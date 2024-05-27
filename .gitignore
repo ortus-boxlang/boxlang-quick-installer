@@ -1,0 +1,37 @@
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build/
+bin/
+runtime/build/
+runtime/bin/
+modules/test/
+
+# Dynamically Generated docs
+docs/
+
+# IDEA files
+.idea
+
+# Mac Files
+.DS_Store
+
+# Generated sources
+src/main/gen
+*.tokens
+
+# Temporary test files
+src/test/resources/tmp/*
+workbench/www/*
+
+# CFML Parser test packages coming from CommandBox
+cfml-parser-tests/**
+/src/main/antlr/.antlr/*
+
+# Core Module Class Files
+src/main/java/ortus/boxlang/web/www/testbox/
+/src/main/java/ortus/boxlang/web/www/coldbox
+
+# JDBC artifacts
+derby.log
