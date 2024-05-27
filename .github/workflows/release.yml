@@ -1,0 +1,125 @@
+name: BoxLang Quick Installers
+
+on:
+  # If you push to main this will trigger a stable release
+  push:
+    branches:
+      - main
+
+env:
+  # The installer version
+  VERSION: 1.0.0
+
+jobs:
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Update changelog [unreleased] with latest version
+        uses: thomaseizinger/keep-a-changelog-new-release@2.0.0
+        with:
+          changelogPath: ./changelog.md
+          tag: v${{ env.VERSION }}
+
+      - name: Commit Changelog [unreleased] with latest version
+        uses: EndBug/add-and-commit@v9.1.4
+        with:
+          author_name: Github Actions
+          author_email: info@ortussolutions.com
+          message: "Finalized changelog for v${{ env.VERSION }}"
+          add: changelog.md
+
+      - name: Tag Version
+        uses: rickstaa/action-create-tag@v1.7.2
+        with:
+          tag: "v${{ env.VERSION }}"
+          force_push_tag: true
+          message: "Latest Release v${{ env.VERSION }}"
+
+      - name: Upload Build Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            src/**
+            changelog.md
+
+      - name: Upload Distributions to S3
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read
+        env:
+          AWS_S3_BUCKET: "downloads.ortussolutions.com"
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ACCESS_SECRET }}
+          SOURCE_DIR: "src/"
+          DEST_DIR: "ortussolutions/boxlang"
+
+      - name: Create Github Release
+        uses: taiki-e/create-gh-release-action@v1.8.0
+        continue-on-error: true
+        id: create_release
+        with:
+          title: ${{ env.VERSION }}
+          changelog: changelog.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: refs/tags/v${{ env.VERSION }}
+
+      - name: Upload Release Asset
+        uses: sekwah41/upload-release-assets@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_name: boxlang-${{ env.VERSION }}.zip
+          asset_content_type: application/zip
+          asset_path: |
+            src/**
+            changelog.md
+
+      - name: Inform Slack
+        if: ${{ always() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: coding
+          SLACK_COLOR: ${{ job.status }} # or a specific color like 'green' or '#ff00ff'
+          SLACK_ICON_EMOJI: ":bell:"
+          SLACK_MESSAGE: "BoxLang ${{ env.VERSION }} Built with ${{ job.status }}!"
+          SLACK_TITLE: "BoxLang Build"
+          SLACK_USERNAME: CI
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  ##########################################################################################
+  # Prep Next Release
+  ##########################################################################################
+  prep_next_release:
+    name: Prep Next Release
+    if: github.ref != 'refs/heads/development'
+    runs-on: ubuntu-latest
+    needs: [publish]
+    steps:
+      - name: Checkout Development Repository
+        uses: actions/checkout@v4
+        with:
+          ref: development
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .tmp
+
+      - name: Copy Changelog
+        run: |
+          cp .tmp/changelog.md changelog.md
+
+      - name: Commit Version Bump
+        uses: EndBug/add-and-commit@v9.1.4
+        with:
+          author_name: Github Actions
+          author_email: info@ortussolutions.com
+          message: "Version bump"
+          add: |
+            changelog.md
