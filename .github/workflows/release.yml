@@ -31,6 +31,8 @@ jobs:
           author_email: info@ortussolutions.com
           message: "Finalized changelog for v${{ env.VERSION }}"
           add: changelog.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag Version
         uses: rickstaa/action-create-tag@v1.7.2
