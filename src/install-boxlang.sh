@@ -121,11 +121,13 @@ main() {
 	ln -sf "${DESTINATION_BIN}/boxlang" "${DESTINATION_BIN}/bx"
 	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${DESTINATION_BIN}/bx-miniserver"
 
-	# Install the install-bx-module.sh script from https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-module.sh
+	# Install the Installer scripts
 	printf "\n"
-	printf "${BLUE}Installing BoxLang® Module Installer...${NORMAL}\n"
+	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-boxlang]...${NORMAL}\n"
 	env curl -Lk -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-module.sh"
 	chmod +x "${DESTINATION_BIN}/install-bx-module"
+	env curl -Lk -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-boxlang.sh"
+	chmod +x "${DESTINATION_BIN}/install-boxlang"
 
 	# Cleanup
 	printf "\n"

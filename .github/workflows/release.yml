@@ -8,7 +8,7 @@ on:
 
 env:
   # The installer version
-  VERSION: 1.0.0
+  VERSION: 1.0.1
 
 jobs:
   publish:
@@ -70,18 +70,6 @@ jobs:
           changelog: changelog.md
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: refs/tags/v${{ env.VERSION }}
-
-      - name: Upload Release Asset
-        uses: sekwah41/upload-release-assets@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_name: boxlang-${{ env.VERSION }}.zip
-          asset_content_type: application/zip
-          asset_path: |
-            src/**
-            changelog.md
 
       - name: Inform Slack
         if: ${{ always() }}
