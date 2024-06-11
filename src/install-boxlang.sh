@@ -90,10 +90,12 @@ main() {
 	mkdir -p /usr/local/lib
 
 	# Download
+	rm -f /tmp/boxlang.zip
 	env curl -Lk -o /tmp/boxlang.zip "${DOWNLOAD_URL}" || {
 		printf "Error: Download of BoxLang® binary failed\n"
 		exit 1
 	}
+	rm -f /tmp/boxlang-miniserver.zip
 	env curl -Lk -o /tmp/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
 		printf "Error: Download of BoxLang® MiniServer binary failed\n"
 		exit 1
