@@ -31,7 +31,7 @@ You can also install any version of BoxLang by passing the version number as an 
 ## Usage
 
 ```bash
-bash <(curl -s https://boxlang.ortus.io/install)
+/bin/bash -c "$(curl -fsSL https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.sh)"
 ```
 
 ## Contributing

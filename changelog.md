@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.1] - 2024-05-28
+- Remove old zips upon first install
+- Updated release build
+- Java 21 as the new standard
 
 ## [1.0.1] - 2024-May-28
 
@@ -24,7 +26,7 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 ### Added
 
--   Initial release
+- Initial release
 
 [Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.1...HEAD
 

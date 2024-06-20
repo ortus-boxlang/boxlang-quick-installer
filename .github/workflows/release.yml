@@ -8,7 +8,7 @@ on:
 
 env:
   # The installer version
-  VERSION: 1.0.1
+  VERSION: 1.0.2
 
 jobs:
   publish:
@@ -17,6 +17,7 @@ jobs:
     # add write permissions
     permissions:
       contents: write
+      checks: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,6 +27,11 @@ jobs:
         with:
           changelogPath: ./changelog.md
           tag: v${{ env.VERSION }}
+
+      - name: Fix Markdown on Changelog
+        run: |
+          npm install -g markdownlint-cli
+          markdownlint changelog.md --fix
 
       - name: Commit Changelog [unreleased] with latest version
         uses: EndBug/add-and-commit@v9.1.4
@@ -94,6 +100,7 @@ jobs:
     # add write permissions
     permissions:
       contents: write
+      checks: write
     steps:
       - name: Checkout Development Repository
         uses: actions/checkout@v4
@@ -107,9 +114,9 @@ jobs:
 
       - name: Copy Changelog
         run: |
-          cp .tmp/changelog.md changelog.md
+          cp -vf .tmp/changelog.md changelog.md
 
-      - name: Commit Version Bump
+      - name: Commit
         uses: EndBug/add-and-commit@v9.1.4
         with:
           author_name: Github Actions
