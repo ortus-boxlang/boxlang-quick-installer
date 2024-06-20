@@ -48,24 +48,12 @@ main() {
 		local DOWNLOAD_URL_MINISERVER=${VERSIONED_URL_MINISERVER}
 	fi
 
-	# Check java exists
-	command -v java >/dev/null 2>&1 || {
-		echo "Error: Java is not installed and we need it for BoxLang to work. Please download JDK 17+ from https://adoptopenjdk.net/ and install it."
-		exit 1
-	}
-
 	# Check java version is 17 or higher
 	local JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
 	if [ "${JAVA_VERSION}" \< "21" ]; then
 		echo "Error: Java 21 or higher is required to run BoxLang"
 		exit 1
 	fi
-
-	# Check curl exists
-	command -v curl >/dev/null 2>&1 || {
-		echo "Error: curl is not installed and we need it in order for the quick installer to work"
-		exit 1
-	}
 
 	# Tell them where we will install
 	printf "${GREEN}"
