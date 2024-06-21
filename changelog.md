@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Use the `latest` as the default now
+
 ## [1.0.2] - 2024-06-20
 
 - Remove old zips upon first install
