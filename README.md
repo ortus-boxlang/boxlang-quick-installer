@@ -34,6 +34,10 @@ You can also install any version of BoxLang by passing the version number as an 
 /bin/bash -c "$(curl -fsSL https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.sh)"
 ```
 
+```PowerShell
+iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/Run-InstallBoxLang.ps1'))
+```
+
 ## Contributing
 
 - All code should be formatted using either our Java Formatter or the CFFormatter.
