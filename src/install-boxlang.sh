@@ -33,6 +33,8 @@ main() {
 	# Setup Global Variables
 	local SNAPSHOT_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-snapshot.zip"
 	local SNAPSHOT_URL_MINISERVER="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-snapshot.zip"
+    local LATEST_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-latest.zip"
+	local LATEST_URL_MINISERVER="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-latest.zip"
 	local VERSIONED_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/${TARGET_VERSION}/boxlang-${TARGET_VERSION}.zip"
 	local VERSIONED_URL_MINISERVER="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/${TARGET_VERSION}/boxlang-miniserver-${TARGET_VERSION}.zip"
 	local DESTINATION="/usr/local/"
@@ -43,7 +45,10 @@ main() {
 	if [ "${TARGET_VERSION}" = "snapshot" ]; then
 		local DOWNLOAD_URL=${SNAPSHOT_URL}
 		local DOWNLOAD_URL_MINISERVER=${SNAPSHOT_URL_MINISERVER}
-	else
+	elif [ "${TARGET_VERSION}" = "latest" ]; then
+        local DOWNLOAD_URL=${LATEST_URL}
+        local DOWNLOAD_URL_MINISERVER=${LATEST_URL_MINISERVER}
+    else
 		local DOWNLOAD_URL=${VERSIONED_URL}
 		local DOWNLOAD_URL_MINISERVER=${VERSIONED_URL_MINISERVER}
 	fi
@@ -160,4 +165,4 @@ main() {
 
 }
 
-main "${1:-snapshot}"
+main "${1:-latest}"

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Use the `latest` as the default now
 - Remove old zips upon first install
 - Updated release build
 - Java 21 as the new standard
