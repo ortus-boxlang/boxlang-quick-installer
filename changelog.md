@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2024-06-21
+
 - Use the `latest` as the default now
 
 ## [1.0.2] - 2024-06-20
@@ -34,7 +36,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 [Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...HEAD
 
-[1.0.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.1...v1.0.2
+[1.0.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.0.2
+
 
 [1.0.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.0...v1.0.1
 
