@@ -8,7 +8,7 @@ on:
 
 env:
   # The installer version
-  VERSION: 1.0.2
+  VERSION: 1.1.0
 
 jobs:
   publish:
@@ -114,7 +114,7 @@ jobs:
 
       - name: Copy Changelog
         run: |
-          cp -vf .tmp/changelog.md changelog.md
+          cp -vf .tmp/artifact/changelog.md changelog.md
 
       - name: Commit
         uses: EndBug/add-and-commit@v9.1.4

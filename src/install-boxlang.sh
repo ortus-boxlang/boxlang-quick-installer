@@ -82,6 +82,10 @@ main() {
 	mkdir -p /usr/local/bin
 	mkdir -p /usr/local/lib
 
+	# Uninstall previous versions
+    printf "${YELLOW}Removing previous versions (if any)...${NORMAL}\n"
+	rm -vf /usr/local/lib/boxlang-*.jar
+
 	# Download
 	rm -f /tmp/boxlang.zip
 	env curl -Lk -o /tmp/boxlang.zip "${DOWNLOAD_URL}" || {
