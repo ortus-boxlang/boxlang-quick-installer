@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2024-07-08
+
 ### Added
 
 - Adding a line to remove existing boxlang jars when installing.
@@ -38,7 +40,9 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.1.0...HEAD
+
+[1.1.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.1.0
 
 [1.0.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.0.2
 
