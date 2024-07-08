@@ -83,7 +83,8 @@ main() {
 	mkdir -p /usr/local/lib
 
 	# Uninstall previous versions
-	rm -f /usr/local/lib/boxlang-*.jar
+    printf "${YELLOW}Removing previous versions (if any)...${NORMAL}\n"
+	rm -vf /usr/local/lib/boxlang-*.jar
 
 	# Download
 	rm -f /tmp/boxlang.zip

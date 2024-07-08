@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Adding a line to remove existing boxlang jars when installing.
+
 ## [1.0.3] - 2024-06-21
 
 - Use the `latest` as the default now
