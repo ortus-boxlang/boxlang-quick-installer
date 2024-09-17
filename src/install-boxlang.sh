@@ -122,9 +122,11 @@ main() {
 
 	# Install the Installer scripts
 	printf "\n"
-	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-boxlang]...${NORMAL}\n"
+	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-bx-modules, install-boxlang]...${NORMAL}\n"
 	env curl -Lk -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-module.sh"
 	chmod +x "${DESTINATION_BIN}/install-bx-module"
+    env curl -Lk -o "${DESTINATION_BIN}/install-bx-modules" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-modules.sh"
+	chmod +x "${DESTINATION_BIN}/install-bx-modules"
 	env curl -Lk -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-boxlang.sh"
 	chmod +x "${DESTINATION_BIN}/install-boxlang"
 
