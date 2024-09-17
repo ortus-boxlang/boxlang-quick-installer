@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `install-bx-modules` so you can do multi-list installations
+
+## [1.1.0] - 2024-07-08
+
+### Added
+
 - Adding a line to remove existing boxlang jars when installing.
 
 ## [1.0.2] - 2024-06-21
