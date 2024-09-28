@@ -11,7 +11,7 @@ modules=("$@")
 
 # Install modules in parallel
 echo "Installing the following modules: ${modules[*]}"
-echo "${modules[@]}" | xargs -n 1 -P 4 -I {} bash -c "install-bx-module {}"
+echo "${modules[@]}" | xargs -n 1 install-bx-module
 
 # Exit with the status of the last command
 exit $?
