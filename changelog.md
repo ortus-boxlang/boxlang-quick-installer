@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Moved all downloads of the BoxLang modules to come from FORGEBOX since now this is the official distribution point.
+
 ## [1.2.0] - 2024-09-28
 
 ## [1.2.0] - 2024-09-17

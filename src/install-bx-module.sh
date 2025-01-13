@@ -40,21 +40,46 @@ main() {
 		exit 1
 	fi
 
+	# Check curl exists else error
+	command -v curl >/dev/null 2>&1 || {
+		printf "${RED}Error: curl is not installed and we need it in order for the quick installer to work${NORMAL}\n"
+		exit 1
+	}
+
+	# Check if we have a target version, else ask ForgeBox for the latest
+	if [ -z "${TARGET_VERSION+x}" ] || [ -z "$TARGET_VERSION" ]; then
+
+		# Check if jq is installed for JSON parsing, if not, request to be installed
+		if ! command -v jq >/dev/null 2>&1; then
+			printf "${RED}Error: [jq] binary is not installed and we need it in order to parse JSON from FORGEBOX${NORMAL}\n"
+			printf "${YELLOW}Please install jq from https://stedolan.github.io/jq/download/ or via your package manager${NORMAL}\n"
+			# Show common package managers
+			printf "${YELLOW}For example, on MacOS you can install it via brew with:${NORMAL}\n"
+			printf "${BLUE}brew install jq${NORMAL}\n"
+			printf "${YELLOW}For example, on Linux you can install it via apt-get with:${NORMAL}\n"
+			printf "${BLUE}apt-get install jq${NORMAL}\n"
+			printf "${YELLOW}For example, on Windows you can install it via choco or winget with:${NORMAL}\n"
+			printf "${BLUE}choco install jq or winget install jqlang.jq${NORMAL}\n"
+			exit 1
+		fi
+
+		# Store Entry JSON From ForgeBox
+		local ENTRY_JSON=$(curl -s "https://forgebox.io/api/v1/entry/${TARGET_MODULE}/latest")
+		TARGET_VERSION=$(echo ${ENTRY_JSON} | jq -r '.data.version')
+		local DOWNLOAD_URL=$(echo ${ENTRY_JSON} | jq -r '.data.downloadURL')
+	else
+		# We have a targeted version, let's build the download URL from the artifacts directly
+		local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
+	fi
+
 	# If we don't have a BOXLANG_HOME set, let's set it
 	if [ -z "${BOXLANG_HOME}" ]; then
 		export BOXLANG_HOME="$HOME/.boxlang"
 	fi
 
 	# BoxLang Module URLS
-	local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
 	local MODULES_HOME="${BOXLANG_HOME}/modules"
 	local DESTINATION="${MODULES_HOME}/${TARGET_MODULE}"
-
-	# Check curl exists
-	command -v curl >/dev/null 2>&1 || {
-		echo "Error: curl is not installed and we need it in order for the quick installer to work"
-		exit 1
-	}
 
 	# Tell them where we will install
 	printf "${GREEN}"
@@ -112,4 +137,4 @@ main() {
 
 }
 
-main "${1}" "${2:-1.0.0}"
+main "${1}" "${2}"
