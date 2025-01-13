@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-01-13
+
 ### Added
 
 - Moved all downloads of the BoxLang modules to come from FORGEBOX since now this is the official distribution point.
@@ -54,10 +56,11 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.3.0...HEAD
+
+[1.3.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.2.0...v1.3.0
 
 [1.2.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.2.0...v1.2.0
-
 
 [1.1.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.1.0
 
