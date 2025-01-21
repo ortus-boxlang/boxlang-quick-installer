@@ -71,7 +71,7 @@ Write-Host -ForegroundColor Green "Downloading $bxName [$TARGET_VERSION] from [$
 Write-Host -ForegroundColor Green "Please wait..."
 
 $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "/boxlang"
-$destinationFolder = "c:\boxlang2"
+$destinationFolder = "c:\boxlang"
 
 New-Item -Type Directory -Path $tmp -Force | Out-Null
 New-Item -Type Directory -Path $destinationFolder -Force | Out-Null
