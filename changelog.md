@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.3.0] - 2025-01-21
+### Changed
+
+- Consolidated the `install-bx-module` and the `install-bx-modules` into one single command `install-boxlang`
+- Make `install-bx-module` use the notation `moduleName@version` for specific versions of modules
 
 ## [1.3.0] - 2025-01-13
 
@@ -19,26 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2024-09-28
 
-## [1.2.0] - 2024-09-17
-
 ## [1.1.0] - 2024-07-08
 
 ### Added
 
 - Added `install-bx-modules` so you can do multi-list installations
-
-## [1.1.0] - 2024-07-08
-
-### Added
-
 - Adding a line to remove existing boxlang jars when installing.
 
 ## [1.0.2] - 2024-06-21
 
 - Use the `latest` as the default now
-
-## [1.0.2] - 2024-06-20
-
 - Remove old zips upon first install
 - Updated release build
 - Java 21 as the new standard
@@ -61,7 +54,6 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 [Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.3.0...HEAD
 
 [1.3.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.3.0...v1.3.0
-
 
 [1.2.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.2.0...v1.2.0
 
