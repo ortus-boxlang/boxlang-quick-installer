@@ -40,6 +40,7 @@ main() {
     # Validate module name
     if [ -z "$TARGET_MODULE" ]; then
         printf "${RED}Error: You must specify a BoxLang module to install${NORMAL}\n"
+		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>]${NORMAL}\n"
         exit 1
     fi
 
