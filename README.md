@@ -38,6 +38,20 @@ You can also install any version of BoxLang by passing the version number as an 
 iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/Run-InstallBoxLang.ps1'))
 ```
 
+## Module Installation
+
+You can use the following command for module installation to the installed BoxLang Home:
+
+```bash
+install-bx-module <module-name>
+```
+
+If you want to install it to a local boxlang_modules folder you can use the following command:
+
+```bash
+install-bx-module <module-name> --local
+```
+
 ## Contributing
 
 - All code should be formatted using either our Java Formatter or the CFFormatter.

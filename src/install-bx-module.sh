@@ -16,7 +16,7 @@ install_module() {
 	# Validate module name
 	if [ -z "$TARGET_MODULE" ]; then
 		printf "${RED}Error: You must specify a BoxLang module to install${NORMAL}\n"
-		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>]${NORMAL}\n"
+		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>] [--local]${NORMAL}\n"
 		exit 1
 	fi
 
@@ -51,13 +51,7 @@ install_module() {
 		local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
 	fi
 
-	# Set BOXLANG_HOME if not already defined
-	if [ -z "${BOXLANG_HOME}" ]; then
-		export BOXLANG_HOME="$HOME/.boxlang"
-	fi
-
-	# Define paths
-	local MODULES_HOME="${BOXLANG_HOME}/modules"
+	# Define paths based on LOCAL_INSTALL flag
 	local DESTINATION="${MODULES_HOME}/${TARGET_MODULE}"
 
 	# Inform the user
@@ -130,7 +124,31 @@ main() {
 		printf "${YELLOW}- [@<version>]: (Optional) The specific version of the module to install.${NORMAL}\n"
 		printf "${YELLOW}- Multiple modules can be specified, separated by a space.${NORMAL}\n"
 		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
+		printf "${YELLOW}- Use --local to install to a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
 		exit 1
+	fi
+
+	# Detect if --local is the last argument
+	LOCAL_INSTALL=false
+	LAST_ARG="${!#}"
+	if [ "$LAST_ARG" == "--local" ]; then
+		LOCAL_INSTALL=true
+		set -- "${@:1:$(($#-1))}" # Remove --local from the argument list
+	fi
+
+	# Set module installation path
+	if [ "$LOCAL_INSTALL" = true ]; then
+		MODULES_HOME="$(pwd)/boxlang_modules"
+	else
+		if [ -z "${BOXLANG_HOME}" ]; then
+			export BOXLANG_HOME="$HOME/.boxlang"
+		fi
+		MODULES_HOME="${BOXLANG_HOME}/modules"
+	fi
+
+	# Inform about local installation
+	if [ "$LOCAL_INSTALL" = true ]; then
+		printf "${YELLOW}Installing modules locally in $(pwd)/boxlang_modules${NORMAL}\n"
 	fi
 
 	# Loop through all provided arguments
