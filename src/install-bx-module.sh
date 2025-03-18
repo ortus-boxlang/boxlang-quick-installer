@@ -119,13 +119,25 @@ main() {
 	if [ $# -eq 0 ]; then
 		printf "${RED}Error: No module(s) specified${NORMAL}\n"
 		printf "${YELLOW}This script installs one or more BoxLang modules.${NORMAL}\n"
-		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...]${NORMAL}\n"
+		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]${NORMAL}\n"
 		printf "${YELLOW}- <module-name>: The name of the module to install.${NORMAL}\n"
 		printf "${YELLOW}- [@<version>]: (Optional) The specific version of the module to install.${NORMAL}\n"
 		printf "${YELLOW}- Multiple modules can be specified, separated by a space.${NORMAL}\n"
 		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
 		printf "${YELLOW}- Use --local to install to a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
 		exit 1
+	fi
+
+	# Detect if a single --list argument is passed
+	if [ "$1" == "--list" ] && [ $# -eq 1 ]; then
+		if [ -z "${BOXLANG_HOME}" ]; then
+			export BOXLANG_HOME="$HOME/.boxlang"
+		fi
+		MODULES_HOME="${BOXLANG_HOME}/modules"
+		printf "${YELLOW}Installed OS BoxLang Modules (${MODULES_HOME}):${NORMAL}\n"
+		# List all directories in the ~/.boxlang/modules folder
+		ls -1 ${MODULES_HOME} | sed 's/^/- /'
+		exit 0
 	fi
 
 	# Detect if --local is the last argument
