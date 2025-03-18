@@ -97,7 +97,7 @@ Expand-Archive -Path $tmp\boxlang-miniserver.zip -DestinationPath $destinationFo
 try {
     Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\bx.bat | Out-Null
     New-Item -ItemType SymbolicLink -Target $destinationFolder\bin\boxlang.bat -Path $destinationFolder\bin\bx.bat | Out-Null
-    
+
     Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\bx-miniserver.bat | Out-Null
     New-Item -ItemType SymbolicLink -Target $destinationFolder\bin\boxlang-miniserver.bat -Path $destinationFolder\bin\bx-miniserver.bat | Out-Null
 }
@@ -137,7 +137,7 @@ Write-Host -ForegroundColor Green "$bxName - Dynamic : Modular : Productive : ht
 Write-Host -ForegroundColor Green '*************************************************************************'
 Write-Host -ForegroundColor Green "$bxName is FREE and Open-Source Software under the Apache 2.0 License"
 Write-Host -ForegroundColor Green "You can also buy support and enhanced versions at https://boxlang.io/plans"
-Write-Host -ForegroundColor Green 'p.s. Follow us at https://twitter.com/ortussolutions.'
+Write-Host -ForegroundColor Green 'p.s. Follow us at https://x.com/tryboxlang'
 Write-Host -ForegroundColor Green 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
 Write-Host -ForegroundColor Green 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
 Write-Host -ForegroundColor Green '*************************************************************************'

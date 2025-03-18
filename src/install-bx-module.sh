@@ -83,7 +83,7 @@ install_module() {
 	echo '*************************************************************************'
 	echo "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
 	echo "You can also buy support and enhanced versions at https://boxlang.io/plans"
-	echo 'p.s. Follow us at https://twitter.com/ortussolutions.'
+	echo 'p.s. Follow us at https://x.com/tryboxlang.'
 	echo 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
 	echo 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
 	echo '*************************************************************************'

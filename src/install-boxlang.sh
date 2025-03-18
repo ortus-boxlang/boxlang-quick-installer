@@ -138,7 +138,7 @@ main() {
 	rm -fv ${DESTINATION_BIN}/boxlang.bat
 	rm -fv ${DESTINATION_BIN}/boxlang-miniserver.bat
 
-	# Run it
+	# Run version test
 	printf "\n"
 	printf "${RED}Testing BoxLang®...${NORMAL}\n"
 	printf "\n"
@@ -148,21 +148,23 @@ main() {
 	echo ''
 	echo "BoxLang® Binaries are now installed to [$DESTINATION_BIN]"
 	echo "BoxLang® JARs are now installed to [$DESTINATION_LIB]"
-	echo "BoxLang® Home is now set to [~/.boxlang]"
+	echo "BoxLang® Home is now set to your user home [~/.boxlang]"
 	echo ''
 	echo 'Your [BOXLANG_HOME] is set by default to your user home directory.'
 	echo 'You can change this by setting the [BOXLANG_HOME] environment variable in your shell profile'
 	echo 'Just copy the following line to override the location if you want'
 	echo ''
-	echo "EXPORT BOXLANG_HOME=/opt/boxlang"
+	printf "${BLUE}"
+	echo "EXPORT BOXLANG_HOME=~/.boxlang"
 	echo ''
-	echo "You can start a MiniServer by running: boxlang-miniserver"
+	echo "${BOLD}You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
+	printf "${GREEN}"
 	echo '*************************************************************************'
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
 	echo '*************************************************************************'
 	echo "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
 	echo "You can also buy support and enhanced versions at https://boxlang.io/plans"
-	echo 'p.s. Follow us at https://twitter.com/ortussolutions.'
+	echo 'p.s. Follow us at https://x.com/tryboxlang.'
 	echo 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
 	echo 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
 	echo '*************************************************************************'
