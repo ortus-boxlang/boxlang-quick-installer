@@ -30,7 +30,9 @@ main() {
 	# Set the target version
 	local TARGET_VERSION=${1}
 
+	###########################################################################
 	# Setup Global Variables
+	###########################################################################
 	local SNAPSHOT_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-snapshot.zip"
 	local SNAPSHOT_URL_MINISERVER="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-snapshot.zip"
     local LATEST_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-latest.zip"
@@ -41,7 +43,9 @@ main() {
 	local DESTINATION_LIB="/usr/local/lib"
 	local DESTINATION_BIN="/usr/local/bin"
 
+	###########################################################################
 	# Determine which URL to use
+	###########################################################################
 	if [ "${TARGET_VERSION}" = "snapshot" ]; then
 		local DOWNLOAD_URL=${SNAPSHOT_URL}
 		local DOWNLOAD_URL_MINISERVER=${SNAPSHOT_URL_MINISERVER}
@@ -53,9 +57,16 @@ main() {
 		local DOWNLOAD_URL_MINISERVER=${VERSIONED_URL_MINISERVER}
 	fi
 
-	# Check java version is 17 or higher
+	###########################################################################
+	# Java Version Check
+	###########################################################################
 	local JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-	if [ "${JAVA_VERSION}" \< "21" ]; then
+	if [[ -z "$JAVA_VERSION" ]]; then
+		echo "${RED}Error: Failed to determine Java version. Ensure Java is installed and in your PATH.${NORMAL}"
+		exit 1
+	fi
+	local JAVA_MAJOR_VERSION=$(echo "${JAVA_VERSION}" | cut -d'.' -f1)
+	if [ "${JAVA_MAJOR_VERSION}" -lt 21 ]; then
 		echo "Error: Java 21 or higher is required to run BoxLang"
 		exit 1
 	fi
@@ -65,10 +76,6 @@ main() {
 	echo ''
 	echo '*************************************************************************'
 	echo 'Welcome to the BoxLang® Quick Installer'
-	echo '*************************************************************************'
-	echo 'This will download and install the latest version of BoxLang® and the'
-	echo 'BoxLang® MiniServer into your system.'
-	echo '*************************************************************************'
 	echo 'You can also download the BoxLang® runtimes from https://boxlang.io'
 	echo '*************************************************************************'
 	printf "${NORMAL}"
@@ -97,9 +104,6 @@ main() {
 		printf "Error: Download of BoxLang® MiniServer binary failed\n"
 		exit 1
 	}
-	printf "\n"
-	printf "${GREEN}BoxLang® downloaded to [/tmp/boxlang.zip, /tmp/boxlang-miniserver.zip], continuing installation...${NORMAL}\n"
-	printf "\n"
 
 	# Inflate it
 	printf "\n"
@@ -122,12 +126,10 @@ main() {
 
 	# Install the Installer scripts
 	printf "\n"
-	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-bx-modules, install-boxlang]...${NORMAL}\n"
-	env curl -Lk -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-module.sh"
+	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-boxlang]...${NORMAL}\n"
+	env curl -Lk -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-bx-module.sh"
 	chmod +x "${DESTINATION_BIN}/install-bx-module"
-    env curl -Lk -o "${DESTINATION_BIN}/install-bx-modules" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-bx-modules.sh"
-	chmod +x "${DESTINATION_BIN}/install-bx-modules"
-	env curl -Lk -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/install-boxlang.sh"
+	env curl -Lk -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
 	chmod +x "${DESTINATION_BIN}/install-boxlang"
 
 	# Cleanup
@@ -137,6 +139,8 @@ main() {
 	rm -fv /tmp/boxlang-miniserver.zip
 	rm -fv ${DESTINATION_BIN}/boxlang.bat
 	rm -fv ${DESTINATION_BIN}/boxlang-miniserver.bat
+	rm -fv ${DESTINATION_BIN}/install-boxlang.ps1
+	rm -fv ${DESTINATION_BIN}/install-bx-module.ps1
 
 	# Run version test
 	printf "\n"
@@ -157,6 +161,7 @@ main() {
 	printf "${BLUE}"
 	echo "EXPORT BOXLANG_HOME=~/.boxlang"
 	echo ''
+	echo "${BOLD}You can start a REPL by running: boxlang${NORMAL}"
 	echo "${BOLD}You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
 	printf "${GREEN}"
 	echo '*************************************************************************'
