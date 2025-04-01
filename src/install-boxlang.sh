@@ -14,6 +14,11 @@ main() {
 		local BLUE="$(tput setaf 4)"
 		local BOLD="$(tput bold)"
 		local NORMAL="$(tput sgr0)"
+		local MAGENTA="$(tput setaf 5)"
+		local CYAN="$(tput setaf 6)"
+		local WHITE="$(tput setaf 7)"
+		local BLACK="$(tput setaf 0)"
+		local UNDERLINE="$(tput smul)"
 	else
 		local RED=""
 		local GREEN=""
@@ -21,6 +26,11 @@ main() {
 		local BLUE=""
 		local BOLD=""
 		local NORMAL=""
+		local MAGENTA=""
+		local CYAN=""
+		local WHITE=""
+		local BLACK=""
+		local UNDERLINE=""
 	fi
 
 	# Only enable exit-on-error after the non-critical colorization stuff,
@@ -150,20 +160,21 @@ main() {
 
 	printf "${GREEN}"
 	echo ''
-	echo "BoxLang® Binaries are now installed to [$DESTINATION_BIN]"
-	echo "BoxLang® JARs are now installed to [$DESTINATION_LIB]"
-	echo "BoxLang® Home is now set to your user home [~/.boxlang]"
-	echo ''
-	echo 'Your [BOXLANG_HOME] is set by default to your user home directory.'
-	echo 'You can change this by setting the [BOXLANG_HOME] environment variable in your shell profile'
+	echo "♨ BoxLang® Binaries are now installed to [$DESTINATION_BIN]"
+	echo "☕ BoxLang® JARs are now installed to [$DESTINATION_LIB]"
+	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang]"
+	echo ""
+	echo 'You can change the BoxLang Home by setting the [BOXLANG_HOME] environment variable in your shell profile'
 	echo 'Just copy the following line to override the location if you want'
 	echo ''
-	printf "${BLUE}"
+	printf "${BLUE}${BOLD}"
 	echo "EXPORT BOXLANG_HOME=~/.boxlang"
+	echo "${NORMAL}"
 	echo ''
-	echo "${BOLD}You can start a REPL by running: boxlang${NORMAL}"
-	echo "${BOLD}You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
+	echo "${MAGENTA}✅ You can start a REPL by running: boxlang${NORMAL}"
+	echo "${MAGENTA}✅ You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
 	printf "${GREEN}"
+	echo ''
 	echo '*************************************************************************'
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
 	echo '*************************************************************************'
