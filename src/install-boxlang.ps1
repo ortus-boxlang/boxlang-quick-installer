@@ -1,10 +1,10 @@
 
-
 $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
 
-$TARGET_VERSION = "latest"
+# $TARGET_VERSION = "latest"
+$TARGET_VERSION = if ($args.Count -ge 1) { $args[0] } else { "latest" }
 $DOWNLOAD_URL = ""
 
 if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
