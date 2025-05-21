@@ -9,13 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.4.0] - 2025-05-02
+### Added
 
-## [1.4.0] - 2025-03-18
-
-## [1.4.0] - 2025-03-18
-
-## [1.4.0] - 2025-03-06
+- Added `install-jre.ps1` to install the Java Runtime Environment (JRE) for BoxLang in Windows.
+- Version cleanup
 
 ## [1.4.0] - 2025-03-03
 
@@ -64,7 +61,6 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 [Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.4.0...HEAD
 
 [1.4.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.4.0...v1.4.0
-
 
 [1.3.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.3.0...v1.3.0
 
