@@ -1,24 +1,6 @@
 # Suppress progress bar for Invoke-WebRequest
 $ProgressPreference = 'SilentlyContinue'
 
-# Relaunch as administrator if not already elevated
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
-    [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-
-    Write-Host "Requesting administrator privileges..."
-
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    $psi.Verb = "runas"  # triggers UAC prompt
-    try {
-        [System.Diagnostics.Process]::Start($psi) | Out-Null
-    } catch {
-        Write-Host "Elevation canceled or failed." -ForegroundColor Red
-    }
-    exit
-}
-
 # Set the JRE version and download URL
 $jreVersion = "21"
 $jreURL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.7%2B6/OpenJDK21U-jre_x64_windows_hotspot_21.0.7_6.zip"
