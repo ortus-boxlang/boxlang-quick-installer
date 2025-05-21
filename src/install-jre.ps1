@@ -4,7 +4,7 @@ $ProgressPreference = 'SilentlyContinue'
 # Set the JRE version and download URL
 $jreVersion = "21"
 $jreURL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.7%2B6/OpenJDK21U-jre_x64_windows_hotspot_21.0.7_6.zip"
-$installPath = "C:\Program Files\Java\jdk$jreVersion"
+$installPath = "C:\Program Files\Java\jre$jreVersion"
 
 # Download the JRE ZIP
 $zipPath = "$env:TEMP\openjdk-$jreVersion.zip"
