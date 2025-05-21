@@ -11,8 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Permissions for JRE installer
 - Added `install-jre.ps1` to install the Java Runtime Environment (JRE) for BoxLang in Windows.
 - Version cleanup
+
+### Fixed
+
+- JRE installation directory
+- Permissions for JRE Paths
 
 ## [1.4.0] - 2025-03-03
 
