@@ -109,10 +109,10 @@ catch {
 
 # Download the following scripts to the bin folder: install-boxlang.bat, install-boxlang.ps1, install-bx-module.bat, install-bx-module.ps1
 # From https://downloads.ortussolutions.com/ortussolutions/boxlang/
-$installBoxLangBat = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.bat"
-$installBoxLangPs1 = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.ps1"
-$installBxModuleBat = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-bx-module.bat"
-$installBxModulePs1 = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-bx-module.ps1"
+$installBoxLangBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-boxlang.bat"
+$installBoxLangPs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-boxlang.ps1"
+$installBxModuleBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-bx-module.bat"
+$installBxModulePs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-bx-module.ps1"
 $installBoxLangBatDest = "$destinationFolder\bin\install-boxlang.bat"
 $installBoxLangPs1Dest = "$destinationFolder\bin\install-boxlang.ps1"
 $installBxModuleBatDest = "$destinationFolder\bin\install-bx-module.bat"
