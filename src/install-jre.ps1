@@ -1,5 +1,7 @@
-# Suppress progress bar for Invoke-WebRequest
-$ProgressPreference = 'SilentlyContinue'
+if ($PSVersionTable.PSVersion.Major -le 5) {
+    # Suppress progress bar for Invoke-WebRequest
+    $ProgressPreference = 'SilentlyContinue'
+}
 
 # Set the JRE version and download URL
 $jreVersion = "21"

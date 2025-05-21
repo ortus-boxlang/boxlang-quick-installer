@@ -94,6 +94,7 @@ Expand-Archive -Path $tmp\boxlang.zip -DestinationPath $destinationFolder -Error
 Write-Host -ForegroundColor Green "Unzipping BoxLang MiniServer"
 Expand-Archive -Path $tmp\boxlang-miniserver.zip -DestinationPath $destinationFolder -ErrorAction SilentlyContinue
 
+# Create bx aliases
 try {
     Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\bx.bat | Out-Null
     New-Item -ItemType SymbolicLink -Target $destinationFolder\bin\boxlang.bat -Path $destinationFolder\bin\bx.bat | Out-Null
@@ -106,20 +107,49 @@ catch {
     Write-Host -ForegroundColor Red "BoxLang will still run but you will not have the 'bx' and 'bx-miniserver' aliases."
 }
 
+# Download the following scripts to the bin folder: install-boxlang.bat, install-boxlang.ps1, install-bx-module.bat, install-bx-module.ps1
+# From https://downloads.ortussolutions.com/ortussolutions/boxlang/
+$installBoxLangBat = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.bat"
+$installBoxLangPs1 = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.ps1"
+$installBxModuleBat = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-bx-module.bat"
+$installBxModulePs1 = "https://downloads.ortussolutions.com/ortussolutions/boxlang/install-bx-module.ps1"
+$installBoxLangBatDest = "$destinationFolder\bin\install-boxlang.bat"
+$installBoxLangPs1Dest = "$destinationFolder\bin\install-boxlang.ps1"
+$installBxModuleBatDest = "$destinationFolder\bin\install-bx-module.bat"
+$installBxModulePs1Dest = "$destinationFolder\bin\install-bx-module.ps1"
+
+Write-Host -ForegroundColor Green "Downloading install-boxlang.bat"
+Invoke-WebRequest -Uri $installBoxLangBat -OutFile $installBoxLangBatDest
+Write-Host -ForegroundColor Green "Downloading install-boxlang.ps1"
+Invoke-WebRequest -Uri $installBoxLangPs1 -OutFile $installBoxLangPs1Dest
+Write-Host -ForegroundColor Green "Downloading install-bx-module.bat"
+Invoke-WebRequest -Uri $installBxModuleBat -OutFile $installBxModuleBatDest
+Write-Host -ForegroundColor Green "Downloading install-bx-module.ps1"
+Invoke-WebRequest -Uri $installBxModulePs1 -OutFile $installBxModulePs1Dest
+
+## Add the bin folder to the path
 Write-Host -ForegroundColor Green "Adding BoxLang to your users' path variable"
 [Environment]::SetEnvironmentVariable(
     "Path",
     [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User) + ";$destinationFolder\bin",
     [EnvironmentVariableTarget]::User) | Out-Null
 
+## Create a BOXLANG_HOME env variable that points to the $destinationFolder
+Write-Host -ForegroundColor Green "Setting the BOXLANG_HOME environment variable"
+[Environment]::SetEnvironmentVariable(
+	"BOXLANG_HOME",
+	$destinationFolder,
+	[EnvironmentVariableTarget]::User) | Out-Null
+
+## Clean up
 Write-Host -ForegroundColor Green "Cleaning up..."
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp\boxlang | Out-Null
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\boxlang | Out-Null
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\boxlang-miniserver | Out-Null
 
+## Startup Test
 Write-Host -ForegroundColor Green "Testing BoxLang..."
 boxlang --version
-
 Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green "$bxName Binaries are now installed to [$DESTINATION_BIN]"
 Write-Host -ForegroundColor Green "$bxName JARs are now installed to [$DESTINATION_LIB]"

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Update the `install-boxlang.bat` for Windows to make sure you can run it from anywhere.
+- If you are in Powershell 5 or lower, it will now use no progress bar.
+- Updated the `install-boxlang.ps1` to add a BOXLANG_HOME env variable to the system and install the boxlang scripts.
+
 ## [1.5.0] - 2025-05-21
 
 ### Added

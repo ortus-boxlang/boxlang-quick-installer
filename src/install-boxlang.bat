@@ -1,24 +1,23 @@
+:: This is the Windows batch script to install BoxLang to the system.
+:: It checks for administrative privileges, and if not, it requests them.
+:: It then runs a PowerShell script to perform the installation.
+:: This script is intended to be run from the command line with administrative privileges.
+:: Usage: install-boxlang.bat [additional_arguments]
+:: Note: This script assumes that the PowerShell script 'install-boxlang.ps1' is in the same directory as this batch file.
 @REM Install BoxLang
 @echo off
 setlocal
 
-:: Pass in the arguments to the PS script!
-
-:: Get current directory
+:: Get the script directory
 set "curdir=%~dp0"
 
 :: Check for admin rights
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo Requesting administrative privileges...
-    powershell -Command "Start-Process '%~f0' -ArgumentList '%curdir% %1%' -Verb runAs"
+    powershell -Command "Start-Process -FilePath '%~f0' -ArgumentList @('%*') -Verb RunAs"
     exit /b
 )
 
-:: Use passed argument as the working directory (if needed)
-if not "%~1"=="" (
-    cd /d "%~1"
-)
-
-:: Run the Powershell command using the current directory
-PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& '%cd%/install-boxlang.ps1'" %~2
+:: Run the PowerShell install script from the same directory
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%curdir%install-boxlang.ps1' %*"
