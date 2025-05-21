@@ -8,7 +8,7 @@ on:
 
 env:
   # The installer version
-  VERSION: 1.5.0
+  VERSION: 1.6.0
 
 jobs:
   publish:
