@@ -1,12 +1,22 @@
 # Suppress progress bar for Invoke-WebRequest
 $ProgressPreference = 'SilentlyContinue'
 
-# Ensure running as Administrator
-If (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
-    [Security.Principal.WindowsBuiltInRole] "Administrator"))
-{
-    Write-Host "You must run this script as Administrator." -ForegroundColor Red
-    exit 1
+# Relaunch as administrator if not already elevated
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+    [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+
+    Write-Host "Requesting administrator privileges..."
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "powershell.exe"
+    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $psi.Verb = "runas"  # triggers UAC prompt
+    try {
+        [System.Diagnostics.Process]::Start($psi) | Out-Null
+    } catch {
+        Write-Host "Elevation canceled or failed." -ForegroundColor Red
+    }
+    exit
 }
 
 # Set the JRE version and download URL
