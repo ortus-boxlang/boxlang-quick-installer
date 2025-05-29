@@ -1,4 +1,4 @@
-name: BoxLang Quick Installers
+name: BoxLang Quick Installers Release
 
 on:
   # If you push to main this will trigger a stable release
@@ -6,9 +6,16 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
+# Cancel running builds if another push to branch is made while this build is running
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
 env:
-  # The installer version
-  VERSION: 1.6.0
+  # if 'development' it's true, then it's a snapshot build
+  SNAPSHOT: ${{ github.ref == 'refs/heads/development' }}
 
 jobs:
   publish:
@@ -22,11 +29,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Read Version File
+        id: version
+        run: |
+          INSTALLER_VERSION=$(jq -r '.INSTALLER_VERSION' version.json)
+          echo "INSTALLER_VERSION=${INSTALLER_VERSION}" >> $GITHUB_ENV
+          echo "image_version=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
+
       - name: Update changelog [unreleased] with latest version
         uses: thomaseizinger/keep-a-changelog-new-release@2.0.0
         with:
           changelogPath: ./changelog.md
-          tag: v${{ env.VERSION }}
+          tag: v${{ env.INSTALLER_VERSION }}
 
       - name: Fix Markdown on Changelog
         run: |
@@ -38,15 +52,15 @@ jobs:
         with:
           author_name: Github Actions
           author_email: lmajano@ortussolutions.com
-          message: "Finalized changelog for v${{ env.VERSION }}"
+          message: "Finalized changelog for v${{ env.INSTALLER_VERSION }}"
           add: changelog.md
 
       - name: Tag Version
         uses: rickstaa/action-create-tag@v1.7.2
         with:
-          tag: "v${{ env.VERSION }}"
+          tag: "v${{ env.INSTALLER_VERSION }}"
           force_push_tag: true
-          message: "Latest Release v${{ env.VERSION }}"
+          message: "Latest Release v${{ env.INSTALLER_VERSION }}"
 
       - name: Upload Build Artifacts
         if: success()
@@ -72,10 +86,10 @@ jobs:
         continue-on-error: true
         id: create_release
         with:
-          title: ${{ env.VERSION }}
+          title: ${{ env.INSTALLER_VERSION }}
           changelog: changelog.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/v${{ env.VERSION }}
+          ref: refs/tags/v${{ env.INSTALLER_VERSION }}
 
       - name: Inform Slack
         if: ${{ always() }}
@@ -84,7 +98,7 @@ jobs:
           SLACK_CHANNEL: coding
           SLACK_COLOR: ${{ job.status }} # or a specific color like 'green' or '#ff00ff'
           SLACK_ICON_EMOJI: ":bell:"
-          SLACK_MESSAGE: "BoxLang ${{ env.VERSION }} Built with ${{ job.status }}!"
+          SLACK_MESSAGE: "BoxLang ${{ env.INSTALLER_VERSION }} Built with ${{ job.status }}!"
           SLACK_TITLE: "BoxLang Build"
           SLACK_USERNAME: CI
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
