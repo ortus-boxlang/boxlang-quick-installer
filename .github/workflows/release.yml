@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - development
 
   workflow_dispatch:
 
@@ -19,7 +20,7 @@ env:
 
 jobs:
   publish:
-    name: Publish Release
+    name: Build & Publish
     runs-on: ubuntu-latest
     # add write permissions
     permissions:
@@ -38,17 +39,40 @@ jobs:
 
       - name: Update changelog [unreleased] with latest version
         uses: thomaseizinger/keep-a-changelog-new-release@2.0.0
+        # If NOT a env.snapshot
+        if: env.SNAPSHOT == 'false'
         with:
           changelogPath: ./changelog.md
           tag: v${{ env.INSTALLER_VERSION }}
 
       - name: Fix Markdown on Changelog
+        if: env.SNAPSHOT == 'false'
         run: |
           npm install -g markdownlint-cli
           markdownlint changelog.md --fix
 
+      - name: Build the Installer
+        run: |
+          # Copy the src/* to a build directory
+          mkdir -p build .tmp
+          cp -r src/* build/
+          # MD5 hashes
+          find build -type f -exec md5sum {} + > .tmp/boxlang-installer.md5
+          # SHA-256 hashes (more secure)
+          find build -type f -exec sha256sum {} + > .tmp/boxlang-installer.sha256
+          # Copy the checksums  to the build directory
+          cp -v .tmp/* build/
+          # Copy the changelog
+          cp -v changelog.md build/changelog.md
+          # Copy the latest version file
+          cp -v version.json build/version.json
+          # Zip up the build directory contents
+          cd build
+          zip -r boxlang-installer.zip ./*
+
       - name: Commit Changelog [unreleased] with latest version
         uses: EndBug/add-and-commit@v9.1.4
+        if: env.SNAPSHOT == 'false'
         with:
           author_name: Github Actions
           author_email: lmajano@ortussolutions.com
@@ -57,6 +81,7 @@ jobs:
 
       - name: Tag Version
         uses: rickstaa/action-create-tag@v1.7.2
+        if: env.SNAPSHOT == 'false'
         with:
           tag: "v${{ env.INSTALLER_VERSION }}"
           force_push_tag: true
@@ -67,22 +92,24 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: |
-            src/**
+            build/**
             changelog.md
 
       - name: Upload Distributions to S3
         uses: jakejarvis/s3-sync-action@master
+        if: success()
         with:
           args: --acl public-read
         env:
           AWS_S3_BUCKET: "downloads.ortussolutions.com"
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ACCESS_SECRET }}
-          SOURCE_DIR: "src/"
-          DEST_DIR: "ortussolutions/boxlang"
+          SOURCE_DIR: "build/"
+          DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
       - name: Create Github Release
         uses: taiki-e/create-gh-release-action@v1.8.0
+        if: env.SNAPSHOT == 'false'
         continue-on-error: true
         id: create_release
         with:
@@ -128,7 +155,12 @@ jobs:
 
       - name: Copy Changelog
         run: |
-          cp -vf .tmp/artifact/changelog.md changelog.md
+          cp -vf .tmp/changelog.md changelog.md
+
+      - name: Bump Version
+        run: |
+          ./bump.sh
+          git pull
 
       - name: Commit
         uses: EndBug/add-and-commit@v9.1.4
@@ -137,4 +169,5 @@ jobs:
           author_email: info@ortussolutions.com
           message: "Version bump"
           add: |
+            version.json
             changelog.md
