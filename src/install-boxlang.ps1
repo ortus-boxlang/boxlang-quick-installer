@@ -20,6 +20,7 @@ $VERSIONED_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions
 $destinationFolder = "c:\boxlang"
 $DESTINATION_LIB = "$destinationFolder\lib"
 $DESTINATION_BIN = "$destinationFolder\bin"
+$DESTINATION_HOME = "$destinationFolder\home"
 
 
 $ProgressPreference = 'SilentlyContinue'
@@ -77,6 +78,7 @@ $destinationFolder = "c:\boxlang"
 
 New-Item -Type Directory -Path $tmp -Force | Out-Null
 New-Item -Type Directory -Path $destinationFolder -Force | Out-Null
+New-Item -Type Directory -Path $DESTINATION_HOME -Force | Out-Null
 
 # download boxlang
 Remove-Item -Path $tmp\boxlang.zip -ErrorAction SilentlyContinue -Force
@@ -220,11 +222,11 @@ Write-Host -ForegroundColor Green "Adding BoxLang to your users' path variable"
     [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User) + ";$destinationFolder\bin",
     [EnvironmentVariableTarget]::User) | Out-Null
 
-## Create a BOXLANG_HOME env variable that points to the $destinationFolder
+## Create a BOXLANG_HOME env variable that points to the $DESTINATION_HOME
 Write-Host -ForegroundColor Green "Setting the BOXLANG_HOME environment variable"
 [Environment]::SetEnvironmentVariable(
 	"BOXLANG_HOME",
-	$destinationFolder,
+	$DESTINATION_HOME,
 	[EnvironmentVariableTarget]::User) | Out-Null
 
 ## Clean up
@@ -239,13 +241,13 @@ boxlang --version
 Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green "$bxName Binaries are now installed to [$DESTINATION_BIN]"
 Write-Host -ForegroundColor Green "$bxName JARs are now installed to [$DESTINATION_LIB]"
-Write-Host -ForegroundColor Green "$bxName Home is now set to [~/.boxlang]"
+Write-Host -ForegroundColor Green "$bxName Home is now set to [$DESTINATION_HOME]"
 Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green 'Your [BOXLANG_HOME] is set by default to your user home directory.'
+Write-Host -ForegroundColor Green 'Your [BOXLANG_HOME] is set to the BoxLang installation directory.'
 Write-Host -ForegroundColor Green 'You can change this by setting the [BOXLANG_HOME] environment variable in your shell profile'
 Write-Host -ForegroundColor Green 'Just copy the following line to override the location if you want'
 Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green "`$env:BOXLANG_HOME=/new/home"
+Write-Host -ForegroundColor Green "`$env:BOXLANG_HOME=`"C:\new\home`""
 Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green "You can start a MiniServer by running: boxlang-miniserver"
 Write-Host -ForegroundColor Green "You can use the Package Manager by running: box (if CommandBox was installed)"
