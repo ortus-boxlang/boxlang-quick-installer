@@ -44,11 +44,13 @@ setup_colors
 ###########################################################################
 # Pre-flight Checks
 ###########################################################################
+# Verifies required dependencies are installed: curl, unzip and jq
 preflight_check() {
 	local missing_deps=()
 
 	command -v curl >/dev/null 2>&1 || missing_deps+=("curl")
 	command -v unzip >/dev/null 2>&1 || missing_deps+=("unzip")
+	command -v jq >/dev/null 2>&1 || missing_deps+=("jq")
 
 	if [ ${#missing_deps[@]} -ne 0 ]; then
 		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"
@@ -163,7 +165,7 @@ check_java_version() {
 ###########################################################################
 # PATH Check and Auto-Update Function
 ###########################################################################
-check_path() {
+check_or_set_path() {
 	local bin_dir="$1"
 
 	# Check if path is already in PATH
@@ -282,6 +284,71 @@ check_path() {
 }
 
 ###########################################################################
+# CommandBox Installation Check and Install Function
+###########################################################################
+check_and_install_commandbox() {
+	local bin_dir="$1"
+
+	printf "${BLUE}🔍 Checking for CommandBox...${NORMAL}\n"
+
+	# Check if CommandBox is already available
+	if command -v box >/dev/null 2>&1; then
+		printf "${GREEN}✅ CommandBox is already installed and available${NORMAL}\n"
+		return 0
+	fi
+
+	printf "${YELLOW}⚠️  CommandBox is not installed${NORMAL}\n"
+	printf "${BLUE}💡 CommandBox is the Package Manager for BoxLang®${NORMAL}\n"
+	printf "${BLUE}💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}\n\n"
+
+	# Ask user if they want to install CommandBox
+	printf "${BLUE}Would you like to install CommandBox? [Y/n] ${NORMAL}"
+	read -r response
+	case "$response" in
+		[nN][oO]|[nN])
+			printf "${YELLOW}Skipping CommandBox installation${NORMAL}\n"
+			printf "${BLUE}💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
+			return 0
+			;;
+		*)
+			# Default to yes
+			;;
+	esac
+
+	printf "${BLUE}📦 Installing CommandBox...${NORMAL}\n"
+
+	# The universal binary for mac/linux is available at the following URL
+	local commandbox_url="https://www.ortussolutions.com/parent/download/commandbox/type/bin"
+	local commandbox_filename="commandbox.zip"
+
+	# Download CommandBox
+	printf "${BLUE}Downloading CommandBox from ${commandbox_url}...${NORMAL}\n"
+	if ! env curl -L --progress-bar -o "/tmp/${commandbox_filename}" "${commandbox_url}"; then
+		printf "${RED}❌ Failed to download CommandBox${NORMAL}\n"
+		printf "${BLUE}💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
+		return 1
+	fi
+
+	# Extract CommandBox
+	printf "${BLUE}Extracting CommandBox...${NORMAL}\n"
+	if ! unzip -o "/tmp/${commandbox_filename}" -d "/tmp/commandbox/"; then
+		printf "${RED}❌ Failed to extract CommandBox${NORMAL}\n"
+		return 1
+	fi
+
+	# Install CommandBox
+	printf "${BLUE}Installing CommandBox to ${bin_dir}/box...${NORMAL}\n"
+	mv "/tmp/commandbox/box" "${bin_dir}/box"
+	chmod +x "${bin_dir}/box"
+
+	# Cleanup
+	rm -rf "/tmp/${commandbox_filename}" "/tmp/commandbox/"
+
+	printf "${GREEN}✅ CommandBox installed successfully${NORMAL}\n"
+	return 0
+}
+
+###########################################################################
 # Installation Verification Function
 ###########################################################################
 verify_installation() {
@@ -385,6 +452,7 @@ show_help() {
 	printf "  ✅ Installs to /usr/local/bin and /usr/local/lib (or ~/.local/ for user install)\n"
 	printf "  ✅ Creates symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver\n"
 	printf "  ✅ Installs helper scripts: install-bx-module, install-boxlang\n"
+	printf "  ✅ Optionally installs CommandBox (BoxLang Package Manager)\n"
 	printf "  ✅ Sets up BoxLang® Home at ~/.boxlang\n"
 	printf "  ✅ Removes any previous versions\n"
 	printf "  ✅ Verifies installation\n\n"
@@ -401,6 +469,7 @@ show_help() {
 	printf "  🚀 Start REPL: ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}\n"
 	printf "  🌐 Start MiniServer: ${GREEN}boxlang-miniserver${NORMAL} or ${GREEN}bx-miniserver${NORMAL}\n"
 	printf "  📦 Install modules: ${GREEN}install-bx-module <module-name>${NORMAL}\n"
+	printf "  📦 Package Manager: ${GREEN}box${NORMAL} (if CommandBox was installed)\n"
 	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - Run with sudo for system-wide installation: ${GREEN}sudo install-boxlang.sh${NORMAL}\n"
@@ -527,15 +596,13 @@ main() {
 		exit 1
 	fi
 
-	# Tell them where we will install
+	# Start the installation
 	printf "${GREEN}"
 	echo ''
 	echo '*************************************************************************'
 	echo 'Welcome to the BoxLang® Quick Installer'
 	echo '*************************************************************************'
 	printf "${NORMAL}"
-
-	# Announce it
 	printf "${BLUE}Downloading BoxLang® [${TARGET_VERSION}] from [${DOWNLOAD_URL}]${NORMAL}\n"
 	printf "${RED}Please wait...${NORMAL}\n"
 
@@ -587,6 +654,10 @@ main() {
 	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
 	chmod +x "${DESTINATION_BIN}/install-boxlang"
 
+	# CommandBox Install
+	printf "\n"
+	check_and_install_commandbox "$DESTINATION_BIN"
+
 	# Cleanup
 	printf "\n"
 	printf "${BLUE}Cleaning up...${NORMAL}\n"
@@ -603,7 +674,7 @@ main() {
 
 	# Check PATH
 	printf "\n"
-	check_path "$DESTINATION_BIN"
+	check_or_set_path "$DESTINATION_BIN"
 
 	printf "${GREEN}"
 	echo ''
