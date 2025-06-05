@@ -124,7 +124,7 @@ check_java_version() {
 ###########################################################################
 show_help() {
 	printf "${GREEN}📦 BoxLang® Quick Installer${NORMAL}\n\n"
-	printf "${YELLOW}This script installs BoxLang® runtime and tools on your system.${NORMAL}\n\n"
+	printf "${YELLOW}This script installs the BoxLang® runtime and tools on your system.${NORMAL}\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
 	printf "  install-boxlang.sh [version] [options]\n"
 	printf "  install-boxlang.sh --help\n\n"
