@@ -229,7 +229,7 @@ check_or_set_path() {
 
 	# Ask user for permission to auto-update
 	printf "${BLUE}Would you like to automatically add $bin_dir to your PATH? [Y/n] ${NORMAL}"
-	read -r response
+	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
 			printf "${YELLOW}Skipping automatic PATH update${NORMAL}\n"
@@ -303,7 +303,7 @@ check_and_install_commandbox() {
 
 	# Ask user if they want to install CommandBox
 	printf "${BLUE}Would you like to install CommandBox? [Y/n] ${NORMAL}"
-	read -r response
+	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
 			printf "${YELLOW}Skipping CommandBox installation${NORMAL}\n"
