@@ -136,13 +136,13 @@ install_module() {
 	mkdir -p "${MODULES_HOME}"
 
 	# Create secure temporary file
-	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}-XXXXXX.zip")
-
-	# Cleanup function
-	cleanup_temp() {
-		rm -f "${TEMP_FILE}"
-	}
-	trap cleanup_temp EXIT
+	# Cleanup the temp file in case it exists
+	if [ -f "/tmp/${TARGET_MODULE}.zip" ]; then
+		rm -f "/tmp/${TARGET_MODULE}.zip"
+	fi
+	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}.zip")
+	# Add a trap to remove the temp file on exit
+	trap 'rm -f "${TEMP_FILE}"' EXIT
 
 	# Download module
 	printf "${BLUE}Downloading from ${DOWNLOAD_URL}...${NORMAL}\n"
