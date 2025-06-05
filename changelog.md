@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Checks if CommandBox is installed, if not, it asks to install it for you.
+- `jq` dependency check
+- sudo support for Linux and macOS
+
+### Fixed
+
+- Boxlang Home fixed for windows
+- Console reading via < /dev/tty
+
+## [1.6.0] - 2025-06-05
+
+### Added
+
 - Added comma-separated list support for module installations
 - Added remove modules via `--remove`
 - Show version of installed modules

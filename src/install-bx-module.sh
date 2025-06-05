@@ -295,7 +295,7 @@ remove_module() {
 	# Ask for confirmation unless --force is used
 	if [ "$FORCE_REMOVE" != "true" ]; then
 		printf "${RED}⚠️  Are you sure you want to remove this module? [y/N]: ${NORMAL}"
-		read -r confirmation
+		read -r confirmation < /dev/tty
 		case "$confirmation" in
 			[yY]|[yY][eE][sS])
 				# Continue with removal
