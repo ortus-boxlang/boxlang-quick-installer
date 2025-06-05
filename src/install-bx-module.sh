@@ -10,6 +10,7 @@ show_help() {
 	printf "${YELLOW}This script installs one or more BoxLang modules from FORGEBOX.${NORMAL}\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
 	printf "  install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]\n"
+	printf "  install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]\n"
 	printf "  install-bx-module.sh --list\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}Arguments:${NORMAL}\n"
@@ -17,12 +18,16 @@ show_help() {
 	printf "  [@<version>]      (Optional) The specific version of the module to install\n\n"
 	printf "${BOLD}Options:${NORMAL}\n"
 	printf "  --local           Install to local boxlang_modules folder instead of BoxLang HOME\n"
+	printf "  --remove          Remove specified modules\n"
+	printf "  --force           Skip confirmation when removing modules (use with --remove)\n"
 	printf "  --list            Show installed modules\n"
 	printf "  --help, -h        Show this help message\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
 	printf "  install-bx-module.sh cborm\n"
 	printf "  install-bx-module.sh cborm@2.5.0\n"
 	printf "  install-bx-module.sh cborm cbsecurity --local\n"
+	printf "  install-bx-module.sh --remove cborm\n"
+	printf "  install-bx-module.sh --remove cborm cbsecurity --force\n"
 	printf "  install-bx-module.sh --list\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
@@ -219,6 +224,66 @@ install_module() {
 	printf "${NORMAL}"
 }
 
+remove_module() {
+	local MODULE_NAME=${1}
+	local FORCE_REMOVE=${2:-false}
+
+	# Validate module name
+	if [ -z "$MODULE_NAME" ]; then
+		printf "${RED}Error: You must specify a BoxLang module to remove${NORMAL}\n"
+		exit 1
+	fi
+
+	# Convert to lowercase to match installation convention
+	MODULE_NAME=$(echo "$MODULE_NAME" | tr '[:upper:]' '[:lower:]')
+
+	# Define module path
+	local MODULE_PATH="${MODULES_HOME}/${MODULE_NAME}"
+
+	# Check if module exists
+	if [ ! -d "${MODULE_PATH}" ]; then
+		printf "${YELLOW}Module '${MODULE_NAME}' is not installed at ${MODULE_PATH}${NORMAL}\n"
+		return 0
+	fi
+
+	# Get module version for display if available
+	local MODULE_VERSION="unknown"
+	local BOX_JSON_PATH="${MODULE_PATH}/box.json"
+	if [ -f "$BOX_JSON_PATH" ]; then
+		MODULE_VERSION=$(jq -r '.version // "unknown"' "$BOX_JSON_PATH" 2>/dev/null)
+		if [ "$MODULE_VERSION" = "null" ] || [ -z "$MODULE_VERSION" ]; then
+			MODULE_VERSION="unknown"
+		fi
+	fi
+
+	# Show what will be removed
+	printf "${YELLOW}Found module: ${MODULE_NAME} (${MODULE_VERSION}) at ${MODULE_PATH}${NORMAL}\n"
+
+	# Ask for confirmation unless --force is used
+	if [ "$FORCE_REMOVE" != "true" ]; then
+		printf "${RED}Are you sure you want to remove this module? [y/N]: ${NORMAL}"
+		read -r confirmation
+		case "$confirmation" in
+			[yY]|[yY][eE][sS])
+				# Continue with removal
+				;;
+			*)
+				printf "${YELLOW}Module removal cancelled${NORMAL}\n"
+				return 0
+				;;
+		esac
+	fi
+
+	# Remove the module directory
+	printf "${BLUE}Removing module ${MODULE_NAME}...${NORMAL}\n"
+	if rm -rf "${MODULE_PATH}"; then
+		printf "${GREEN}Module '${MODULE_NAME}' removed successfully!${NORMAL}\n"
+	else
+		printf "${RED}Error: Failed to remove module '${MODULE_NAME}'${NORMAL}\n"
+		exit 1
+	fi
+}
+
 main() {
 	# Use colors if the terminal supports them
 	if which tput >/dev/null 2>&1; then
@@ -246,13 +311,16 @@ main() {
 	# Check if no arguments are passed
 	if [ $# -eq 0 ]; then
 		printf "${RED}Error: No module(s) specified${NORMAL}\n"
-		printf "${YELLOW}This script installs one or more BoxLang modules.${NORMAL}\n"
+		printf "${YELLOW}This script installs or removes BoxLang modules.${NORMAL}\n"
 		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]${NORMAL}\n"
-		printf "${YELLOW}- <module-name>: The name of the module to install.${NORMAL}\n"
+		printf "${YELLOW}   or: install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]${NORMAL}\n"
+		printf "${YELLOW}- <module-name>: The name of the module to install or remove.${NORMAL}\n"
 		printf "${YELLOW}- [@<version>]: (Optional) The specific version of the module to install.${NORMAL}\n"
 		printf "${YELLOW}- Multiple modules can be specified, separated by a space.${NORMAL}\n"
 		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
-		printf "${YELLOW}- Use --local to install to a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
+		printf "${YELLOW}- Use --remove to remove modules instead of installing them${NORMAL}\n"
+		printf "${YELLOW}- Use --force with --remove to skip confirmation prompts${NORMAL}\n"
+		printf "${YELLOW}- Use --local to install to/remove from a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
 		printf "${YELLOW}- Use --list to show installed modules${NORMAL}\n"
 		printf "${YELLOW}- Use --help to show this message${NORMAL}\n"
 		exit 1
@@ -268,6 +336,29 @@ main() {
 	if [ "$1" == "--list" ] && [ $# -eq 1 ]; then
 		list_modules
 		exit 0
+	fi
+
+	# Handle remove command
+	REMOVE_MODE=false
+	FORCE_REMOVE=false
+
+	# Check if --remove is the first argument
+	if [ "$1" = "--remove" ]; then
+		REMOVE_MODE=true
+		shift # Remove --remove from arguments
+
+		# Check for --force flag
+		for arg in "$@"; do
+			if [ "$arg" = "--force" ]; then
+				FORCE_REMOVE=true
+				break
+			fi
+		done
+
+		# Remove --force from arguments if present
+		if [ "$FORCE_REMOVE" = true ]; then
+			set -- $(printf '%s\n' "$@" | grep -v '^--force$')
+		fi
 	fi
 
 	# Detect if --local is anywhere in the arguments (not just last)
@@ -294,12 +385,37 @@ main() {
 		MODULES_HOME="${BOXLANG_HOME}/modules"
 	fi
 
+	# Handle remove mode
+	if [ "$REMOVE_MODE" = true ]; then
+		# Check if no modules specified for removal
+		if [ $# -eq 0 ]; then
+			printf "${RED}Error: No module(s) specified for removal${NORMAL}\n"
+			printf "${YELLOW}Usage: install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]${NORMAL}\n"
+			exit 1
+		fi
+
+		# Inform about local removal if applicable
+		if [ "$LOCAL_INSTALL" = true ]; then
+			printf "${YELLOW}Removing modules from local directory: $(pwd)/boxlang_modules${NORMAL}\n"
+		else
+			printf "${YELLOW}Removing modules from: ${MODULES_HOME}${NORMAL}\n"
+		fi
+
+		# Loop through all provided modules for removal
+		for module in "$@"; do
+			printf "${GREEN}Starting removal of module: ${module}${NORMAL}\n"
+			remove_module "$module" "$FORCE_REMOVE"
+		done
+
+		exit 0
+	fi
+
 	# Inform about local installation
 	if [ "$LOCAL_INSTALL" = true ]; then
 		printf "${YELLOW}Installing modules locally in $(pwd)/boxlang_modules${NORMAL}\n"
 	fi
 
-	# Loop through all provided arguments
+	# Loop through all provided arguments for installation
 	for module in "$@"; do
 		printf "${GREEN}Starting installation of module: ${module}${NORMAL}\n"
 		install_module "$module"
