@@ -1,6 +1,56 @@
 #!/bin/bash
 
 ## BOXLANG Module Installer
+
+# Configuration
+FORGEBOX_API_URL="https://forgebox.io/api/v1"
+
+show_help() {
+	printf "${GREEN}BoxLang Module Installer${NORMAL}\n\n"
+	printf "${YELLOW}This script installs one or more BoxLang modules from FORGEBOX.${NORMAL}\n\n"
+	printf "${BOLD}Usage:${NORMAL}\n"
+	printf "  install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]\n"
+	printf "  install-bx-module.sh --list\n"
+	printf "  install-bx-module.sh --help\n\n"
+	printf "${BOLD}Arguments:${NORMAL}\n"
+	printf "  <module-name>     The name of the module to install\n"
+	printf "  [@<version>]      (Optional) The specific version of the module to install\n\n"
+	printf "${BOLD}Options:${NORMAL}\n"
+	printf "  --local           Install to local boxlang_modules folder instead of BoxLang HOME\n"
+	printf "  --list            Show installed modules\n"
+	printf "  --help, -h        Show this help message\n\n"
+	printf "${BOLD}Examples:${NORMAL}\n"
+	printf "  install-bx-module.sh cborm\n"
+	printf "  install-bx-module.sh cborm@2.5.0\n"
+	printf "  install-bx-module.sh cborm cbsecurity --local\n"
+	printf "  install-bx-module.sh --list\n\n"
+	printf "${BOLD}Notes:${NORMAL}\n"
+	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
+	printf "  - Multiple modules can be specified, separated by spaces\n"
+	printf "  - Requires curl and jq to be installed\n"
+}
+
+list_modules() {
+	if [ -z "${BOXLANG_HOME}" ]; then
+		export BOXLANG_HOME="$HOME/.boxlang"
+	fi
+	MODULES_HOME="${BOXLANG_HOME}/modules"
+	printf "${YELLOW}Installed OS BoxLang Modules (${MODULES_HOME}):${NORMAL}\n"
+
+	# Check if modules directory exists
+	if [ ! -d "${MODULES_HOME}" ]; then
+		printf "${YELLOW}No modules directory found at ${MODULES_HOME}${NORMAL}\n"
+		return 0
+	fi
+
+	# List all directories in the modules folder
+	if [ -z "$(ls -A "${MODULES_HOME}" 2>/dev/null)" ]; then
+		printf "${YELLOW}No modules installed${NORMAL}\n"
+	else
+		ls -1 "${MODULES_HOME}" | sed 's/^/- /'
+	fi
+}
+
 install_module() {
 	local INPUT=${1}
 	local TARGET_MODULE=""
@@ -43,9 +93,27 @@ install_module() {
 		printf "${YELLOW}No version specified, getting latest version from FORGEBOX...${NORMAL}\n"
 
 		# Store Entry JSON From ForgeBox
-		local ENTRY_JSON=$(curl -s "https://forgebox.io/api/v1/entry/${TARGET_MODULE}/latest")
-		TARGET_VERSION=$(echo ${ENTRY_JSON} | jq -r '.data.version')
-		local DOWNLOAD_URL=$(echo ${ENTRY_JSON} | jq -r '.data.downloadURL')
+		local ENTRY_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/latest")
+
+		# Validate API response
+		if [ -z "$ENTRY_JSON" ] || [ "$ENTRY_JSON" = "null" ]; then
+			printf "${RED}Error: Failed to fetch module information from FORGEBOX${NORMAL}\n"
+			exit 1
+		fi
+
+		TARGET_VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version')
+		local DOWNLOAD_URL=$(echo "${ENTRY_JSON}" | jq -r '.data.downloadURL')
+
+		# Validate parsed data
+		if [ "$TARGET_VERSION" = "null" ] || [ -z "$TARGET_VERSION" ]; then
+			printf "${RED}Error: Module '${TARGET_MODULE}' not found in FORGEBOX${NORMAL}\n"
+			exit 1
+		fi
+
+		if [ "$DOWNLOAD_URL" = "null" ] || [ -z "$DOWNLOAD_URL" ]; then
+			printf "${RED}Error: No download URL found for module '${TARGET_MODULE}'${NORMAL}\n"
+			exit 1
+		fi
 	else
 		# We have a targeted version, let's build the download URL from the artifacts directly
 		local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
@@ -54,26 +122,56 @@ install_module() {
 	# Define paths based on LOCAL_INSTALL flag
 	local DESTINATION="${MODULES_HOME}/${TARGET_MODULE}"
 
+	# Check if module is already installed
+	if [ -d "${DESTINATION}" ]; then
+		printf "${YELLOW}Module '${TARGET_MODULE}' is already installed at ${DESTINATION}${NORMAL}\n"
+		printf "${YELLOW}Proceeding with installation (will overwrite existing)...${NORMAL}\n"
+	fi
+
 	# Inform the user
 	printf "${GREEN}Installing BoxLang® Module: ${TARGET_MODULE}@${TARGET_VERSION}\n"
 	printf "Destination: ${DESTINATION}\n${NORMAL}\n"
 
 	# Ensure module folders exist
-	mkdir -p ${MODULES_HOME}
+	mkdir -p "${MODULES_HOME}"
+
+	# Create secure temporary file
+	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}-XXXXXX.zip")
+
+	# Cleanup function
+	cleanup_temp() {
+		rm -f "${TEMP_FILE}"
+	}
+	trap cleanup_temp EXIT
 
 	# Download module
 	printf "${BLUE}Downloading from ${DOWNLOAD_URL}...${NORMAL}\n"
-	curl -Lk -o /tmp/${TARGET_MODULE}.zip "${DOWNLOAD_URL}" || {
+	if ! curl -L --fail -o "${TEMP_FILE}" "${DOWNLOAD_URL}"; then
 		printf "${RED}Error: Download failed${NORMAL}\n"
 		exit 1
-	}
+	fi
+
+	# Record installation by calling forgebox at: /api/v1/install/${TARGET_MODULE}/${TARGET_VERSION}
+	printf "${BLUE}Recording installation with FORGEBOX...${NORMAL}\n"
+	if ! curl -s -o /dev/null "${FORGEBOX_API_URL}/install/${TARGET_MODULE}/${TARGET_VERSION}"; then
+		printf "${YELLOW}Warning: Failed to record installation with FORGEBOX, but continuing...${NORMAL}\n"
+	fi
 
 	# Remove existing module folder
-	rm -rf ${DESTINATION}
+	rm -rf "${DESTINATION}"
 
 	# Extract module
 	printf "${BLUE}Extracting module...${NORMAL}\n"
-	unzip -o /tmp/${TARGET_MODULE}.zip -d "${DESTINATION}"
+	if ! unzip -o "${TEMP_FILE}" -d "${DESTINATION}"; then
+		printf "${RED}Error: Failed to extract module${NORMAL}\n"
+		exit 1
+	fi
+
+	# Verify extraction
+	if [ ! -d "${DESTINATION}" ] || [ -z "$(ls -A "${DESTINATION}" 2>/dev/null)" ]; then
+		printf "${RED}Error: Module extraction appears to have failed - destination directory is empty${NORMAL}\n"
+		exit 1
+	fi
 
 	# Success message
 	printf "${GREEN}\nBoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed successfully!\n"
@@ -125,27 +223,35 @@ main() {
 		printf "${YELLOW}- Multiple modules can be specified, separated by a space.${NORMAL}\n"
 		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
 		printf "${YELLOW}- Use --local to install to a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
+		printf "${YELLOW}- Use --list to show installed modules${NORMAL}\n"
+		printf "${YELLOW}- Use --help to show this message${NORMAL}\n"
 		exit 1
+	fi
+
+	# Show help if requested
+	if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+		show_help
+		exit 0
 	fi
 
 	# Detect if a single --list argument is passed
 	if [ "$1" == "--list" ] && [ $# -eq 1 ]; then
-		if [ -z "${BOXLANG_HOME}" ]; then
-			export BOXLANG_HOME="$HOME/.boxlang"
-		fi
-		MODULES_HOME="${BOXLANG_HOME}/modules"
-		printf "${YELLOW}Installed OS BoxLang Modules (${MODULES_HOME}):${NORMAL}\n"
-		# List all directories in the ~/.boxlang/modules folder
-		ls -1 ${MODULES_HOME} | sed 's/^/- /'
+		list_modules
 		exit 0
 	fi
 
-	# Detect if --local is the last argument
+	# Detect if --local is anywhere in the arguments (not just last)
 	LOCAL_INSTALL=false
-	LAST_ARG="${!#}"
-	if [ "$LAST_ARG" == "--local" ]; then
-		LOCAL_INSTALL=true
-		set -- "${@:1:$(($#-1))}" # Remove --local from the argument list
+	for arg in "$@"; do
+		if [ "$arg" = "--local" ]; then
+			LOCAL_INSTALL=true
+			break
+		fi
+	done
+
+	# Remove --local from arguments if present
+	if [ "$LOCAL_INSTALL" = true ]; then
+		set -- $(printf '%s\n' "$@" | grep -v '^--local$')
 	fi
 
 	# Set module installation path

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added record installation back to ForgeBox
+- Added `--help` to all commands
 - Uploads to new destination on s3: `boxlang-quick-installer`
 - md5 and sha256 checksums for the installer
 - zip files for the installer
