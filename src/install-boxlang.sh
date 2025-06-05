@@ -1,38 +1,190 @@
 #!/bin/bash
 
-## BOXLANG WEB INSTALLER
-main() {
-	# Use colors, but only if connected to a terminal, and that terminal
-	# supports them.
+## BOXLANG INSTALLER
+
+###########################################################################
+# Global Color Variables
+###########################################################################
+# Initialize colors globally so all functions can use them
+setup_colors() {
+	# Use colors, but only if connected to a terminal, and that terminal supports them.
 	if which tput >/dev/null 2>&1; then
 		ncolors=$(tput colors)
 	fi
 	if [ -t 1 ] && [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
-		local RED="$(tput setaf 1)"
-		local GREEN="$(tput setaf 2)"
-		local YELLOW="$(tput setaf 3)"
-		local BLUE="$(tput setaf 4)"
-		local BOLD="$(tput bold)"
-		local NORMAL="$(tput sgr0)"
-		local MAGENTA="$(tput setaf 5)"
-		local CYAN="$(tput setaf 6)"
-		local WHITE="$(tput setaf 7)"
-		local BLACK="$(tput setaf 0)"
-		local UNDERLINE="$(tput smul)"
+		RED="$(tput setaf 1)"
+		GREEN="$(tput setaf 2)"
+		YELLOW="$(tput setaf 3)"
+		BLUE="$(tput setaf 4)"
+		BOLD="$(tput bold)"
+		NORMAL="$(tput sgr0)"
+		MAGENTA="$(tput setaf 5)"
+		CYAN="$(tput setaf 6)"
+		WHITE="$(tput setaf 7)"
+		BLACK="$(tput setaf 0)"
+		UNDERLINE="$(tput smul)"
 	else
-		local RED=""
-		local GREEN=""
-		local YELLOW=""
-		local BLUE=""
-		local BOLD=""
-		local NORMAL=""
-		local MAGENTA=""
-		local CYAN=""
-		local WHITE=""
-		local BLACK=""
-		local UNDERLINE=""
+		RED=""
+		GREEN=""
+		YELLOW=""
+		BLUE=""
+		BOLD=""
+		NORMAL=""
+		MAGENTA=""
+		CYAN=""
+		WHITE=""
+		BLACK=""
+		UNDERLINE=""
+	fi
+}
+
+# Initialize colors at script startup
+setup_colors
+
+###########################################################################
+# Java Version Check Function (Enhanced for sudo compatibility)
+###########################################################################
+check_java_version() {
+	local JAVA_CMD=""
+	local JAVA_VERSION=""
+
+	# Function to extract version from java output
+	extract_java_version() {
+		local version_output="$1"
+		# Handle both old (1.8.0_xxx) and new (11.x.x, 17.x.x, 21.x.x) version formats
+		echo "$version_output" | awk -F '"' '/version/ {print $2}' | sed 's/^1\.//' | cut -d'.' -f1
+	}
+
+	# Try multiple approaches to find Java, especially when running under sudo
+	local java_candidates=(
+		"java"                                          # Standard PATH
+		"$JAVA_HOME/bin/java"                          # JAVA_HOME if set
+		"/usr/bin/java"                                # Common system location
+		"/usr/local/bin/java"                          # Homebrew location
+		"/opt/homebrew/bin/java"                       # Apple Silicon Homebrew
+		"/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java"  # macOS Oracle/OpenJDK
+	)
+
+	# If running under sudo, try to get the original user's environment
+	if [ -n "${SUDO_USER}" ]; then
+		printf "${YELLOW}Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
+
+		# Try to get Java from the original user's environment
+		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
+		if [ -n "$user_java_cmd" ]; then
+			java_candidates=("$user_java_cmd" "${java_candidates[@]}")
+		fi
+
+		# Try to get JAVA_HOME from original user
+		local user_java_home=$(sudo -u "${SUDO_USER}" -i bash -c 'echo $JAVA_HOME 2>/dev/null' || echo "")
+		if [ -n "$user_java_home" ] && [ -f "$user_java_home/bin/java" ]; then
+			java_candidates=("$user_java_home/bin/java" "${java_candidates[@]}")
+		fi
 	fi
 
+	# Test each candidate
+	for candidate in "${java_candidates[@]}"; do
+		# Handle glob patterns
+		if [[ "$candidate" == *"*"* ]]; then
+			for expanded_path in $candidate; do
+				if [ -x "$expanded_path" ]; then
+					local version_output=$("$expanded_path" -version 2>&1)
+					if [ $? -eq 0 ]; then
+						JAVA_VERSION=$(extract_java_version "$version_output")
+						if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
+							JAVA_CMD="$expanded_path"
+							printf "${GREEN}✅ Found Java ${JAVA_VERSION} at: ${JAVA_CMD}${NORMAL}\n"
+							return 0
+						fi
+					fi
+				fi
+			done
+		else
+			if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
+				local version_output=$("$candidate" -version 2>&1)
+				if [ $? -eq 0 ]; then
+					JAVA_VERSION=$(extract_java_version "$version_output")
+					if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
+						JAVA_CMD="$candidate"
+						printf "${GREEN}✅ Found Java ${JAVA_VERSION} at: ${JAVA_CMD}${NORMAL}\n"
+						return 0
+					elif [ -n "$JAVA_VERSION" ]; then
+						printf "${YELLOW}⚠️  Found Java ${JAVA_VERSION} at ${candidate}, but Java 21+ is required${NORMAL}\n"
+					fi
+				fi
+			fi
+		fi
+	done
+
+	return 1
+}
+
+###########################################################################
+# Help Function
+###########################################################################
+show_help() {
+	printf "${GREEN}📦 BoxLang® Quick Installer${NORMAL}\n\n"
+	printf "${YELLOW}This script installs BoxLang® runtime and tools on your system.${NORMAL}\n\n"
+	printf "${BOLD}Usage:${NORMAL}\n"
+	printf "  install-boxlang.sh [version] [options]\n"
+	printf "  install-boxlang.sh --help\n\n"
+	printf "${BOLD}Arguments:${NORMAL}\n"
+	printf "  [version]         (Optional) Specify which version to install\n"
+	printf "                    - 'latest' (default): Install the latest stable release\n"
+	printf "                    - 'snapshot': Install the latest development snapshot\n"
+	printf "                    - '1.2.0': Install a specific version number\n\n"
+	printf "${BOLD}Options:${NORMAL}\n"
+	printf "  --help, -h        Show this help message\n\n"
+	printf "${BOLD}Examples:${NORMAL}\n"
+	printf "  install-boxlang.sh\n"
+	printf "  install-boxlang.sh latest\n"
+	printf "  install-boxlang.sh snapshot\n"
+	printf "  install-boxlang.sh 1.2.0\n"
+	printf "  install-boxlang.sh --help\n\n"
+	printf "${BOLD}What this installer does:${NORMAL}\n"
+	printf "  ✅ Checks for Java 21+ requirement\n"
+	printf "  ✅ Downloads BoxLang® runtime and MiniServer\n"
+	printf "  ✅ Installs to /usr/local/bin and /usr/local/lib\n"
+	printf "  ✅ Creates symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver\n"
+	printf "  ✅ Installs helper scripts: install-bx-module, install-boxlang\n"
+	printf "  ✅ Sets up BoxLang® Home at ~/.boxlang\n"
+	printf "  ✅ Removes any previous versions\n\n"
+	printf "${BOLD}Requirements:${NORMAL}\n"
+	printf "  - Java 21 or higher (OpenJDK or Oracle JDK)\n"
+	printf "  - curl (for downloading)\n"
+	printf "  - unzip (for extracting)\n"
+	printf "  - sudo privileges (for system-wide installation)\n\n"
+	printf "${BOLD}Installation Paths:${NORMAL}\n"
+	printf "  📁 Binaries: /usr/local/bin/\n"
+	printf "  📁 JARs: /usr/local/lib/\n"
+	printf "  📁 BoxLang Home: ~/.boxlang/\n\n"
+	printf "${BOLD}After Installation:${NORMAL}\n"
+	printf "  🚀 Start REPL: ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}\n"
+	printf "  🌐 Start MiniServer: ${GREEN}boxlang-miniserver${NORMAL} or ${GREEN}bx-miniserver${NORMAL}\n"
+	printf "  📦 Install modules: ${GREEN}install-bx-module <module-name>${NORMAL}\n"
+	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n\n"
+	printf "${BOLD}Notes:${NORMAL}\n"
+	printf "  - Run with sudo for system-wide installation: ${GREEN}sudo install-boxlang.sh${NORMAL}\n"
+	printf "  - Java detection works even when run with sudo\n"
+	printf "  - Previous versions are automatically removed before installation\n"
+	printf "  - BoxLang® is open-source under Apache 2.0 License\n\n"
+	printf "${BOLD}More Information:${NORMAL}\n"
+	printf "  🌐 Website: https://boxlang.io\n"
+	printf "  📖 Documentation: https://boxlang.io/docs\n"
+	printf "  💾 GitHub: https://github.com/ortus-boxlang/boxlang\n"
+	printf "  💬 Community: https://boxlang.io/community\n"
+}
+
+###########################################################################
+# Parse command line arguments before main execution
+###########################################################################
+# Check for help argument early to avoid any setup overhead
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+	show_help
+	exit 0
+fi
+
+main() {
 	# Only enable exit-on-error after the non-critical colorization stuff,
 	# which may fail on systems lacking tput or terminfo
 	set -e
@@ -70,14 +222,33 @@ main() {
 	###########################################################################
 	# Java Version Check
 	###########################################################################
-	local JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-	if [[ -z "$JAVA_VERSION" ]]; then
-		echo "${RED}Error: Failed to determine Java version. Ensure Java is installed and in your PATH.${NORMAL}"
-		exit 1
-	fi
-	local JAVA_MAJOR_VERSION=$(echo "${JAVA_VERSION}" | cut -d'.' -f1)
-	if [ "${JAVA_MAJOR_VERSION}" -lt 21 ]; then
-		echo "Error: Java 21 or higher is required to run BoxLang"
+	printf "${BLUE}🔍 Checking Java installation...${NORMAL}\n"
+
+	if ! check_java_version; then
+		printf "${RED}❌ Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
+		printf "${YELLOW}Please install Java 21+ and ensure it's in your PATH.${NORMAL}\n"
+		printf "${YELLOW}Recommended: OpenJDK 21+ or Oracle JRE 21+${NORMAL}\n"
+
+		if [ "$(uname)" = "Darwin" ]; then
+			printf "${BLUE}💡 On macOS, you can install Java using:${NORMAL}\n"
+			printf "   brew install openjdk@21\n"
+			printf "   or download from: https://adoptium.net/\n"
+		elif [ "$(uname)" = "Linux" ]; then
+			if command -v apt-get >/dev/null 2>&1; then
+				printf "${BLUE}💡 On Ubuntu/Debian, you can install Java using:${NORMAL}\n"
+				printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
+			elif command -v yum >/dev/null 2>&1; then
+				printf "${BLUE}💡 On RHEL/CentOS/Fedora, you can install Java using:${NORMAL}\n"
+				printf "   sudo yum install java-21-openjdk\n"
+			elif command -v dnf >/dev/null 2>&1; then
+				printf "${BLUE}💡 On Fedora, you can install Java using:${NORMAL}\n"
+				printf "   sudo dnf install java-21-openjdk\n"
+			else
+				printf "${BLUE}💡 On Linux, you can install Java using your package manager or:${NORMAL}\n"
+				printf "   Download from: https://adoptium.net/\n"
+			fi
+		fi
+
 		exit 1
 	fi
 
@@ -168,7 +339,7 @@ main() {
 	echo 'Just copy the following line to override the location if you want'
 	echo ''
 	printf "${BLUE}${BOLD}"
-	echo "EXPORT BOXLANG_HOME=~/.boxlang"
+	echo "export BOXLANG_HOME=~/.boxlang"
 	echo "${NORMAL}"
 	echo ''
 	echo "${MAGENTA}✅ You can start a REPL by running: boxlang${NORMAL}"
