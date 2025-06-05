@@ -47,8 +47,71 @@ list_modules() {
 	if [ -z "$(ls -A "${MODULES_HOME}" 2>/dev/null)" ]; then
 		printf "${YELLOW}No modules installed${NORMAL}\n"
 	else
-		ls -1 "${MODULES_HOME}" | sed 's/^/- /'
+		# List modules with version information from box.json
+		for module_dir in "${MODULES_HOME}"/*; do
+			if [ -d "$module_dir" ]; then
+				module_name=$(basename "$module_dir")
+				box_json_path="$module_dir/box.json"
+
+				if [ -f "$box_json_path" ]; then
+					# Extract version from box.json
+					version=$(jq -r '.version // "unknown"' "$box_json_path" 2>/dev/null)
+					if [ "$version" != "null" ] && [ -n "$version" ]; then
+						printf -- "✓ %s (%s)\n" "$module_name" "$version"
+					else
+						printf -- "✓ %s (version unknown)\n" "$module_name"
+					fi
+				else
+					printf -- "✓ %s (no box.json)\n" "$module_name"
+				fi
+			fi
+		done
 	fi
+}
+
+get_latest_version_from_forgebox() {
+	local MODULE_NAME=${1}
+
+	command -v jq >/dev/null 2>&1 || {
+		printf "${RED}Error: [jq] binary is not installed and we need it in order to parse JSON from FORGEBOX${NORMAL}\n"
+		printf "${YELLOW}Please install jq from https://stedolan.github.io/jq/download/ or via your package manager${NORMAL}\n"
+		printf "${YELLOW}For example, on MacOS you can install it via brew with:${NORMAL}\n"
+		printf "${BLUE}brew install jq${NORMAL}\n"
+		printf "${YELLOW}For example, on Linux you can install it via apt-get with:${NORMAL}\n"
+		printf "${BLUE}apt-get install jq${NORMAL}\n"
+		printf "${YELLOW}For example, on Windows you can install it via choco or winget with:${NORMAL}\n"
+		printf "${BLUE}choco install jq or winget install jqlang.jq${NORMAL}\n"
+		exit 1
+	}
+
+	printf "${YELLOW}No version specified, getting latest version from FORGEBOX...${NORMAL}\n"
+
+	# Store Entry JSON From ForgeBox
+	local ENTRY_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/latest")
+
+	# Validate API response
+	if [ -z "$ENTRY_JSON" ] || [ "$ENTRY_JSON" = "null" ]; then
+		printf "${RED}Error: Failed to fetch module information from FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	local VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version')
+	local DOWNLOAD_URL_TEMP=$(echo "${ENTRY_JSON}" | jq -r '.data.downloadURL')
+
+	# Validate parsed data
+	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+		printf "${RED}Error: Module '${MODULE_NAME}' not found in FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	if [ "$DOWNLOAD_URL_TEMP" = "null" ] || [ -z "$DOWNLOAD_URL_TEMP" ]; then
+		printf "${RED}Error: No download URL found for module '${MODULE_NAME}'${NORMAL}\n"
+		exit 1
+	fi
+
+	# Return values via global variables
+	TARGET_VERSION="$VERSION"
+	DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
 }
 
 install_module() {
@@ -78,42 +141,9 @@ install_module() {
 
 	# Fetch latest version if not specified
 	if [ -z "${TARGET_VERSION+x}" ] || [ -z "$TARGET_VERSION" ]; then
-		command -v jq >/dev/null 2>&1 || {
-			printf "${RED}Error: [jq] binary is not installed and we need it in order to parse JSON from FORGEBOX${NORMAL}\n"
-			printf "${YELLOW}Please install jq from https://stedolan.github.io/jq/download/ or via your package manager${NORMAL}\n"
-			printf "${YELLOW}For example, on MacOS you can install it via brew with:${NORMAL}\n"
-			printf "${BLUE}brew install jq${NORMAL}\n"
-			printf "${YELLOW}For example, on Linux you can install it via apt-get with:${NORMAL}\n"
-			printf "${BLUE}apt-get install jq${NORMAL}\n"
-			printf "${YELLOW}For example, on Windows you can install it via choco or winget with:${NORMAL}\n"
-			printf "${BLUE}choco install jq or winget install jqlang.jq${NORMAL}\n"
-			exit 1
-		}
-
-		printf "${YELLOW}No version specified, getting latest version from FORGEBOX...${NORMAL}\n"
-
-		# Store Entry JSON From ForgeBox
-		local ENTRY_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/latest")
-
-		# Validate API response
-		if [ -z "$ENTRY_JSON" ] || [ "$ENTRY_JSON" = "null" ]; then
-			printf "${RED}Error: Failed to fetch module information from FORGEBOX${NORMAL}\n"
-			exit 1
-		fi
-
-		TARGET_VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version')
-		local DOWNLOAD_URL=$(echo "${ENTRY_JSON}" | jq -r '.data.downloadURL')
-
-		# Validate parsed data
-		if [ "$TARGET_VERSION" = "null" ] || [ -z "$TARGET_VERSION" ]; then
-			printf "${RED}Error: Module '${TARGET_MODULE}' not found in FORGEBOX${NORMAL}\n"
-			exit 1
-		fi
-
-		if [ "$DOWNLOAD_URL" = "null" ] || [ -z "$DOWNLOAD_URL" ]; then
-			printf "${RED}Error: No download URL found for module '${TARGET_MODULE}'${NORMAL}\n"
-			exit 1
-		fi
+		get_latest_version_from_forgebox "$TARGET_MODULE"
+		# Use the global variables set by the function
+		local DOWNLOAD_URL="$DOWNLOAD_URL"
 	else
 		# We have a targeted version, let's build the download URL from the artifacts directly
 		local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
