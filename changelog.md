@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added comma-separated list support for module installations
+- Added remove modules via `--remove`
+- Show version of installed modules
+- Added record installation back to ForgeBox
+- Added `--help` to all commands
+- Uploads to new destination on s3: `boxlang-quick-installer`
+- md5 and sha256 checksums for the installer
+- zip files for the installer
+- `version.json` file to track the installer
+- Update the `install-boxlang.bat` for Windows to make sure you can run it from anywhere.
+- If you are in Powershell 5 or lower, it will now use no progress bar.
+- Updated the `install-boxlang.ps1` to add a BOXLANG_HOME env variable to the system and install the boxlang scripts.
+
+## [1.5.0] - 2025-05-21
+
+### Added
+
 - Permissions for JRE installer
 - Added `install-jre.ps1` to install the Java Runtime Environment (JRE) for BoxLang in Windows.
 - Version cleanup
