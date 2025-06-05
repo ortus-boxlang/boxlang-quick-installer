@@ -11,8 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.0] - 2025-06-05
 
-## [1.5.0] - 2025-05-21
-
 ### Added
 
 - Added comma-separated list support for module installations
