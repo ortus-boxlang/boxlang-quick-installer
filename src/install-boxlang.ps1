@@ -8,8 +8,14 @@ if ($args.Count -ge 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
     exit 0
 }
 
+# Check for uninstall argument
+if ($args.Count -ge 1 -and $args[0] -eq "--uninstall") {
+    Uninstall-BoxLang
+    exit 0
+}
+
 # $TARGET_VERSION = "latest"
-$TARGET_VERSION = if ($args.Count -ge 1) { $args[0] } else { "latest" }
+$TARGET_VERSION = if ($args.Count -ge 1 -and $args[0] -notmatch "^--") { $args[0] } else { "latest" }
 $DOWNLOAD_URL = ""
 
 if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
@@ -69,6 +75,7 @@ function Show-Help {
     Write-Host -ForegroundColor White -NoNewline "Options:"
     Write-Host ""
     Write-Host "  --help, -h        Show this help message"
+    Write-Host "  --uninstall       Remove BoxLang from the system"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
     Write-Host ""
@@ -76,6 +83,7 @@ function Show-Help {
     Write-Host "  .\install-boxlang.ps1 latest"
     Write-Host "  .\install-boxlang.ps1 snapshot"
     Write-Host "  .\install-boxlang.ps1 1.2.0"
+    Write-Host "  .\install-boxlang.ps1 --uninstall"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Installation Methods:"
     Write-Host ""
@@ -144,24 +152,198 @@ function Show-Help {
     Write-Host "  💬 Community: https://boxlang.io/community"
 }
 
-try {
-    $javaVersion = java --version | Select-String -Pattern "\d+\.\d+\.\d+" | Select-Object -First 1
+###########################################################################
+# Uninstall Function
+###########################################################################
+function Uninstall-BoxLang {
+    Write-Host -ForegroundColor Yellow "🗑️  Uninstalling BoxLang..."
 
-    if ( $null -eq $javaVersion ) {
-        Write-Host "You must have Java $requiredJavaVersion or higher installed"
-        exit
-    }
+    # Remove from standard Windows program locations
+    Write-Host -ForegroundColor Blue "Removing binaries and scripts..."
+    Remove-Item -Path "C:\boxlang" -Recurse -Force -ErrorAction SilentlyContinue
 
-    $javaVersion -match "(\d+)\.\d+\.\d+"
-    $installedJavaVersion = $matches.1
+    # Remove from PATH
+    Write-Host -ForegroundColor Blue "Removing from PATH..."
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $newPath = ($currentPath -split ";" | Where-Object { $_ -notlike "*boxlang*" }) -join ";"
+    [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
 
-    if ( [convert]::ToInt32($installedJavaVersion, 10) -lt [convert]::ToInt32($requiredJavaVersion, 10 ) ) {
-        Write-Host "You must have Java $requiredJavaVersion or higher installed"
-        exit
-    }
+    # Remove environment variables
+    Write-Host -ForegroundColor Blue "Removing environment variables..."
+    [Environment]::SetEnvironmentVariable("BOXLANG_HOME", $null, [EnvironmentVariableTarget]::User)
+
+    Write-Host -ForegroundColor Green "✅ BoxLang uninstalled successfully"
+    Write-Host -ForegroundColor Blue "💡 BoxLang Home directory was preserved"
+    Write-Host -ForegroundColor Blue "💡 To remove it completely, delete the .boxlang folder in your user directory"
 }
-catch {
 
+###########################################################################
+# Installation Verification Function
+###########################################################################
+function Test-Installation {
+    param([string]$BinDir)
+
+    Write-Host -ForegroundColor Blue "🔍 Verifying installation..."
+
+    # Test basic functionality
+    $boxlangPath = Join-Path $BinDir "boxlang.bat"
+    try {
+        $version = & $boxlangPath --version 2>$null
+        if (-not $version) {
+            Write-Host -ForegroundColor Red "❌ BoxLang installation verification failed"
+            return $false
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Red "❌ BoxLang installation verification failed: $($_.Exception.Message)"
+        return $false
+    }
+
+    Write-Host -ForegroundColor Green "✅ Installation verified successfully"
+    return $true
+}
+
+###########################################################################
+# PATH Management Function
+###########################################################################
+function Update-PathVariable {
+    param([string]$BinDir)
+
+    # Check if path is already in PATH
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    if ($currentPath -like "*$BinDir*") {
+        Write-Host -ForegroundColor Green "✅ $BinDir is already in your PATH"
+        return
+    }
+
+    Write-Host -ForegroundColor Yellow "⚠️  $BinDir is not in your PATH"
+
+    # Ask user for permission to auto-update
+    $response = Read-Host "Would you like to automatically add $BinDir to your PATH? [Y/n]"
+    if ($response -match "^[nN]") {
+        Write-Host -ForegroundColor Yellow "Skipping automatic PATH update"
+        Write-Host -ForegroundColor Blue "Manually add $BinDir to your system PATH"
+        return
+    }
+
+    # Add to PATH
+    Write-Host -ForegroundColor Blue "Adding $BinDir to PATH..."
+    $newPath = "$currentPath;$BinDir"
+    [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
+    Write-Host -ForegroundColor Green "✅ Successfully added $BinDir to PATH"
+    Write-Host -ForegroundColor Blue "💡 Restart your terminal to use the new PATH"
+}
+
+###########################################################################
+# Preflight Checks Function
+###########################################################################
+function Test-Prerequisites {
+    Write-Host -ForegroundColor Blue "🔍 Running pre-flight checks..."
+
+    $missingDeps = @()
+
+    # Check for PowerShell (obviously available, but check version)
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        $missingDeps += "PowerShell 5.1+"
+    }
+
+    # Check for internet connectivity
+    try {
+        $testConnection = Test-NetConnection -ComputerName "downloads.ortussolutions.com" -Port 443 -InformationLevel Quiet -ErrorAction SilentlyContinue
+        if (-not $testConnection) {
+            $missingDeps += "Internet connectivity"
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Yellow "⚠️  Could not verify internet connectivity"
+    }
+
+    if ($missingDeps.Count -gt 0) {
+        Write-Host -ForegroundColor Red "❌ Missing required dependencies: $($missingDeps -join ', ')"
+        Write-Host -ForegroundColor Blue "💡 Please ensure you have:"
+        foreach ($dep in $missingDeps) {
+            Write-Host "   - $dep"
+        }
+        return $false
+    }
+
+    Write-Host -ForegroundColor Green "✅ Pre-flight checks passed"
+    return $true
+}
+
+# Perform preflight checks
+if (-not (Test-Prerequisites)) {
+    exit 1
+}
+
+###########################################################################
+# Enhanced Java Version Check Function
+###########################################################################
+function Test-JavaVersion {
+    Write-Host -ForegroundColor Blue "🔍 Checking Java installation..."
+
+    $javaCandidates = @(
+        "java",                                    # Standard PATH
+        "$env:JAVA_HOME\bin\java.exe",            # JAVA_HOME if set
+        "C:\Program Files\Java\*\bin\java.exe",   # Common Windows Oracle location
+        "C:\Program Files (x86)\Java\*\bin\java.exe", # 32-bit Java location
+        "$env:ProgramFiles\Eclipse Adoptium\*\bin\java.exe", # Eclipse Temurin
+        "$env:ProgramFiles\Microsoft\jdk-*\bin\java.exe"     # Microsoft OpenJDK
+    )
+
+    foreach ($candidate in $javaCandidates) {
+        try {
+            # Handle glob patterns for Program Files
+            if ($candidate -like "*\*\*") {
+                $expandedPaths = Get-ChildItem -Path ($candidate -replace "\\\*.*", "") -Directory -ErrorAction SilentlyContinue |
+                    ForEach-Object { $candidate -replace "\*", $_.Name }
+                foreach ($expandedPath in $expandedPaths) {
+                    if (Test-Path $expandedPath) {
+                        $candidate = $expandedPath
+                        break
+                    }
+                }
+            }
+
+            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                $versionOutput = & $candidate --version 2>&1 | Out-String
+                if ($versionOutput -match '"(\d+)\.') {
+                    $majorVersion = [int]$matches[1]
+                } elseif ($versionOutput -match '"1\.(\d+)\.') {
+                    $majorVersion = [int]$matches[1]  # Handle legacy 1.8 format
+                } elseif ($versionOutput -match 'version (\d+)\.') {
+                    $majorVersion = [int]$matches[1]
+                } else {
+                    continue
+                }
+
+                if ($majorVersion -ge $requiredJavaVersion) {
+                    Write-Host -ForegroundColor Green "✅ Found Java $majorVersion at: $candidate"
+                    return $true
+                } else {
+                    Write-Host -ForegroundColor Yellow "⚠️  Found Java $majorVersion at $candidate, but Java $requiredJavaVersion+ is required"
+                }
+            }
+        }
+        catch {
+            # Silent continue to next candidate
+        }
+    }
+
+    # If we get here, no suitable Java was found
+    Write-Host -ForegroundColor Red "❌ Error: Java $requiredJavaVersion or higher is required to run BoxLang"
+    Write-Host -ForegroundColor Yellow "Please install Java $requiredJavaVersion+ and ensure it's in your PATH."
+    Write-Host -ForegroundColor Yellow "Recommended: OpenJDK $requiredJavaVersion+ or Oracle JRE $requiredJavaVersion+"
+    Write-Host -ForegroundColor Blue "💡 You can download Java from:"
+    Write-Host "   https://adoptium.net/ (Eclipse Temurin)"
+    Write-Host "   https://www.microsoft.com/openjdk (Microsoft OpenJDK)"
+    Write-Host "   https://www.oracle.com/java/technologies/downloads/"
+    return $false
+}
+
+# Perform Java version check
+if (-not (Test-JavaVersion)) {
+    exit 1
 }
 
 # Tell them where we will install
@@ -186,23 +368,55 @@ New-Item -Type Directory -Path $tmp -Force | Out-Null
 New-Item -Type Directory -Path $destinationFolder -Force | Out-Null
 New-Item -Type Directory -Path $DESTINATION_HOME -Force | Out-Null
 
+# Uninstall previous versions
+Write-Host -ForegroundColor Yellow "Removing previous versions (if any)..."
+Remove-Item -Path "$DESTINATION_LIB\boxlang-*.jar" -Force -ErrorAction SilentlyContinue
+
 # download boxlang
 Remove-Item -Path $tmp\boxlang.zip -ErrorAction SilentlyContinue -Force
-Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $tmp\boxlang.zip
+try {
+    Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $tmp\boxlang.zip -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Red "❌ Error: Download of BoxLang® binary failed"
+    Write-Host -ForegroundColor Red $_.Exception.Message
+    exit 1
+}
 
 # download miniserver
 Remove-Item -Path $tmp\boxlang-miniserver.zip -ErrorAction SilentlyContinue -Force
-Invoke-WebRequest -Uri $DOWNLOAD_URL_MINISERVER -OutFile $tmp\boxlang-miniserver.zip
+try {
+    Invoke-WebRequest -Uri $DOWNLOAD_URL_MINISERVER -OutFile $tmp\boxlang-miniserver.zip -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Red "❌ Error: Download of BoxLang® MiniServer binary failed"
+    Write-Host -ForegroundColor Red $_.Exception.Message
+    exit 1
+}
 
 write-host $tmp
 
 Write-Host -ForegroundColor Green "BoxLang downloaded to [$tmp\boxlang] continuing installation"
 
 Write-Host -ForegroundColor Green "Unzipping BoxLang"
-Expand-Archive -Path $tmp\boxlang.zip -DestinationPath $destinationFolder -ErrorAction SilentlyContinue
+try {
+    Expand-Archive -Path $tmp\boxlang.zip -DestinationPath $destinationFolder -Force -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Red "❌ Error: Failed to extract BoxLang archive"
+    Write-Host -ForegroundColor Red $_.Exception.Message
+    exit 1
+}
 
 Write-Host -ForegroundColor Green "Unzipping BoxLang MiniServer"
-Expand-Archive -Path $tmp\boxlang-miniserver.zip -DestinationPath $destinationFolder -ErrorAction SilentlyContinue
+try {
+    Expand-Archive -Path $tmp\boxlang-miniserver.zip -DestinationPath $destinationFolder -Force -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Red "❌ Error: Failed to extract BoxLang MiniServer archive"
+    Write-Host -ForegroundColor Red $_.Exception.Message
+    exit 1
+}
 
 # Create bx aliases
 try {
@@ -229,13 +443,36 @@ $installBxModuleBatDest = "$destinationFolder\bin\install-bx-module.bat"
 $installBxModulePs1Dest = "$destinationFolder\bin\install-bx-module.ps1"
 
 Write-Host -ForegroundColor Green "Downloading install-boxlang.bat"
-Invoke-WebRequest -Uri $installBoxLangBat -OutFile $installBoxLangBatDest
+try {
+    Invoke-WebRequest -Uri $installBoxLangBat -OutFile $installBoxLangBatDest -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Yellow "⚠️  Warning: Failed to download install-boxlang.bat"
+}
+
 Write-Host -ForegroundColor Green "Downloading install-boxlang.ps1"
-Invoke-WebRequest -Uri $installBoxLangPs1 -OutFile $installBoxLangPs1Dest
+try {
+    Invoke-WebRequest -Uri $installBoxLangPs1 -OutFile $installBoxLangPs1Dest -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Yellow "⚠️  Warning: Failed to download install-boxlang.ps1"
+}
+
 Write-Host -ForegroundColor Green "Downloading install-bx-module.bat"
-Invoke-WebRequest -Uri $installBxModuleBat -OutFile $installBxModuleBatDest
+try {
+    Invoke-WebRequest -Uri $installBxModuleBat -OutFile $installBxModuleBatDest -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Yellow "⚠️  Warning: Failed to download install-bx-module.bat"
+}
+
 Write-Host -ForegroundColor Green "Downloading install-bx-module.ps1"
-Invoke-WebRequest -Uri $installBxModulePs1 -OutFile $installBxModulePs1Dest
+try {
+    Invoke-WebRequest -Uri $installBxModulePs1 -OutFile $installBxModulePs1Dest -ErrorAction Stop
+}
+catch {
+    Write-Host -ForegroundColor Yellow "⚠️  Warning: Failed to download install-bx-module.ps1"
+}
 
 # CommandBox Installation Check and Install
 function Check-And-Install-CommandBox {
@@ -333,11 +570,8 @@ Write-Host ""
 Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
 ## Add the bin folder to the path
-Write-Host -ForegroundColor Green "Adding BoxLang to your users' path variable"
-[Environment]::SetEnvironmentVariable(
-    "Path",
-    [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User) + ";$destinationFolder\bin",
-    [EnvironmentVariableTarget]::User) | Out-Null
+Write-Host ""
+Update-PathVariable -BinDir $DESTINATION_BIN
 
 ## Create a BOXLANG_HOME env variable that points to the $DESTINATION_HOME
 Write-Host -ForegroundColor Green "Setting the BOXLANG_HOME environment variable"
@@ -348,9 +582,18 @@ Write-Host -ForegroundColor Green "Setting the BOXLANG_HOME environment variable
 
 ## Clean up
 Write-Host -ForegroundColor Green "Cleaning up..."
-Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp\boxlang | Out-Null
+Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp\boxlang.zip | Out-Null
+Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp\boxlang-miniserver.zip | Out-Null
+Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp -Recurse | Out-Null
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\boxlang | Out-Null
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\boxlang-miniserver | Out-Null
+# Remove any Unix-specific files that might have been extracted
+Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\install-boxlang -ErrorAction SilentlyContinue
+Remove-Item -Force -ErrorAction SilentlyContinue -Path $destinationFolder\bin\install-bx-module -ErrorAction SilentlyContinue
+
+## Verify installation
+Write-Host ""
+Test-Installation -BinDir $DESTINATION_BIN
 
 ## Startup Test
 Write-Host -ForegroundColor Green "Testing BoxLang..."
