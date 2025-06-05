@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Checks if CommandBox is installed, if not, it asks to install it for you.
 - `jq` dependency check
+- sudo support for Linux and macOS
 
 ### Fixed
 
