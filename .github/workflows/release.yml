@@ -53,22 +53,7 @@ jobs:
 
       - name: Build the Installer
         run: |
-          # Copy the src/* to a build directory
-          mkdir -p build .tmp
-          cp -r src/* build/
-          # MD5 hashes
-          find build -type f -exec md5sum {} + > .tmp/boxlang-installer.md5
-          # SHA-256 hashes (more secure)
-          find build -type f -exec sha256sum {} + > .tmp/boxlang-installer.sha256
-          # Copy the checksums  to the build directory
-          cp -v .tmp/* build/
-          # Copy the changelog
-          cp -v changelog.md build/changelog.md
-          # Copy the latest version file
-          cp -v version.json build/version.json
-          # Zip up the build directory contents
-          cd build
-          zip -r boxlang-installer.zip ./*
+          ./build.sh
 
       - name: Commit Changelog [unreleased] with latest version
         uses: EndBug/add-and-commit@v9.1.4
