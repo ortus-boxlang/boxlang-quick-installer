@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added remove modules via `--remove`
 - Show version of installed modules
 - Added record installation back to ForgeBox
 - Added `--help` to all commands

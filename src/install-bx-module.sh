@@ -7,17 +7,17 @@ FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
 show_help() {
 	printf "${GREEN}BoxLang Module Installer${NORMAL}\n\n"
-	printf "${YELLOW}This script installs one or more BoxLang modules from FORGEBOX.${NORMAL}\n\n"
+	printf "${YELLOW}This script installs, removes, and lists BoxLang modules from FORGEBOX.${NORMAL}\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
 	printf "  install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]\n"
 	printf "  install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]\n"
-	printf "  install-bx-module.sh --list\n"
+	printf "  install-bx-module.sh --list [--local]\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}Arguments:${NORMAL}\n"
 	printf "  <module-name>     The name of the module to install\n"
 	printf "  [@<version>]      (Optional) The specific version of the module to install\n\n"
 	printf "${BOLD}Options:${NORMAL}\n"
-	printf "  --local           Install to local boxlang_modules folder instead of BoxLang HOME\n"
+	printf "  --local           Install to/remove from local boxlang_modules folder instead of BoxLang HOME\n"
 	printf "  --remove          Remove specified modules\n"
 	printf "  --force           Skip confirmation when removing modules (use with --remove)\n"
 	printf "  --list            Show installed modules\n"
@@ -28,32 +28,35 @@ show_help() {
 	printf "  install-bx-module.sh cborm cbsecurity --local\n"
 	printf "  install-bx-module.sh --remove cborm\n"
 	printf "  install-bx-module.sh --remove cborm cbsecurity --force\n"
-	printf "  install-bx-module.sh --list\n\n"
+	printf "  install-bx-module.sh --remove cborm --local\n"
+	printf "  install-bx-module.sh --list\n"
+	printf "  install-bx-module.sh --list --local\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
 	printf "  - Multiple modules can be specified, separated by spaces\n"
+	printf "  - Use --local to work with modules in current directory's boxlang_modules folder\n"
+	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
 }
 
 list_modules() {
-	if [ -z "${BOXLANG_HOME}" ]; then
-		export BOXLANG_HOME="$HOME/.boxlang"
-	fi
-	MODULES_HOME="${BOXLANG_HOME}/modules"
-	printf "${YELLOW}Installed OS BoxLang Modules (${MODULES_HOME}):${NORMAL}\n"
+	local MODULES_PATH=${1}
+	local LOCATION_DESC=${2}
+
+	printf "${YELLOW}Installed BoxLang Modules (${LOCATION_DESC}):${NORMAL}\n"
 
 	# Check if modules directory exists
-	if [ ! -d "${MODULES_HOME}" ]; then
-		printf "${YELLOW}No modules directory found at ${MODULES_HOME}${NORMAL}\n"
+	if [ ! -d "${MODULES_PATH}" ]; then
+		printf "${YELLOW}No modules directory found at ${MODULES_PATH}${NORMAL}\n"
 		return 0
 	fi
 
 	# List all directories in the modules folder
-	if [ -z "$(ls -A "${MODULES_HOME}" 2>/dev/null)" ]; then
+	if [ -z "$(ls -A "${MODULES_PATH}" 2>/dev/null)" ]; then
 		printf "${YELLOW}No modules installed${NORMAL}\n"
 	else
 		# List modules with version information from box.json
-		for module_dir in "${MODULES_HOME}"/*; do
+		for module_dir in "${MODULES_PATH}"/*; do
 			if [ -d "$module_dir" ]; then
 				module_name=$(basename "$module_dir")
 				box_json_path="$module_dir/box.json"
@@ -321,7 +324,7 @@ main() {
 		printf "${YELLOW}- Use --remove to remove modules instead of installing them${NORMAL}\n"
 		printf "${YELLOW}- Use --force with --remove to skip confirmation prompts${NORMAL}\n"
 		printf "${YELLOW}- Use --local to install to/remove from a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
-		printf "${YELLOW}- Use --list to show installed modules${NORMAL}\n"
+		printf "${YELLOW}- Use --list to show installed modules (can be combined with --local)${NORMAL}\n"
 		printf "${YELLOW}- Use --help to show this message${NORMAL}\n"
 		exit 1
 	fi
@@ -332,9 +335,39 @@ main() {
 		exit 0
 	fi
 
-	# Detect if a single --list argument is passed
-	if [ "$1" == "--list" ] && [ $# -eq 1 ]; then
-		list_modules
+	# Handle --list command (can be used with --local)
+	LIST_MODE=false
+	if [ "$1" = "--list" ]; then
+		LIST_MODE=true
+		shift # Remove --list from arguments
+
+		# Check if --local is specified with --list
+		LOCAL_LIST=false
+		if [ "$1" = "--local" ]; then
+			LOCAL_LIST=true
+			shift # Remove --local from arguments
+		fi
+
+		# Ensure no other arguments after --list [--local]
+		if [ $# -gt 0 ]; then
+			printf "${RED}Error: --list command does not accept additional arguments${NORMAL}\n"
+			printf "${YELLOW}Usage: install-bx-module.sh --list [--local]${NORMAL}\n"
+			exit 1
+		fi
+
+		# Set up paths for listing
+		if [ "$LOCAL_LIST" = true ]; then
+			MODULES_PATH="$(pwd)/boxlang_modules"
+			LOCATION_DESC="Local - $(pwd)/boxlang_modules"
+		else
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			MODULES_PATH="${BOXLANG_HOME}/modules"
+			LOCATION_DESC="Global - ${BOXLANG_HOME}/modules"
+		fi
+
+		list_modules "$MODULES_PATH" "$LOCATION_DESC"
 		exit 0
 	fi
 
