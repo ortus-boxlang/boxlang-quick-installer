@@ -5,6 +5,33 @@
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
+parse_module_list() {
+	local modules=()
+	local input=""
+
+	# Concatenate all arguments into a single string
+	for arg in "$@"; do
+		# Skip flags
+		if [[ "$arg" == --* ]]; then
+			continue
+		fi
+		input="$input $arg"
+	done
+
+	# Replace commas with spaces and normalize whitespace
+	input=$(echo "$input" | sed 's/,/ /g' | tr -s ' ')
+
+	# Split by spaces and add to array
+	for module in $input; do
+		if [ -n "$module" ]; then
+			modules+=("$module")
+		fi
+	done
+
+	# Output modules one per line
+	printf '%s\n' "${modules[@]}"
+}
+
 show_help() {
 	printf "${GREEN}📦 BoxLang Module Installer${NORMAL}\n\n"
 	printf "${YELLOW}This script installs, removes, and lists BoxLang modules from FORGEBOX.${NORMAL}\n\n"
@@ -14,26 +41,29 @@ show_help() {
 	printf "  install-bx-module.sh --list [--local]\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}Arguments:${NORMAL}\n"
-	printf "  <module-name>     The name of the module to install\n"
-	printf "  [@<version>]      (Optional) The specific version of the module to install\n\n"
+	printf "  <module-name>     The name(s) of the module(s) to install. (Comma or space delimmited)\n"
+	printf "  [@<version>]      (Optional) The specific semantic version of the module to install\n\n"
 	printf "${BOLD}Options:${NORMAL}\n"
-	printf "  --local           Install to/remove from local boxlang_modules folder instead of BoxLang HOME\n"
-	printf "  --remove          Remove specified modules\n"
-	printf "  --force           Skip confirmation when removing modules (use with --remove)\n"
-	printf "  --list            Show installed modules\n"
+	printf "  --local           Install to/remove from local boxlang_modules folder instead of BoxLang HOME. The BoxLang HOME is the default.\n"
+	printf "  --remove          Remove specified module(s)\n"
+	printf "  --force           Skip confirmation when removing modules(s)(use with --remove)\n"
+	printf "  --list            Show installed module(s)\n"
 	printf "  --help, -h        Show this help message\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
-	printf "  install-bx-module.sh cborm\n"
-	printf "  install-bx-module.sh cborm@2.5.0\n"
-	printf "  install-bx-module.sh cborm cbsecurity --local\n"
-	printf "  install-bx-module.sh --remove cborm\n"
-	printf "  install-bx-module.sh --remove cborm cbsecurity --force\n"
-	printf "  install-bx-module.sh --remove cborm --local\n"
+	printf "  install-bx-module.sh bx-orm\n"
+	printf "  install-bx-module.sh bx-orm@2.5.0\n"
+	printf "  install-bx-module.sh bx-orm bx-ai --local\n"
+	printf "  install-bx-module.sh bx-orm,bx-ai,bx-esapi\n"
+	printf "  install-bx-module.sh \"bx-orm, bx-ai\" --local\n"
+	printf "  install-bx-module.sh --remove bx-orm\n"
+	printf "  install-bx-module.sh --remove bx-orm,bx-ai --force\n"
+	printf "  install-bx-module.sh --remove \"bx-orm, bx-ai\" --local\n"
 	printf "  install-bx-module.sh --list\n"
 	printf "  install-bx-module.sh --list --local\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
-	printf "  - Multiple modules can be specified, separated by spaces\n"
+	printf "  - Multiple modules can be specified, separated by spaces or commas\n"
+	printf "  - Module lists can mix spaces and commas: 'bx-orm, bx-ai bx-esapi'\n"
 	printf "  - Use --local to work with modules in current directory's boxlang_modules folder\n"
 	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
@@ -319,7 +349,7 @@ main() {
 		printf "${YELLOW}   or: install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]${NORMAL}\n"
 		printf "${YELLOW}- <module-name>: The name of the module to install or remove.${NORMAL}\n"
 		printf "${YELLOW}- [@<version>]: (Optional) The specific version of the module to install.${NORMAL}\n"
-		printf "${YELLOW}- Multiple modules can be specified, separated by a space.${NORMAL}\n"
+		printf "${YELLOW}- Multiple modules can be specified, separated by spaces or commas.${NORMAL}\n"
 		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
 		printf "${YELLOW}- Use --remove to remove modules instead of installing them${NORMAL}\n"
 		printf "${YELLOW}- Use --force with --remove to skip confirmation prompts${NORMAL}\n"
@@ -434,11 +464,13 @@ main() {
 			printf "${YELLOW}🗑️  Removing modules from: ${MODULES_HOME}${NORMAL}\n"
 		fi
 
-		# Loop through all provided modules for removal
-		for module in "$@"; do
-			printf "${GREEN}🚀 Starting removal of module: ${module}${NORMAL}\n"
-			remove_module "$module" "$FORCE_REMOVE"
-		done
+		# Parse comma/space-delimited module list
+		while IFS= read -r module; do
+			if [ -n "$module" ]; then
+				printf "${GREEN}🚀 Starting removal of module: ${module}${NORMAL}\n"
+				remove_module "$module" "$FORCE_REMOVE"
+			fi
+		done < <(parse_module_list "$@")
 
 		exit 0
 	fi
@@ -448,11 +480,13 @@ main() {
 		printf "${YELLOW}📍 Installing modules locally in $(pwd)/boxlang_modules${NORMAL}\n"
 	fi
 
-	# Loop through all provided arguments for installation
-	for module in "$@"; do
-		printf "${GREEN}🚀 Starting installation of module: ${module}${NORMAL}\n"
-		install_module "$module"
-	done
+	# Parse comma/space-delimited module list and install
+	while IFS= read -r module; do
+		if [ -n "$module" ]; then
+			printf "${GREEN}🚀 Starting installation of module: ${module}${NORMAL}\n"
+			install_module "$module"
+		fi
+	done < <(parse_module_list "$@")
 }
 
 main "$@"
