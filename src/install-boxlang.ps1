@@ -21,6 +21,7 @@ $destinationFolder = "c:\boxlang"
 $DESTINATION_LIB = "$destinationFolder\lib"
 $DESTINATION_BIN = "$destinationFolder\bin"
 
+
 $ProgressPreference = 'SilentlyContinue'
 
 if ($TARGET_VERSION -eq "snapshot") {
@@ -63,6 +64,7 @@ Write-Host -ForegroundColor Green "Welcome to the $bxName Quick Installer"
 Write-Host -ForegroundColor Green "*************************************************************************"
 Write-Host -ForegroundColor Green "This will download and install the latest version of $bxName and the"
 Write-Host -ForegroundColor Green "$bxName MiniServer into your system."
+Write-Host -ForegroundColor Green "It will also optionally install CommandBox (BoxLang Package Manager)."
 Write-Host -ForegroundColor Green "*************************************************************************"
 Write-Host -ForegroundColor Green "You can also download the $bxName runtimes from https://boxlang.io"
 Write-Host -ForegroundColor Green "*************************************************************************"
@@ -109,10 +111,10 @@ catch {
 
 # Download the following scripts to the bin folder: install-boxlang.bat, install-boxlang.ps1, install-bx-module.bat, install-bx-module.ps1
 # From https://downloads.ortussolutions.com/ortussolutions/boxlang/
-$installBoxLangBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-boxlang.bat"
-$installBoxLangPs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-boxlang.ps1"
-$installBxModuleBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-bx-module.bat"
-$installBxModulePs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/install-bx-module.ps1"
+$installBoxLangBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/master/src/install-boxlang.bat"
+$installBoxLangPs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/master/src/install-boxlang.ps1"
+$installBxModuleBat = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/master/src/install-bx-module.bat"
+$installBxModulePs1 = "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/master/src/install-bx-module.ps1"
 $installBoxLangBatDest = "$destinationFolder\bin\install-boxlang.bat"
 $installBoxLangPs1Dest = "$destinationFolder\bin\install-boxlang.ps1"
 $installBxModuleBatDest = "$destinationFolder\bin\install-bx-module.bat"
@@ -126,6 +128,90 @@ Write-Host -ForegroundColor Green "Downloading install-bx-module.bat"
 Invoke-WebRequest -Uri $installBxModuleBat -OutFile $installBxModuleBatDest
 Write-Host -ForegroundColor Green "Downloading install-bx-module.ps1"
 Invoke-WebRequest -Uri $installBxModulePs1 -OutFile $installBxModulePs1Dest
+
+# CommandBox Installation Check and Install
+function Check-And-Install-CommandBox {
+    param(
+        [string]$BinDir
+    )
+
+    Write-Host -ForegroundColor Blue "🔍 Checking for CommandBox..."
+
+    # Check if CommandBox is already available
+    $boxCommand = Get-Command "box" -ErrorAction SilentlyContinue
+    if ($boxCommand) {
+        Write-Host -ForegroundColor Green "✅ CommandBox is already installed and available"
+        return $true
+    }
+
+    Write-Host -ForegroundColor Yellow "⚠️  CommandBox is not installed"
+    Write-Host -ForegroundColor Blue "💡 CommandBox is the Package Manager for BoxLang®"
+    Write-Host -ForegroundColor Blue "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more"
+    Write-Host ""
+
+    # Ask user if they want to install CommandBox
+    $response = Read-Host "Would you like to install CommandBox? [Y/n]"
+    if ($response -match "^[nN]") {
+        Write-Host -ForegroundColor Yellow "Skipping CommandBox installation"
+        Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
+        return $false
+    }
+
+    Write-Host -ForegroundColor Blue "📦 Installing CommandBox..."
+
+    # The universal binary for Windows is available at the following URL
+    $commandboxUrl = "https://www.ortussolutions.com/parent/download/commandbox/type/windows"
+    $commandboxTempPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandbox.zip"
+    $commandboxExtractPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandbox"
+
+    try {
+        # Download CommandBox
+        Write-Host -ForegroundColor Blue "Downloading CommandBox from $commandboxUrl..."
+        Invoke-WebRequest -Uri $commandboxUrl -OutFile $commandboxTempPath
+
+        # Extract CommandBox
+        Write-Host -ForegroundColor Blue "Extracting CommandBox..."
+        if (Test-Path $commandboxExtractPath) {
+            Remove-Item -Path $commandboxExtractPath -Recurse -Force
+        }
+        Expand-Archive -Path $commandboxTempPath -DestinationPath $commandboxExtractPath -Force
+
+        # Install CommandBox - copy the executable to the bin directory
+        Write-Host -ForegroundColor Blue "Installing CommandBox to $BinDir\box.exe..."
+        $boxExePath = Get-ChildItem -Path $commandboxExtractPath -Name "box.exe" -Recurse | Select-Object -First 1
+        if ($boxExePath) {
+            $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxExePath.Name
+            $destBoxPath = Join-Path -Path $BinDir -ChildPath "box.exe"
+            Copy-Item -Path $sourceBoxPath -Destination $destBoxPath -Force
+        } else {
+            # Look for box.bat as fallback
+            $boxBatPath = Get-ChildItem -Path $commandboxExtractPath -Name "box.bat" -Recurse | Select-Object -First 1
+            if ($boxBatPath) {
+                $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxBatPath.Name
+                $destBoxPath = Join-Path -Path $BinDir -ChildPath "box.bat"
+                Copy-Item -Path $sourceBoxPath -Destination $destBoxPath -Force
+            } else {
+                throw "Could not find box.exe or box.bat in the extracted CommandBox archive"
+            }
+        }
+
+        # Cleanup
+        Remove-Item -Path $commandboxTempPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $commandboxExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-Host -ForegroundColor Green "✅ CommandBox installed successfully"
+        return $true
+    }
+    catch {
+        Write-Host -ForegroundColor Red "❌ Failed to install CommandBox: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Blue "💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation"
+        return $false
+    }
+}
+
+# Install CommandBox
+Write-Host ""
+Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
 ## Add the bin folder to the path
 Write-Host -ForegroundColor Green "Adding BoxLang to your users' path variable"
@@ -162,6 +248,7 @@ Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green "`$env:BOXLANG_HOME=/new/home"
 Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green "You can start a MiniServer by running: boxlang-miniserver"
+Write-Host -ForegroundColor Green "You can use the Package Manager by running: box (if CommandBox was installed)"
 Write-Host -ForegroundColor Green '*************************************************************************'
 Write-Host -ForegroundColor Green "$bxName - Dynamic : Modular : Productive : https://boxlang.io"
 Write-Host -ForegroundColor Green '*************************************************************************'
