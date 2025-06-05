@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2025-06-05
+
 ### Added
 
 - Checks if CommandBox is installed, if not, it asks to install it for you.
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Boxlang Home fixed for windows
-- Console reading via < /dev/tty
+- Console reading via &lt; /dev/tty
 
 ## [1.6.0] - 2025-06-05
 
@@ -94,7 +96,9 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.7.0...HEAD
+
+[1.7.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.6.0...v1.7.0
 
 [1.6.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.5.0...v1.6.0
 
