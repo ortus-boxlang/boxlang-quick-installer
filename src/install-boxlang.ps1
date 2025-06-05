@@ -303,6 +303,17 @@ function Check-And-Install-CommandBox {
             }
         }
 
+        # Create commandbox.properties file to configure home directory
+        Write-Host -ForegroundColor Blue "Creating CommandBox configuration..."
+        $commandboxPropertiesPath = Join-Path -Path $BinDir -ChildPath "commandbox.properties"
+        $commandboxPropertiesContent = "commandbox_home=../.commandbox"
+        Set-Content -Path $commandboxPropertiesPath -Value $commandboxPropertiesContent -Encoding UTF8
+
+        # Create .commandbox directory
+        $commandboxHomeDir = Join-Path -Path (Split-Path $BinDir -Parent) -ChildPath ".commandbox"
+        New-Item -Type Directory -Path $commandboxHomeDir -Force | Out-Null
+        Write-Host -ForegroundColor Blue "Created CommandBox home directory at $commandboxHomeDir"
+
         # Cleanup
         Remove-Item -Path $commandboxTempPath -Force -ErrorAction SilentlyContinue
         Remove-Item -Path $commandboxExtractPath -Recurse -Force -ErrorAction SilentlyContinue
