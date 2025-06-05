@@ -1,7 +1,12 @@
-
 $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
+
+# Check for help argument early to avoid any setup overhead
+if ($args.Count -ge 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
+    Show-Help
+    exit 0
+}
 
 # $TARGET_VERSION = "latest"
 $TARGET_VERSION = if ($args.Count -ge 1) { $args[0] } else { "latest" }
@@ -36,6 +41,107 @@ elseif ($TARGET_VERSION -eq "latest" ) {
 else {
     $DOWNLOAD_URL = $VERSIONED_URL
     $DOWNLOAD_URL_MINISERVER = $VERSIONED_URL_MINISERVER
+}
+
+###########################################################################
+# Help Function
+###########################################################################
+function Show-Help {
+    # Ensure console supports UTF-8 for emojis
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+    Write-Host -ForegroundColor Green "📦 BoxLang® Quick Installer"
+    Write-Host ""
+    Write-Host -ForegroundColor Yellow "This script installs the BoxLang® runtime and tools on your system."
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Usage:"
+    Write-Host ""
+    Write-Host "  .\install-boxlang.ps1 [version] [options]"
+    Write-Host "  .\install-boxlang.ps1 --help"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Arguments:"
+    Write-Host ""
+    Write-Host "  [version]         (Optional) Specify which version to install"
+    Write-Host "                    - 'latest' (default): Install the latest stable release"
+    Write-Host "                    - 'snapshot': Install the latest development snapshot"
+    Write-Host "                    - '1.2.0': Install a specific version number"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Options:"
+    Write-Host ""
+    Write-Host "  --help, -h        Show this help message"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Examples:"
+    Write-Host ""
+    Write-Host "  .\install-boxlang.ps1"
+    Write-Host "  .\install-boxlang.ps1 latest"
+    Write-Host "  .\install-boxlang.ps1 snapshot"
+    Write-Host "  .\install-boxlang.ps1 1.2.0"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Installation Methods:"
+    Write-Host ""
+    Write-Host -NoNewline "  🌐 One-liner: "
+    Write-Host -ForegroundColor Green "iwr -useb https://boxlang.io/install.ps1 | iex"
+    Write-Host -NoNewline "  📦 With version: "
+    Write-Host -ForegroundColor Green "`$env:BOXLANG_TARGET_VERSION='snapshot'; iwr -useb https://boxlang.io/install.ps1 | iex"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "What this installer does:"
+    Write-Host ""
+    Write-Host "  ✅ Checks for Java 21+ requirement"
+    Write-Host "  ✅ Downloads BoxLang® runtime and MiniServer"
+    Write-Host "  ✅ Installs to C:\boxlang\bin and C:\boxlang\lib"
+    Write-Host "  ✅ Creates symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver"
+    Write-Host "  ✅ Installs helper scripts: install-bx-module, install-boxlang"
+    Write-Host "  ✅ Optionally installs CommandBox (BoxLang Package Manager)"
+    Write-Host "  ✅ Sets up BoxLang® Home at C:\boxlang\home"
+    Write-Host "  ✅ Removes any previous versions"
+    Write-Host "  ✅ Verifies installation"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Requirements:"
+    Write-Host ""
+    Write-Host "  - Java 21 or higher (OpenJDK or Oracle JDK)"
+    Write-Host "  - PowerShell 5.1+ or PowerShell Core 6+"
+    Write-Host "  - Internet connection (for downloading)"
+    Write-Host "  - Administrator privileges (recommended)"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Installation Paths:"
+    Write-Host ""
+    Write-Host "  📁 Binaries: C:\boxlang\bin\"
+    Write-Host "  📁 Libraries: C:\boxlang\lib\"
+    Write-Host "  📁 BoxLang Home: C:\boxlang\home\"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "After Installation:"
+    Write-Host ""
+    Write-Host -NoNewline "  🚀 Start REPL: "
+    Write-Host -ForegroundColor Green -NoNewline "boxlang"
+    Write-Host -NoNewline " or "
+    Write-Host -ForegroundColor Green "bx"
+    Write-Host -NoNewline "  🌐 Start MiniServer: "
+    Write-Host -ForegroundColor Green -NoNewline "boxlang-miniserver"
+    Write-Host -NoNewline " or "
+    Write-Host -ForegroundColor Green "bx-miniserver"
+    Write-Host -NoNewline "  📦 Install modules: "
+    Write-Host -ForegroundColor Green "install-bx-module <module-name>"
+    Write-Host -NoNewline "  📦 Package Manager: "
+    Write-Host -ForegroundColor Green "box"
+    Write-Host " (if CommandBox was installed)"
+    Write-Host -NoNewline "  🔄 Update BoxLang: "
+    Write-Host -ForegroundColor Green "install-boxlang latest"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "Notes:"
+    Write-Host ""
+    Write-Host -NoNewline "  - Run as Administrator for best results: "
+    Write-Host -ForegroundColor Green "Run as Administrator"
+    Write-Host "  - Installation adds C:\boxlang\bin to your PATH"
+    Write-Host "  - Java detection works in various PowerShell contexts"
+    Write-Host "  - Previous versions are automatically removed before installation"
+    Write-Host "  - BoxLang® is open-source under Apache 2.0 License"
+    Write-Host ""
+    Write-Host -ForegroundColor White -NoNewline "More Information:"
+    Write-Host ""
+    Write-Host "  🌐 Website: https://boxlang.io"
+    Write-Host "  📖 Documentation: https://boxlang.io/docs"
+    Write-Host "  💾 GitHub: https://github.com/ortus-boxlang/boxlang"
+    Write-Host "  💬 Community: https://boxlang.io/community"
 }
 
 try {
