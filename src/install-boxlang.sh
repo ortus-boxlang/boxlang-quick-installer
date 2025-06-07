@@ -822,7 +822,7 @@ main() {
 	# Verify installation
 	verify_installation "$DESTINATION_BIN"
 
-	# Check PATH
+	# Check PATH for local user execution mostly.
 	printf "\n"
 	check_or_set_path "$DESTINATION_BIN"
 
@@ -839,8 +839,7 @@ main() {
 	echo "export BOXLANG_HOME=~/.boxlang"
 	echo "${NORMAL}"
 	echo ''
-	echo "${MAGENTA}✅ You can start a REPL by running: boxlang${NORMAL}"
-	echo "${MAGENTA}✅ You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
+	echo "${MAGENTA}✅ Remember you can check for updates at any time with: install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
 	echo ''
 	echo '*************************************************************************'
