@@ -76,6 +76,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
+          name: build-artifacts
           path: |
             build/**
             changelog.md
@@ -136,6 +137,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
+          name: build-artifacts
           path: .tmp
 
       - name: Copy Changelog

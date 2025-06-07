@@ -38,9 +38,6 @@ setup_colors() {
 	fi
 }
 
-# Initialize colors at script startup
-setup_colors
-
 ###########################################################################
 # Pre-flight Checks
 ###########################################################################
@@ -160,6 +157,146 @@ check_java_version() {
 	done
 
 	return 1
+}
+
+###########################################################################
+# Version Comparison Functions
+###########################################################################
+# Extract semantic version (Major.Minor.Patch) from version string
+extract_semantic_version() {
+	local version_string="$1"
+	# Extract version like "1.2.3" from strings like "BoxLang 1.2.3+20241201.120000" or "1.2.3+buildId"
+	echo "$version_string" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
+}
+
+# Compare two semantic versions (Major.Minor.Patch)
+# Returns: 0 if equal, 1 if first > second, 2 if first < second
+compare_versions() {
+	local version1="$1"
+	local version2="$2"
+
+	# Split versions into arrays
+	IFS='.' read -ra V1 <<< "$version1"
+	IFS='.' read -ra V2 <<< "$version2"
+
+	# Compare major, minor, patch
+	for i in 0 1 2; do
+		local v1_part=${V1[i]:-0}
+		local v2_part=${V2[i]:-0}
+
+		if [ "$v1_part" -gt "$v2_part" ]; then
+			return 1  # version1 > version2
+		elif [ "$v1_part" -lt "$v2_part" ]; then
+			return 2  # version1 < version2
+		fi
+	done
+
+	return 0  # versions are equal
+}
+
+# Get current installed BoxLang version
+get_current_version() {
+	local current_version=""
+
+	# Try to find BoxLang in common locations
+	local boxlang_candidates=(
+		"boxlang"                    # In PATH
+		"/usr/local/bin/boxlang"     # System install
+		"$HOME/.local/bin/boxlang"   # User install
+	)
+
+	for candidate in "${boxlang_candidates[@]}"; do
+		if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
+			local version_output=$("$candidate" --version 2>/dev/null || echo "")
+			if [ -n "$version_output" ]; then
+				current_version=$(extract_semantic_version "$version_output")
+				if [ -n "$current_version" ]; then
+					echo "$current_version"
+					return 0
+				fi
+			fi
+		fi
+	done
+
+	return 1
+}
+
+# Get latest available BoxLang version from remote
+get_latest_version() {
+	local version_url="https://downloads.ortussolutions.com/ortussolutions/boxlang/version-latest.properties"
+	local version_info
+
+	# Download version info
+	version_info=$(curl -s "$version_url" 2>/dev/null || echo "")
+	if [ -z "$version_info" ]; then
+		return 1
+	fi
+
+	# Extract version from properties file (format: version=1.2.3+buildId)
+	local latest_version=$(echo "$version_info" | grep "^version=" | cut -d'=' -f2 | head -n1)
+	if [ -n "$latest_version" ]; then
+		extract_semantic_version "$latest_version"
+		return 0
+	fi
+
+	return 1
+}
+
+# Check for updates and optionally prompt for installation
+check_for_updates() {
+	printf "${BLUE}🔍 Checking for BoxLang updates...${NORMAL}\n"
+
+	# Get current version
+	local current_version
+	current_version=$(get_current_version)
+	if [ $? -ne 0 ] || [ -z "$current_version" ]; then
+		printf "${YELLOW}⚠️  BoxLang is not currently installed${NORMAL}\n"
+		current_version="0.0.0"
+	fi
+
+	# Get latest version
+	local latest_version
+	latest_version=$(get_latest_version)
+	if [ $? -ne 0 ] || [ -z "$latest_version" ]; then
+		printf "${RED}❌ Failed to fetch latest version information${NORMAL}\n"
+		printf "${YELLOW}Please check your internet connection and try again${NORMAL}\n"
+		return 1
+	fi
+
+	printf "${GREEN}Current version: ${current_version}${NORMAL}\n"
+	printf "${GREEN}Latest version:  ${latest_version}${NORMAL}\n"
+
+	# Compare versions
+	compare_versions "$current_version" "$latest_version"
+	local comparison_result=$?
+
+	case $comparison_result in
+		0)
+			printf "${GREEN}✅ You have the latest version of BoxLang${NORMAL}\n"
+			return 0
+			;;
+		1)
+			printf "${BLUE}🔄 You have a newer version than the latest release${NORMAL}\n"
+			printf "${YELLOW}This might be a development or snapshot build${NORMAL}\n"
+			return 0
+			;;
+		2)
+			printf "${YELLOW}🆙 A newer version of BoxLang is available!${NORMAL}\n"
+			printf "${BLUE}Would you like to update to version ${latest_version}? [Y/n] ${NORMAL}"
+			read -r response < /dev/tty
+			case "$response" in
+				[nN][oO]|[nN])
+					printf "${YELLOW}Update cancelled${NORMAL}\n"
+					return 0
+					;;
+				*)
+					printf "${GREEN}Starting update to BoxLang ${latest_version}...${NORMAL}\n"
+					# Call main installation function with latest version
+					exec "$0" "latest"
+					;;
+			esac
+			;;
+	esac
 }
 
 ###########################################################################
@@ -436,6 +573,7 @@ show_help() {
 	printf "${BOLD}Options:${NORMAL}\n"
 	printf "  --help, -h        Show this help message\n"
 	printf "  --uninstall       Remove BoxLang from the system\n"
+	printf "  --check-update    Check if a newer version is available\n"
 	printf "  --system          Force system-wide installation (requires sudo)\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
 	printf "  install-boxlang.sh\n"
@@ -443,6 +581,7 @@ show_help() {
 	printf "  install-boxlang.sh snapshot\n"
 	printf "  install-boxlang.sh 1.2.0\n"
 	printf "  install-boxlang.sh --uninstall\n"
+	printf "  install-boxlang.sh --check-update\n"
 	printf "  sudo install-boxlang.sh --system\n\n"
 	printf "${BOLD}Installation Methods:${NORMAL}\n"
 	printf "  🌐 One-liner: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash${NORMAL}\n"
@@ -456,7 +595,8 @@ show_help() {
 	printf "  ✅ Optionally installs CommandBox (BoxLang Package Manager)\n"
 	printf "  ✅ Sets up BoxLang® Home at ~/.boxlang\n"
 	printf "  ✅ Removes any previous versions\n"
-	printf "  ✅ Verifies installation\n\n"
+	printf "  ✅ Verifies installation\n"
+	printf "  ✅ Checks for updates with --check-update flag\n\n"
 	printf "${BOLD}Requirements:${NORMAL}\n"
 	printf "  - Java 21 or higher (OpenJDK or Oracle JDK)\n"
 	printf "  - curl (for downloading)\n"
@@ -471,7 +611,8 @@ show_help() {
 	printf "  🌐 Start MiniServer: ${GREEN}boxlang-miniserver${NORMAL} or ${GREEN}bx-miniserver${NORMAL}\n"
 	printf "  📦 Install modules: ${GREEN}install-bx-module <module-name>${NORMAL}\n"
 	printf "  📦 Package Manager: ${GREEN}box${NORMAL} (if CommandBox was installed)\n"
-	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n\n"
+	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n"
+	printf "  🔍 Check for updates: ${GREEN}install-boxlang --check-update${NORMAL}\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - Run with sudo for system-wide installation: ${GREEN}sudo install-boxlang.sh${NORMAL}\n"
 	printf "  - User installation doesn't require sudo and installs to ~/.local/\n"
@@ -488,6 +629,10 @@ show_help() {
 ###########################################################################
 # Parse command line arguments before main execution
 ###########################################################################
+
+# Initialize colors at script startup
+setup_colors
+
 # Check for help argument early to avoid any setup overhead
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
 	show_help
@@ -497,6 +642,15 @@ fi
 # Check for uninstall argument
 if [ "$1" = "--uninstall" ]; then
 	uninstall_boxlang
+	exit 0
+fi
+
+# Check for check-update argument
+if [ "$1" = "--check-update" ]; then
+	if ! preflight_check; then
+		exit 1
+	fi
+	check_for_updates
 	exit 0
 fi
 
