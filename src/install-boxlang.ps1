@@ -14,6 +14,15 @@ if ($args.Count -ge 1 -and $args[0] -eq "--uninstall") {
     exit 0
 }
 
+# Check for check-update argument
+if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
+    if (-not (Test-Prerequisites)) {
+        exit 1
+    }
+    Test-ForUpdates
+    exit 0
+}
+
 # $TARGET_VERSION = "latest"
 $TARGET_VERSION = if ($args.Count -ge 1 -and $args[0] -notmatch "^--") { $args[0] } else { "latest" }
 $DOWNLOAD_URL = ""
@@ -76,6 +85,7 @@ function Show-Help {
     Write-Host ""
     Write-Host "  --help, -h        Show this help message"
     Write-Host "  --uninstall       Remove BoxLang from the system"
+    Write-Host "  --check-update    Check if a newer version is available"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
     Write-Host ""
@@ -84,6 +94,7 @@ function Show-Help {
     Write-Host "  .\install-boxlang.ps1 snapshot"
     Write-Host "  .\install-boxlang.ps1 1.2.0"
     Write-Host "  .\install-boxlang.ps1 --uninstall"
+    Write-Host "  .\install-boxlang.ps1 --check-update"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Installation Methods:"
     Write-Host ""
@@ -103,6 +114,7 @@ function Show-Help {
     Write-Host "  ✅ Sets up BoxLang® Home at C:\boxlang\home"
     Write-Host "  ✅ Removes any previous versions"
     Write-Host "  ✅ Verifies installation"
+    Write-Host "  ✅ Checks for updates with --check-update flag"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Requirements:"
     Write-Host ""
@@ -134,6 +146,8 @@ function Show-Help {
     Write-Host " (if CommandBox was installed)"
     Write-Host -NoNewline "  🔄 Update BoxLang: "
     Write-Host -ForegroundColor Green "install-boxlang latest"
+    Write-Host -NoNewline "  🔍 Check for updates: "
+    Write-Host -ForegroundColor Green ".\install-boxlang.ps1 --check-update"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Notes:"
     Write-Host ""
@@ -344,6 +358,157 @@ function Test-JavaVersion {
 # Perform Java version check
 if (-not (Test-JavaVersion)) {
     exit 1
+}
+
+###########################################################################
+# Version Comparison Functions
+###########################################################################
+
+# Extract semantic version (Major.Minor.Patch) from version string
+function Get-SemanticVersion {
+    param([string]$VersionString)
+
+    # Extract version like "1.2.3" from strings like "BoxLang v1.2.3+20241201.120000" or "1.2.3+buildId"
+    if ($VersionString -match '(\d+\.\d+\.\d+)') {
+        return $matches[1]
+    }
+    return $null
+}
+
+# Compare two semantic versions (Major.Minor.Patch)
+# Returns: 0 if equal, 1 if first > second, -1 if first < second
+function Compare-Versions {
+    param(
+        [string]$Version1,
+        [string]$Version2
+    )
+
+    $v1Parts = $Version1.Split('.')
+    $v2Parts = $Version2.Split('.')
+
+    # Compare major, minor, patch
+    for ($i = 0; $i -lt 3; $i++) {
+        $v1Part = if ($i -lt $v1Parts.Length) { [int]$v1Parts[$i] } else { 0 }
+        $v2Part = if ($i -lt $v2Parts.Length) { [int]$v2Parts[$i] } else { 0 }
+
+        if ($v1Part -gt $v2Part) {
+            return 1  # version1 > version2
+        }
+        elseif ($v1Part -lt $v2Part) {
+            return -1  # version1 < version2
+        }
+    }
+
+    return 0  # versions are equal
+}
+
+# Get current installed BoxLang version
+function Get-CurrentBoxLangVersion {
+    # Try to find BoxLang in common locations
+    $boxlangCandidates = @(
+        "boxlang",                                    # In PATH
+        "C:\boxlang\bin\boxlang.bat",                # Standard Windows install
+        "$env:USERPROFILE\.local\bin\boxlang.bat"    # User install
+    )
+
+    foreach ($candidate in $boxlangCandidates) {
+        try {
+            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                $versionOutput = & $candidate --version 2>$null
+                if ($versionOutput) {
+                    $currentVersion = Get-SemanticVersion -VersionString ($versionOutput | Out-String)
+                    if ($currentVersion) {
+                        return $currentVersion
+                    }
+                }
+            }
+        }
+        catch {
+            # Continue to next candidate
+        }
+    }
+
+    return $null
+}
+
+# Get latest available BoxLang version from remote
+function Get-LatestBoxLangVersion {
+    $versionUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang/version-latest.properties"
+
+    try {
+        # Download version info
+        $versionInfo = Invoke-WebRequest -Uri $versionUrl -UseBasicParsing -ErrorAction Stop
+        if (-not $versionInfo.Content) {
+            return $null
+        }
+
+        # Extract version from properties file (format: version=1.2.3+buildId)
+        $versionLines = $versionInfo.Content -split "`n"
+        foreach ($line in $versionLines) {
+            if ($line -match "^version=(.+)$") {
+                $latestVersion = Get-SemanticVersion -VersionString $matches[1]
+                if ($latestVersion) {
+                    return $latestVersion
+                }
+            }
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Red "❌ Failed to fetch version information: $($_.Exception.Message)"
+        return $null
+    }
+
+    return $null
+}
+
+# Check for updates and optionally prompt for installation
+function Test-ForUpdates {
+    Write-Host -ForegroundColor Blue "🔍 Checking for BoxLang updates..."
+
+    # Get current version
+    $currentVersion = Get-CurrentBoxLangVersion
+    if (-not $currentVersion) {
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is not currently installed"
+        Write-Host -ForegroundColor Blue "💡 Run '.\install-boxlang.ps1' to install the latest version"
+        return
+    }
+
+    # Get latest version
+    $latestVersion = Get-LatestBoxLangVersion
+    if (-not $latestVersion) {
+        Write-Host -ForegroundColor Red "❌ Failed to fetch latest version information"
+        Write-Host -ForegroundColor Yellow "Please check your internet connection and try again"
+        return
+    }
+
+    Write-Host -ForegroundColor Green "Current version: $currentVersion"
+    Write-Host -ForegroundColor Green "Latest version:  $latestVersion"
+
+    # Compare versions
+    $comparisonResult = Compare-Versions -Version1 $currentVersion -Version2 $latestVersion
+
+    switch ($comparisonResult) {
+        0 {
+            Write-Host -ForegroundColor Green "✅ You have the latest version of BoxLang"
+        }
+        1 {
+            Write-Host -ForegroundColor Blue "🔄 You have a newer version than the latest release"
+            Write-Host -ForegroundColor Yellow "This might be a development or snapshot build"
+        }
+        -1 {
+            Write-Host -ForegroundColor Yellow "🆙 A newer version of BoxLang is available!"
+            $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            if ($response -notmatch "^[nN]") {
+                Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
+                # Call the script again with latest version
+                & $PSCommandPath "latest"
+                exit 0
+            }
+            else {
+                Write-Host -ForegroundColor Yellow "Update cancelled"
+            }
+        }
+    }
 }
 
 # Tell them where we will install
