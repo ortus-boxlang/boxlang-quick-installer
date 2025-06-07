@@ -228,7 +228,7 @@ check_or_set_path() {
 	fi
 
 	# Ask user for permission to auto-update
-	printf "${BLUE}Would you like to automatically add $bin_dir to your PATH? [Y/n] ${NORMAL}"
+	printf "${BLUE}❓Would you like to automatically add $bin_dir to your PATH? [Y/n] ${NORMAL}"
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
@@ -302,7 +302,7 @@ check_and_install_commandbox() {
 	printf "${BLUE}💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}\n\n"
 
 	# Ask user if they want to install CommandBox
-	printf "${BLUE}Would you like to install CommandBox? [Y/n] ${NORMAL}"
+	printf "${BLUE}❓ Would you like to install CommandBox? [Y/n] ${NORMAL}"
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
@@ -339,7 +339,8 @@ check_and_install_commandbox() {
 	# Install CommandBox
 	printf "${BLUE}Installing CommandBox to ${bin_dir}/box...${NORMAL}\n"
 	mv "/tmp/commandbox/box" "${bin_dir}/box"
-	chmod +x "${bin_dir}/box"
+	chmod 755 "${bin_dir}/box"
+
 
 	# Cleanup
 	rm -rf "/tmp/${commandbox_filename}" "/tmp/commandbox/"
@@ -637,8 +638,8 @@ main() {
 	# Make it executable
 	printf "\n"
 	printf "${BLUE}Making BoxLang® Executable...${NORMAL}\n"
-	chmod +x "${DESTINATION_BIN}/boxlang"
-	chmod +x "${DESTINATION_BIN}/boxlang-miniserver"
+	chmod 755 "${DESTINATION_BIN}/boxlang"
+	chmod 755 "${DESTINATION_BIN}/boxlang-miniserver"
 
 	# Add links
 	printf "\n"
@@ -650,9 +651,9 @@ main() {
 	printf "\n"
 	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-boxlang]...${NORMAL}\n"
 	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-bx-module.sh"
-	chmod +x "${DESTINATION_BIN}/install-bx-module"
+	chmod 755 "${DESTINATION_BIN}/install-bx-module"
 	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
-	chmod +x "${DESTINATION_BIN}/install-boxlang"
+	chmod 755 "${DESTINATION_BIN}/install-boxlang"
 
 	# CommandBox Install
 	printf "\n"
