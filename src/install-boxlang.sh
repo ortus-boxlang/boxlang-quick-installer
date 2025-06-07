@@ -809,22 +809,17 @@ main() {
 	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
 	chmod 755 "${DESTINATION_BIN}/install-boxlang"
 
-	# CommandBox Install
+	# CommandBox Install Checks
 	printf "\n"
 	check_and_install_commandbox "$DESTINATION_BIN"
 
 	# Cleanup
-	printf "\n"
-	printf "${BLUE}Cleaning up...${NORMAL}\n"
-	rm -f /tmp/boxlang.zip
-	rm -f /tmp/boxlang-miniserver.zip
-	rm -f ${DESTINATION_BIN}/boxlang.bat
-	rm -f ${DESTINATION_BIN}/boxlang-miniserver.bat
-	rm -f ${DESTINATION_BIN}/install-boxlang.ps1
-	rm -f ${DESTINATION_BIN}/install-bx-module.ps1
+	printf "${BLUE}🗑️ Cleaning up...${NORMAL}\n"
+	rm -f /tmp/boxlang*.zip
+	# Remove Windows-specific files that may have been downloaded
+	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
 
 	# Verify installation
-	printf "\n"
 	verify_installation "$DESTINATION_BIN"
 
 	# Check PATH
