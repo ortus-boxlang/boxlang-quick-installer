@@ -200,9 +200,11 @@ get_current_version() {
 
 	# Try to find BoxLang in common locations
 	local boxlang_candidates=(
-		"boxlang"                    # In PATH
-		"/usr/local/bin/boxlang"     # System install
-		"$HOME/.local/bin/boxlang"   # User install
+		"boxlang"                              # In PATH
+		"/usr/local/bin/boxlang"               # System install (symbolic link)
+		"$HOME/.local/bin/boxlang"             # User install (symbolic link)
+		"/usr/local/boxlang/bin/boxlang"       # System BoxLang installation
+		"$HOME/.local/boxlang/bin/boxlang"     # User BoxLang installation
 	)
 
 	for candidate in "${boxlang_candidates[@]}"; do
@@ -424,7 +426,8 @@ check_or_set_path() {
 # CommandBox Installation Check and Install Function
 ###########################################################################
 check_and_install_commandbox() {
-	local bin_dir="$1"
+	local system_bin="$1"
+	local boxlang_bin="$2"
 
 	printf "${BLUE}🔍 Checking for CommandBox...${NORMAL}\n"
 
@@ -473,11 +476,14 @@ check_and_install_commandbox() {
 		return 1
 	fi
 
-	# Install CommandBox
-	printf "${BLUE}Installing CommandBox to ${bin_dir}/box...${NORMAL}\n"
-	mv "/tmp/commandbox/box" "${bin_dir}/box"
-	chmod 755 "${bin_dir}/box"
+	# Install CommandBox to BoxLang bin directory
+	printf "${BLUE}Installing CommandBox to ${boxlang_bin}/box...${NORMAL}\n"
+	mv "/tmp/commandbox/box" "${boxlang_bin}/box"
+	chmod 755 "${boxlang_bin}/box"
 
+	# Create symbolic link in system bin directory
+	printf "${BLUE}Creating CommandBox symbolic link in ${system_bin}...${NORMAL}\n"
+	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
 
 	# Cleanup
 	rm -rf "/tmp/${commandbox_filename}" "/tmp/commandbox/"
@@ -491,6 +497,7 @@ check_and_install_commandbox() {
 ###########################################################################
 verify_installation() {
 	local bin_dir="$1"
+	local system_bin="$2"
 	printf "${BLUE}🔍 Verifying installation...${NORMAL}\n"
 
 	# Test basic functionality
@@ -499,13 +506,30 @@ verify_installation() {
 		return 1
 	fi
 
-	# Check symlinks
+	# Check internal symlinks in BoxLang installation
 	if [ ! -L "${bin_dir}/bx" ]; then
-		printf "${YELLOW}⚠️  Symbolic link 'bx' was not created properly${NORMAL}\n"
+		printf "${YELLOW}⚠️  Internal symbolic link 'bx' was not created properly${NORMAL}\n"
 	fi
 
 	if [ ! -L "${bin_dir}/bx-miniserver" ]; then
-		printf "${YELLOW}⚠️  Symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
+		printf "${YELLOW}⚠️  Internal symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
+	fi
+
+	# Check system symbolic links
+	if [ ! -L "${system_bin}/boxlang" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'boxlang' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/bx" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'bx' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/boxlang-miniserver" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'boxlang-miniserver' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/bx-miniserver" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
 	fi
 
 	# Check helper scripts
@@ -513,7 +537,24 @@ verify_installation() {
 		printf "${YELLOW}⚠️  Helper script 'install-bx-module' was not installed properly${NORMAL}\n"
 	fi
 
-	printf "${GREEN}✅ Installation verified successfully${NORMAL}"
+	if [ ! -L "${system_bin}/install-bx-module" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'install-bx-module' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/install-boxlang" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'install-boxlang' was not created properly${NORMAL}\n"
+	fi
+
+	# Check CommandBox installation (optional)
+	if [ -x "${bin_dir}/box" ]; then
+		if [ ! -L "${system_bin}/box" ]; then
+			printf "${YELLOW}⚠️  CommandBox symbolic link was not created properly${NORMAL}\n"
+		else
+			printf "${GREEN}✅ CommandBox is installed and linked${NORMAL}\n"
+		fi
+	fi
+
+	printf "${GREEN}✅ Installation verified successfully${NORMAL}\n"
 	return 0
 }
 
@@ -523,17 +564,22 @@ verify_installation() {
 uninstall_boxlang() {
 	printf "${YELLOW}🗑️  Uninstalling BoxLang...${NORMAL}\n"
 
-	# Remove binaries and symlinks
-	printf "${BLUE}Removing binaries and symlinks...${NORMAL}\n"
+	# Remove symbolic links from system bin directories
+	printf "${BLUE}Removing system symbolic links...${NORMAL}\n"
 	rm -fv /usr/local/bin/boxlang
 	rm -fv /usr/local/bin/bx
 	rm -fv /usr/local/bin/boxlang-miniserver
 	rm -fv /usr/local/bin/bx-miniserver
 	rm -fv /usr/local/bin/install-bx-module
 	rm -fv /usr/local/bin/install-boxlang
+	rm -fv /usr/local/bin/box
 
-	# Remove JAR files
-	printf "${BLUE}Removing JAR files...${NORMAL}\n"
+	# Remove BoxLang installation directory
+	printf "${BLUE}Removing BoxLang installation directory...${NORMAL}\n"
+	rm -rfv /usr/local/boxlang
+
+	# Remove legacy JAR files if they exist
+	printf "${BLUE}Removing legacy JAR files (if any)...${NORMAL}\n"
 	rm -fv /usr/local/lib/boxlang-*.jar
 
 	# Also check user-local installation
@@ -545,8 +591,16 @@ uninstall_boxlang() {
 		rm -fv "$HOME/.local/bin/bx-miniserver"
 		rm -fv "$HOME/.local/bin/install-bx-module"
 		rm -fv "$HOME/.local/bin/install-boxlang"
+		rm -fv "$HOME/.local/bin/box"
 	fi
 
+	# Remove user-local BoxLang installation directory
+	if [ -d "$HOME/.local/boxlang" ]; then
+		printf "${BLUE}Removing user-local BoxLang installation directory...${NORMAL}\n"
+		rm -rfv "$HOME/.local/boxlang"
+	fi
+
+	# Remove legacy user lib files if they exist
 	if [ -d "$HOME/.local/lib" ]; then
 		rm -fv "$HOME/.local/lib/boxlang-*.jar"
 	fi
@@ -589,12 +643,14 @@ show_help() {
 	printf "${BOLD}What this installer does:${NORMAL}\n"
 	printf "  ✅ Checks for Java 21+ requirement\n"
 	printf "  ✅ Downloads BoxLang® runtime and MiniServer\n"
-	printf "  ✅ Installs to /usr/local/bin and /usr/local/lib (or ~/.local/ for user install)\n"
-	printf "  ✅ Creates symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver\n"
+	printf "  ✅ Creates dedicated BoxLang installation directory (/usr/local/boxlang or ~/.local/boxlang)\n"
+	printf "  ✅ Installs binaries to boxlang/bin, libraries to boxlang/lib, assets to boxlang/assets\n"
+	printf "  ✅ Creates symbolic links in system bin (/usr/local/bin or ~/.local/bin)\n"
+	printf "  ✅ Creates internal symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver\n"
 	printf "  ✅ Installs helper scripts: install-bx-module, install-boxlang\n"
 	printf "  ✅ Optionally installs CommandBox (BoxLang Package Manager)\n"
 	printf "  ✅ Sets up BoxLang® Home at ~/.boxlang\n"
-	printf "  ✅ Removes any previous versions\n"
+	printf "  ✅ Removes any previous installations\n"
 	printf "  ✅ Verifies installation\n"
 	printf "  ✅ Checks for updates with --check-update flag\n\n"
 	printf "${BOLD}Requirements:${NORMAL}\n"
@@ -603,8 +659,10 @@ show_help() {
 	printf "  - unzip (for extracting)\n"
 	printf "  - sudo privileges (for system-wide installation)\n\n"
 	printf "${BOLD}Installation Paths:${NORMAL}\n"
-	printf "  📁 System: /usr/local/bin/ and /usr/local/lib/\n"
-	printf "  📁 User: ~/.local/bin/ and ~/.local/lib/\n"
+	printf "  📁 System BoxLang Directory: /usr/local/boxlang/\n"
+	printf "  📁 User BoxLang Directory: ~/.local/boxlang/\n"
+	printf "  📁 System Links: /usr/local/bin/\n"
+	printf "  📁 User Links: ~/.local/bin/\n"
 	printf "  📁 BoxLang Home: ~/.boxlang/\n\n"
 	printf "${BOLD}After Installation:${NORMAL}\n"
 	printf "  🚀 Start REPL: ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}\n"
@@ -665,19 +723,26 @@ main() {
 	###########################################################################
 	# Setup Installation Directories
 	###########################################################################
-	local DESTINATION="/usr/local/"
-	local DESTINATION_LIB="/usr/local/lib"
-	local DESTINATION_BIN="/usr/local/bin"
+	local BOXLANG_INSTALLATION_HOME="/usr/local/boxlang"
+	local SYSTEM_BIN="/usr/local/bin"
+	local SYSTEM_LIB="/usr/local/lib"
 
 	# Support user-local installation if not running as root and not explicitly system install
 	if [ "$EUID" -ne 0 ] && [ "$1" != "--system" ]; then
 		printf "${YELLOW}Installing to user directory (~/.local) since not running as root${NORMAL}\n"
 		printf "${BLUE}💡 Use 'sudo install-boxlang.sh' for system-wide installation${NORMAL}\n\n"
-		DESTINATION="$HOME/.local/"
-		DESTINATION_BIN="$HOME/.local/bin"
-		DESTINATION_LIB="$HOME/.local/lib"
-		mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB"
+		BOXLANG_INSTALLATION_HOME="$HOME/.local/boxlang"
+		SYSTEM_BIN="$HOME/.local/bin"
+		SYSTEM_LIB="$HOME/.local/lib"
 	fi
+
+	# BoxLang installation structure
+	local DESTINATION_BIN="${BOXLANG_INSTALLATION_HOME}/bin"
+	local DESTINATION_LIB="${BOXLANG_INSTALLATION_HOME}/lib"
+	local DESTINATION_ASSETS="${BOXLANG_INSTALLATION_HOME}/assets"
+
+	# Create BoxLang installation directories
+	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$SYSTEM_BIN"
 
 	###########################################################################
 	# Pre-flight Checks
@@ -758,17 +823,25 @@ main() {
 	echo 'Welcome to the BoxLang® Quick Installer'
 	echo '*************************************************************************'
 	printf "${NORMAL}"
+	printf "${BLUE}Installing BoxLang® [${TARGET_VERSION}] to [${BOXLANG_INSTALLATION_HOME}]${NORMAL}\n"
 	printf "${BLUE}Downloading BoxLang® [${TARGET_VERSION}] from [${DOWNLOAD_URL}]${NORMAL}\n"
+
+	# Remove previous BoxLang installation if it exists
+	printf "${YELLOW}Removing previous BoxLang installation (if any)...${NORMAL}\n"
+	rm -rf "${BOXLANG_INSTALLATION_HOME}"
 	printf "${RED}Please wait...${NORMAL}\n"
 
 	# Ensure destination folders
 	mkdir -p /tmp
-	mkdir -p "$DESTINATION_BIN"
-	mkdir -p "$DESTINATION_LIB"
+	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS"
 
-	# Uninstall previous versions
-    printf "${YELLOW}Removing previous versions (if any)...${NORMAL}\n"
-	rm -fv "${DESTINATION_LIB}"/boxlang-*.jar
+	# Remove old symbolic links from system bin
+	rm -f "${SYSTEM_BIN}/boxlang"
+	rm -f "${SYSTEM_BIN}/bx"
+	rm -f "${SYSTEM_BIN}/boxlang-miniserver"
+	rm -f "${SYSTEM_BIN}/bx-miniserver"
+	rm -f "${SYSTEM_BIN}/install-bx-module"
+	rm -f "${SYSTEM_BIN}/install-boxlang"
 
 	# Download with progress bar
 	rm -f /tmp/boxlang.zip
@@ -784,10 +857,10 @@ main() {
 
 	# Inflate it
 	printf "\n"
-	printf "${BLUE}Unzipping BoxLang®...${NORMAL}\n"
+	printf "${BLUE}Unzipping BoxLang® to ${BOXLANG_INSTALLATION_HOME}...${NORMAL}\n"
 	printf "\n"
-	unzip -o /tmp/boxlang.zip -d "${DESTINATION}"
-	unzip -o /tmp/boxlang-miniserver.zip -d "${DESTINATION}"
+	unzip -o /tmp/boxlang.zip -d "${BOXLANG_INSTALLATION_HOME}"
+	unzip -o /tmp/boxlang-miniserver.zip -d "${BOXLANG_INSTALLATION_HOME}"
 
 	# Make it executable
 	printf "\n"
@@ -795,11 +868,18 @@ main() {
 	chmod 755 "${DESTINATION_BIN}/boxlang"
 	chmod 755 "${DESTINATION_BIN}/boxlang-miniserver"
 
-	# Add links
+	# Add internal links within BoxLang home
 	printf "\n"
-	printf "${BLUE}Adding symbolic links...${NORMAL}\n"
+	printf "${BLUE}Adding internal symbolic links...${NORMAL}\n"
 	ln -sf "${DESTINATION_BIN}/boxlang" "${DESTINATION_BIN}/bx"
 	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${DESTINATION_BIN}/bx-miniserver"
+
+	# Create symbolic links in system bin directory
+	printf "${BLUE}Creating system symbolic links...${NORMAL}\n"
+	ln -sf "${DESTINATION_BIN}/boxlang" "${SYSTEM_BIN}/boxlang"
+	ln -sf "${DESTINATION_BIN}/bx" "${SYSTEM_BIN}/bx"
+	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${SYSTEM_BIN}/boxlang-miniserver"
+	ln -sf "${DESTINATION_BIN}/bx-miniserver" "${SYSTEM_BIN}/bx-miniserver"
 
 	# Install the Installer scripts
 	printf "\n"
@@ -809,9 +889,13 @@ main() {
 	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
 	chmod 755 "${DESTINATION_BIN}/install-boxlang"
 
+	# Create symbolic links for installer scripts
+	ln -sf "${DESTINATION_BIN}/install-bx-module" "${SYSTEM_BIN}/install-bx-module"
+	ln -sf "${DESTINATION_BIN}/install-boxlang" "${SYSTEM_BIN}/install-boxlang"
+
 	# CommandBox Install Checks
 	printf "\n"
-	check_and_install_commandbox "$DESTINATION_BIN"
+	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
 
 	# Cleanup
 	printf "${BLUE}🗑️ Cleaning up...${NORMAL}\n"
@@ -820,16 +904,19 @@ main() {
 	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
 
 	# Verify installation
-	verify_installation "$DESTINATION_BIN"
+	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
 	# Check PATH for local user execution mostly.
 	printf "\n"
-	check_or_set_path "$DESTINATION_BIN"
+	check_or_set_path "$SYSTEM_BIN"
 
 	printf "${GREEN}"
 	echo ''
-	echo "♨ BoxLang® Binaries are now installed to [$DESTINATION_BIN]"
-	echo "☕ BoxLang® JARs are now installed to [$DESTINATION_LIB]"
+	echo "♨ BoxLang® Installation Directory: [${BOXLANG_INSTALLATION_HOME}]"
+	echo "♨ BoxLang® Binaries: [${DESTINATION_BIN}]"
+	echo "☕ BoxLang® JARs: [${DESTINATION_LIB}]"
+	echo "🎨 BoxLang® Assets: [${DESTINATION_ASSETS}]"
+	echo "🔗 System Links: [${SYSTEM_BIN}]"
 	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang]"
 	echo ""
 	echo 'You can change the BoxLang Home by setting the [BOXLANG_HOME] environment variable in your shell profile'
