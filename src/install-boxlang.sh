@@ -146,7 +146,7 @@ check_java_version() {
 
 	# If running under sudo, try to get the original user's environment
 	if [ -n "${SUDO_USER}" ]; then
-		printf "${YELLOW}Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
+		printf "${YELLOW}🛡️ Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
 
 		# Try to get Java from the original user's environment
 		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
@@ -348,11 +348,11 @@ check_or_set_path() {
 
 	# Check if path is already in PATH
 	if echo "$PATH" | grep -q "$bin_dir"; then
-		printf "${GREEN}✅ $bin_dir is already in your PATH${NORMAL}\n"
+		printf "${GREEN}✅ [$bin_dir] is already in your PATH${NORMAL}\n"
 		return 0
 	fi
 
-	printf "${YELLOW}⚠️  $bin_dir is not in your PATH${NORMAL}\n"
+	printf "${YELLOW}⚠️  [$bin_dir] is not in your PATH${NORMAL}\n"
 
 	# Detect the appropriate shell profile file
 	local profile_file=""
@@ -406,7 +406,7 @@ check_or_set_path() {
 	fi
 
 	# Ask user for permission to auto-update
-	printf "${BLUE}❓Would you like to automatically add $bin_dir to your PATH? [Y/n] ${NORMAL}"
+	printf "${BLUE}❓Would you like to automatically add [$bin_dir] to your PATH? [Y/n] ${NORMAL}"
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
@@ -425,7 +425,7 @@ check_or_set_path() {
 	esac
 
 	# Add PATH to the profile file
-	printf "${BLUE}Adding $bin_dir to PATH in $profile_file...${NORMAL}\n"
+	printf "${BLUE}➕ Adding $bin_dir to PATH in $profile_file...${NORMAL}\n"
 
 	{
 		echo ""
@@ -437,7 +437,7 @@ check_or_set_path() {
 		fi
 	} >> "$profile_file"
 
-	printf "${GREEN}✅ Successfully added $bin_dir to PATH in $profile_file${NORMAL}\n"
+	printf "${GREEN}✅ Successfully added [$bin_dir] to PATH in $profile_file${NORMAL}\n"
 
 	# Special handling for WSL
 	if [ "$is_wsl" = true ]; then
@@ -539,19 +539,10 @@ verify_installation() {
 	local system_bin="$2"
 	printf "${BLUE}🔍 Verifying installation...${NORMAL}\n"
 
-	# Test basic functionality
+	# Make sure BoxLang binary can emit version information
 	if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
 		printf "${RED}❌ BoxLang installation verification failed${NORMAL}\n"
 		return 1
-	fi
-
-	# Check internal symlinks in BoxLang installation
-	if [ ! -L "${bin_dir}/bx" ]; then
-		printf "${YELLOW}⚠️  Internal symbolic link 'bx' was not created properly${NORMAL}\n"
-	fi
-
-	if [ ! -L "${bin_dir}/bx-miniserver" ]; then
-		printf "${YELLOW}⚠️  Internal symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
 	fi
 
 	# Check system symbolic links
@@ -572,14 +563,9 @@ verify_installation() {
 	fi
 
 	# Check helper scripts
-	if [ ! -x "${bin_dir}/install-bx-module" ]; then
-		printf "${YELLOW}⚠️  Helper script 'install-bx-module' was not installed properly${NORMAL}\n"
-	fi
-
 	if [ ! -L "${system_bin}/install-bx-module" ]; then
 		printf "${YELLOW}⚠️  System symbolic link 'install-bx-module' was not created properly${NORMAL}\n"
 	fi
-
 	if [ ! -L "${system_bin}/install-boxlang" ]; then
 		printf "${YELLOW}⚠️  System symbolic link 'install-boxlang' was not created properly${NORMAL}\n"
 	fi
@@ -794,8 +780,11 @@ main() {
 
 	# Support user-local installation if not running as root and not explicitly system install
 	if [ "$EUID" -ne 0 ] && [ "$1" != "--system" ]; then
+		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 		printf "${YELLOW}🥸 Installing to user directory (~/.local) since not running as root${NORMAL}\n"
-		printf "${BLUE}💡 Use 'sudo install-boxlang.sh' for system-wide installation${NORMAL}\n\n"
+		printf "${BLUE}💡 Use ${GREEN}'sudo install-boxlang.sh'${BLUE} for system-wide installation${NORMAL}\n"
+		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+		printf "\n"
 		SYSTEM_HOME="$HOME/.local/boxlang"
 		SYSTEM_BIN="$HOME/.local/bin"
 	fi
@@ -844,12 +833,6 @@ main() {
 	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$DESTINATION_SCRIPTS" "$SYSTEM_BIN" "/tmp"
 
 	# Start the installation
-	printf "${GREEN}"
-	echo ''
-	echo '*************************************************************************'
-	echo 'Welcome to the BoxLang® Quick Installer'
-	echo '*************************************************************************'
-	printf "${NORMAL}"
 	printf "${BLUE}🎯 Installing BoxLang® [${TARGET_VERSION}] to [${SYSTEM_HOME}]${NORMAL}\n"
 	printf "${RED}⌛ Downloading Please wait...${NORMAL}\n"
 
@@ -882,12 +865,11 @@ main() {
 
 	# Make them executable
 	printf "\n"
-	printf "${BLUE}Making Assets Executable...${NORMAL}\n"
+	printf "${BLUE}⚡Making Assets Executable...${NORMAL}\n"
 	chmod -R 755 "${SYSTEM_HOME}"
 
 	# Add internal links within BoxLang home
-	printf "\n"
-	printf "${BLUE}🔗 Adding symbolic links...${NORMAL}\n"
+	printf "${BLUE}🔗 Adding system symbolic links...${NORMAL}\n"
 	ln -sf "${DESTINATION_BIN}/boxlang" "${DESTINATION_BIN}/bx"
 	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${DESTINATION_BIN}/bx-miniserver"
 	ln -sf "${DESTINATION_BIN}/boxlang" "${SYSTEM_BIN}/boxlang"
@@ -904,7 +886,7 @@ main() {
 	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
 
 	# Cleanup
-	printf "${BLUE}🗑️ Cleaning up...${NORMAL}\n"
+	printf "${BLUE}🗑️  Cleaning up...${NORMAL}\n"
 	rm -f /tmp/boxlang*.zip
 	# Remove Windows-specific files that may have been downloaded
 	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
@@ -914,19 +896,15 @@ main() {
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
 	# Check PATH for local user execution mostly.
-	printf "\n"
 	check_or_set_path "$SYSTEM_BIN"
 
 	printf "${GREEN}"
-	echo ''
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "♨ BoxLang® Installation Directory: [${SYSTEM_HOME}]"
-	echo "♨ BoxLang® Binaries: [${DESTINATION_BIN}]"
-	echo "☕ BoxLang® JARs: [${DESTINATION_LIB}]"
-	echo "🎨 BoxLang® Assets: [${DESTINATION_ASSETS}]"
 	echo "🔗 System Links: [${SYSTEM_BIN}]"
-	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang]"
-	echo ""
-	echo 'You can change the BoxLang Home by setting the [BOXLANG_HOME] environment variable in your shell profile'
+	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
+	echo 'You can change the BoxLang Home by setting a [BOXLANG_HOME] environment variable in your shell profile'
 	echo 'Just copy the following line to override the location if you want'
 	echo ''
 	printf "${BLUE}${BOLD}"
@@ -936,15 +914,15 @@ main() {
 	echo "${MAGENTA}✅ Remember you can check for updates at any time with: install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
 	echo ''
-	echo '*************************************************************************'
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
-	echo '*************************************************************************'
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
 	echo "You can also buy support and enhanced versions at https://boxlang.io/plans"
 	echo 'p.s. Follow us at https://x.com/tryboxlang.'
 	echo 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
 	echo 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
-	echo '*************************************************************************'
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "Copyright and Registered Trademarks of Ortus Solutions, Corp"
 	printf "${NORMAL}"
 
