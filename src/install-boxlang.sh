@@ -1,6 +1,10 @@
 #!/bin/bash
 
-## BOXLANG INSTALLER
+# BoxLang Installer Script
+# This script helps install BoxLang® runtime and tools on your system.
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
 ###########################################################################
 # Global Color Variables

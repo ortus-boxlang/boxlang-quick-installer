@@ -1,3 +1,9 @@
+:: BoxLang Installation Script
+:: Description: This script installs the BoxLang miniserver web application on a Windows system.
+:: Author: BoxLang Team
+:: Version: @build.version@
+:: License: Apache License, Version 2.0
+
 :: This is the Windows batch script to install BoxLang to the system.
 :: It checks for administrative privileges, and if not, it requests them.
 :: It then runs a PowerShell script to perform the installation.

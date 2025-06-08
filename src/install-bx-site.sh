@@ -3,7 +3,8 @@
 # BoxLang Website Installer Script
 # This script helps install and configure a BoxLang miniserver web application
 # Author: BoxLang Team
-# Version: 1.0.0
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
 set -e
 

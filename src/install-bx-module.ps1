@@ -1,4 +1,8 @@
-## BOXLANG Module Installer
+# BoxLang Module Script
+# Description: This script installs, removes, and lists BoxLang modules from FORGEBOX.
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
 # Configuration
 $FORGEBOX_API_URL = "https://forgebox.io/api/v1"

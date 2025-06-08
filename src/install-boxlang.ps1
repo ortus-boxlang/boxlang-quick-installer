@@ -1,3 +1,10 @@
+# BoxLang Installation Script
+# Description: This script installs the BoxLang miniserver web application on a Windows system.
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
+
+
 $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;

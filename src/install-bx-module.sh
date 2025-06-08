@@ -1,6 +1,10 @@
 #!/bin/bash
 
-## BOXLANG Module Installer
+# BoxLang Module Installer Script
+# This script helps install and manage BoxLang modules from FORGEBOX.
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
