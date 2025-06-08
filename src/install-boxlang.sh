@@ -43,6 +43,12 @@ setup_colors() {
 }
 
 ###########################################################################
+# Global Variables
+###########################################################################
+# Global temporary directory variable for all temporary operations
+TEMP_DIR="${TMPDIR:-/tmp}"
+
+###########################################################################
 # Pre-flight Checks
 ###########################################################################
 # Verifies required dependencies are installed: curl, unzip and jq
@@ -506,7 +512,7 @@ check_and_install_commandbox() {
 
 	# Download CommandBox
 	printf "${BLUE}Downloading CommandBox from ${commandbox_url}...${NORMAL}\n"
-	if ! env curl -L --progress-bar -o "/tmp/${commandbox_filename}" "${commandbox_url}"; then
+	if ! env curl -L --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
 		printf "${RED}❌ Failed to download CommandBox${NORMAL}\n"
 		printf "${BLUE}💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
 		return 1
@@ -514,14 +520,14 @@ check_and_install_commandbox() {
 
 	# Extract CommandBox
 	printf "${BLUE}Extracting CommandBox...${NORMAL}\n"
-	if ! unzip -o "/tmp/${commandbox_filename}" -d "/tmp/commandbox/"; then
+	if ! unzip -o "${TEMP_DIR}/${commandbox_filename}" -d "${TEMP_DIR}/commandbox/"; then
 		printf "${RED}❌ Failed to extract CommandBox${NORMAL}\n"
 		return 1
 	fi
 
 	# Install CommandBox to BoxLang bin directory
 	printf "${BLUE}Installing CommandBox to ${boxlang_bin}/box...${NORMAL}\n"
-	mv "/tmp/commandbox/box" "${boxlang_bin}/box"
+	mv "${TEMP_DIR}/commandbox/box" "${boxlang_bin}/box"
 	chmod 755 "${boxlang_bin}/box"
 
 	# Create symbolic link in system bin directory
@@ -529,7 +535,7 @@ check_and_install_commandbox() {
 	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
 
 	# Cleanup
-	rm -rf "/tmp/${commandbox_filename}" "/tmp/commandbox/"
+	rm -rf "${TEMP_DIR}/${commandbox_filename}" "${TEMP_DIR}/commandbox/"
 
 	printf "${GREEN}✅ CommandBox installed successfully${NORMAL}\n"
 	return 0
@@ -834,27 +840,27 @@ main() {
 	local DESTINATION_LIB="${SYSTEM_HOME}/lib"
 	local DESTINATION_ASSETS="${SYSTEM_HOME}/assets"
 	local DESTINATION_SCRIPTS="${SYSTEM_HOME}/scripts"
-	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$DESTINATION_SCRIPTS" "$SYSTEM_BIN" "/tmp"
+	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$DESTINATION_SCRIPTS" "$SYSTEM_BIN" "${TEMP_DIR}"
 
 	# Start the installation
 	printf "${BLUE}🎯 Installing BoxLang® [${TARGET_VERSION}] to [${SYSTEM_HOME}]${NORMAL}\n"
 	printf "${RED}⌛ Downloading Please wait...${NORMAL}\n"
 
 	# Download BoxLang
-	rm -f /tmp/boxlang.zip
-	env curl -L --progress-bar -o /tmp/boxlang.zip "${DOWNLOAD_URL}" || {
+	rm -f "${TEMP_DIR}"/boxlang.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
 		printf "${RED}🔴 Error: Download of BoxLang® binary failed${NORMAL}\n"
 		exit 1
 	}
 	# Download BoxLang MiniServer
-	rm -f /tmp/boxlang-miniserver.zip
-	env curl -L --progress-bar -o /tmp/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
+	rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
 		printf "${RED}🔴 Error: Download of BoxLang® MiniServer binary failed${NORMAL}\n"
 		exit 1
 	}
 	# Download BoxLang Installer Bundle
-	rm -f /tmp/boxlang-installer.zip
-	env curl -L --progress-bar -o /tmp/boxlang-installer.zip "${INSTALLER_URL}" || {
+	rm -f "${TEMP_DIR}"/boxlang-installer.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
 		printf "${RED}🔴 Error: Download of BoxLang® Installer bundle failed${NORMAL}\n"
 		exit 1
 	}
@@ -863,9 +869,9 @@ main() {
 	printf "\n"
 	printf "${BLUE}🛺 Unzipping Assets to ${SYSTEM_HOME}...${NORMAL}\n"
 	printf "\n"
-	unzip -o /tmp/boxlang.zip -d "${SYSTEM_HOME}"
-	unzip -o /tmp/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
-	unzip -o /tmp/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
+	unzip -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
+	unzip -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
+	unzip -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
 
 	# Make them executable
 	printf "\n"
@@ -891,7 +897,7 @@ main() {
 
 	# Cleanup
 	printf "${BLUE}🗑️  Cleaning up...${NORMAL}\n"
-	rm -f /tmp/boxlang*.zip
+	rm -f "${TEMP_DIR}"/boxlang*.zip
 	# Remove Windows-specific files that may have been downloaded
 	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
 	rm -f "${DESTINATION_SCRIPTS}"/*.bat "${DESTINATION_SCRIPTS}"/*.ps1
