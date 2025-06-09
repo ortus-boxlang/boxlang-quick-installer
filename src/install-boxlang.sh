@@ -892,7 +892,6 @@ main() {
 
 	# CommandBox Installation
 	# In the future this will be part of BoxLang
-	printf "\n"
 	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
 
 	# Cleanup
@@ -921,7 +920,7 @@ main() {
 	echo "export BOXLANG_HOME=~/.boxlang"
 	echo "${NORMAL}"
 	echo ''
-	echo "${MAGENTA}✅ Remember you can check for updates at any time with: install-boxlang --check-update${NORMAL}"
+	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
 	echo ''
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
