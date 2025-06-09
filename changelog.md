@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a new `--force` flag to the `install-boxlang` command to force the installation of BoxLang even if it is already installed.
 - Updated readme
 - New `${TEMP_DIR}` variable to the installer scripts, which points to the system's temporary directory.
 - Creation of new boxlang installation home according to the OS and the user.

@@ -29,11 +29,27 @@ if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
     exit 0
 }
 
+# Parse arguments to check for --force flag and remove it from args
+$FORCE_INSTALL = $false
+$newArgs = @()
+foreach ($arg in $args) {
+    if ($arg -eq "--force") {
+        $FORCE_INSTALL = $true
+    } else {
+        $newArgs += $arg
+    }
+}
+
 # $TARGET_VERSION = "latest"
-$TARGET_VERSION = if ($args.Count -ge 1 -and $args[0] -notmatch "^--") { $args[0] } else { "latest" }
+$TARGET_VERSION = if ($newArgs.Count -ge 1 -and $newArgs[0] -notmatch "^--") { $newArgs[0] } else { "latest" }
 $DOWNLOAD_URL = ""
 if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
     $TARGET_VERSION = $env:BOXLANG_TARGET_VERSION
+}
+
+# If the version is "snapshot", always force it
+if ($TARGET_VERSION -eq "snapshot") {
+    $FORCE_INSTALL = $true
 }
 
 $INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
@@ -94,6 +110,7 @@ function Show-Help {
     Write-Host "  --help, -h        Show this help message"
     Write-Host "  --uninstall       Remove BoxLang from the system"
     Write-Host "  --check-update    Check if a newer version is available"
+    Write-Host "  --force           Force reinstallation even if already installed"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
     Write-Host ""
@@ -101,6 +118,7 @@ function Show-Help {
     Write-Host "  .\install-boxlang.ps1 latest"
     Write-Host "  .\install-boxlang.ps1 snapshot"
     Write-Host "  .\install-boxlang.ps1 1.2.0"
+    Write-Host "  .\install-boxlang.ps1 --force"
     Write-Host "  .\install-boxlang.ps1 --uninstall"
     Write-Host "  .\install-boxlang.ps1 --check-update"
     Write-Host ""
@@ -608,6 +626,18 @@ function Check-And-Install-CommandBox {
     }
 }
 
+# Function to remove previous BoxLang installations
+function Remove-PreviousInstallation {
+    Write-Host -ForegroundColor Yellow "🗑️ Removing previous BoxLang installation..."
+
+    # Remove installation directories
+    Remove-Item -Path "$DESTINATION_LIB" -Force -Recurse -ErrorAction SilentlyContinue
+    Remove-Item -Path "$DESTINATION_BIN" -Force -Recurse -ErrorAction SilentlyContinue
+    Remove-Item -Path "$DESTINATION_SCRIPTS" -Force -Recurse -ErrorAction SilentlyContinue
+
+    Write-Host -ForegroundColor Green "✅ Previous installation removed successfully"
+}
+
 # Tell them where we will install
 Write-Host -ForegroundColor Green ''
 Write-Host -ForegroundColor Green '*************************************************************************'
@@ -620,12 +650,33 @@ Write-Host -ForegroundColor Green "*********************************************
 Write-Host -ForegroundColor Green "You can also download the $bxName runtimes from https://boxlang.io"
 Write-Host -ForegroundColor Green "*************************************************************************"
 
+# Check for existing BoxLang installation
+if (-not $FORCE_INSTALL) {
+    Write-Host -ForegroundColor Blue "🔍 Checking for existing BoxLang installation..."
 
-# Uninstall previous versions
-Write-Host -ForegroundColor Yellow "🗑️ Removing previous versions (if any)..."
-Remove-Item -Path "$DESTINATION_LIB" -Force -ErrorAction SilentlyContinue
-Remove-Item -Path "$DESTINATION_BIN" -Force -ErrorAction SilentlyContinue
-Remove-Item -Path "$DESTINATION_SCRIPTS" -Force -ErrorAction SilentlyContinue
+    $currentVersion = Get-CurrentBoxLangVersion
+    if ($currentVersion) {
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [C:\boxlang] with version [$currentVersion]"
+        Write-Host -ForegroundColor Blue "💡 Use '.\install-boxlang.ps1 --uninstall' to remove the existing version before reinstalling."
+        Write-Host -ForegroundColor Blue "💡 Or use '--force' to do a forced reinstall."
+        exit 0
+    } else {
+        Write-Host -ForegroundColor Green "✅ No previous BoxLang installation found, proceeding with fresh install..."
+        Write-Host ""
+    }
+} else {
+    Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
+    Remove-PreviousInstallation
+    Write-Host ""
+}
+
+# Uninstall previous versions (if not already done by force install)
+if (-not $FORCE_INSTALL) {
+    Write-Host -ForegroundColor Yellow "🗑️ Removing previous versions (if any)..."
+    Remove-Item -Path "$DESTINATION_LIB" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$DESTINATION_BIN" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$DESTINATION_SCRIPTS" -Force -ErrorAction SilentlyContinue
+}
 
 # Prepare directories for installation
 Write-Host -ForegroundColor Blue "📁 Creating installation folders..."

@@ -664,12 +664,14 @@ show_help() {
 	printf "  --help, -h        Show this help message\n"
 	printf "  --uninstall       Remove BoxLang from the system\n"
 	printf "  --check-update    Check if a newer version is available\n"
-	printf "  --system          Force system-wide installation (requires sudo)\n\n"
+	printf "  --system          Force system-wide installation (requires sudo)\n"
+	printf "  --force           Force reinstallation even if already installed\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang latest\n"
 	printf "  install-boxlang snapshot\n"
 	printf "  install-boxlang 1.2.0\n"
+	printf "  install-boxlang --force\n"
 	printf "  install-boxlang --uninstall\n"
 	printf "  install-boxlang --check-update\n"
 	printf "  sudo install-boxlang --system\n\n"
@@ -832,7 +834,6 @@ main() {
 		}
 		printf "\n"
 	fi
-
 
 	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
