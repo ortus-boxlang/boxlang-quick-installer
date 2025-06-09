@@ -260,7 +260,7 @@ get_current_version() {
 		if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
 			local version_output=$("$candidate" --version 2>/dev/null || echo "")
 			if [ -n "$version_output" ]; then
-				current_version=$(extract_semantic_version "$version_output")
+				current_version=$(extract_semantic_version "$version_output" | xargs )
 				if [ -n "$current_version" ]; then
 					echo "$current_version"
 					return 0
@@ -448,17 +448,18 @@ check_or_set_path() {
 	} >> "$profile_file"
 
 	printf "${GREEN}✅ Successfully added [$bin_dir] to PATH in $profile_file${NORMAL}\n"
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
 	# Special handling for WSL
 	if [ "$is_wsl" = true ]; then
-		printf "${BLUE}💡 WSL Note: You may need to restart your terminal or run:${NORMAL}\n"
+		printf "${RED}⚠️ IMPORTANT: You may need to restart your terminal or run:${NORMAL}\n"
 		if [ "$current_shell" = "fish" ]; then
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		else
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		fi
 	else
-		printf "${BLUE}💡 Restart your terminal or run the following to use the new PATH:${NORMAL}\n"
+		printf "${RED}⚠️ IMPORTANT: Restart your terminal or run the following to use the new PATH:${NORMAL}\n"
 		if [ "$current_shell" = "fish" ]; then
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		else
@@ -466,9 +467,10 @@ check_or_set_path() {
 		fi
 	fi
 
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+
 	# Update current session PATH
 	export PATH="$bin_dir:$PATH"
-	printf "${GREEN}✅ PATH updated for current session${NORMAL}\n"
 }
 
 ###########################################################################
@@ -495,7 +497,6 @@ check_and_install_commandbox() {
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
-			printf "${YELLOW}Skipping CommandBox installation${NORMAL}\n"
 			printf "${BLUE}💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
 			return 0
 			;;
@@ -778,8 +779,25 @@ main() {
 	# which may fail on systems lacking tput or terminfo
 	set -e
 
+	# Check for --force flag in any position and remove it from args
+	local FORCE_INSTALL=false
+	local new_args=()
+	for arg in "$@"; do
+		if [ "$arg" = "--force" ]; then
+			FORCE_INSTALL=true
+		else
+			new_args+=("$arg")
+		fi
+	done
+
+	# Replace positional parameters with cleaned args
+	set -- "${new_args[@]}"
 	# Check target version argument, this could be "latest", "snapshot", or a specific version like "1.2.0" or empty for latest
-	local TARGET_VERSION=${1}
+	local TARGET_VERSION=${1:-latest}
+	# If the version is "snapshot", always force it
+	if [ "$TARGET_VERSION" = "snapshot" ]; then
+		FORCE_INSTALL=true
+	fi
 
 	###########################################################################
 	# Setup Installation Directories
@@ -788,7 +806,37 @@ main() {
 	local SYSTEM_HOME="/usr/local/boxlang"
 	local SYSTEM_BIN="/usr/local/bin"
 
+	###########################################################################
+	# Verify if BoxLang is already installed
+	# If it is, we will exit early unless --force is used
+	# If --force is used, we will remove the existing installation first
+	###########################################################################
+
+	if [ "$FORCE_INSTALL" = false ]; then
+		printf "${BLUE}🔍 Checking for existing BoxLang installation...${NORMAL}\n"
+		local CURRENT_VERSION=$(get_current_version)
+		if [ $? -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
+			printf "${YELLOW}⚠️  BoxLang is already installed at [${SYSTEM_HOME}] with version[${CURRENT_VERSION}${NORMAL}]\n"
+			printf "${BLUE}💡 Use ${GREEN}'install-boxlang.sh --uninstall'${BLUE} to remove the existing version before reinstalling.${NORMAL}\n"
+			printf "${BLUE}💡 Or use ${GREEN}'--force'${BLUE} to do a forced reinstall.${NORMAL}\n"
+			exit 0;
+		else
+			printf "${GREEN}✅ No previous BoxLang installation found, proceeding with fresh install...${NORMAL}\n"
+			printf "\n"
+		fi
+	else
+		printf "${YELLOW}🔄 Forcing reinstallation of BoxLang...${NORMAL}\n"
+		remove_previous_installation || {
+			printf "${RED}❌ Failed to remove previous installation, please see log for more information${NORMAL}\n"
+			exit 1
+		}
+		printf "\n"
+	fi
+
+
+	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
+	###########################################################################
 	if [ "$EUID" -ne 0 ] && [ "$1" != "--system" ]; then
 		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 		printf "${YELLOW}🥸 Installing to user directory (~/.local) since not running as root${NORMAL}\n"
@@ -806,10 +854,6 @@ main() {
 	if ! preflight_check; then
 		exit 1
 	fi
-
-	# Remove previous BoxLang installation if it exists
-	remove_previous_installation;
-
 	###########################################################################
 	# Setup Global Variables
 	###########################################################################
@@ -843,7 +887,7 @@ main() {
 	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$DESTINATION_SCRIPTS" "$SYSTEM_BIN" "${TEMP_DIR}"
 
 	# Start the installation
-	printf "${BLUE}🎯 Installing BoxLang® [${TARGET_VERSION}] to [${SYSTEM_HOME}]${NORMAL}\n"
+	printf "${BLUE}🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]${NORMAL}\n"
 	printf "${RED}⌛ Downloading Please wait...${NORMAL}\n"
 
 	# Download BoxLang
@@ -895,6 +939,7 @@ main() {
 	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
 
 	# Cleanup
+	printf "\n"
 	printf "${BLUE}🗑️  Cleaning up...${NORMAL}\n"
 	rm -f "${TEMP_DIR}"/boxlang*.zip
 	# Remove Windows-specific files that may have been downloaded
@@ -912,17 +957,9 @@ main() {
 	echo "♨ BoxLang® Installation Directory: [${SYSTEM_HOME}]"
 	echo "🔗 System Links: [${SYSTEM_BIN}]"
 	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
-	printf "─────────────────────────────────────────────────────────────────────────────\n"
-	echo 'You can change the BoxLang Home by setting a [BOXLANG_HOME] environment variable in your shell profile'
-	echo 'Just copy the following line to override the location if you want'
-	echo ''
-	printf "${BLUE}${BOLD}"
-	echo "export BOXLANG_HOME=~/.boxlang"
-	echo "${NORMAL}"
-	echo ''
 	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
-	echo ''
+	printf "\n"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
@@ -937,4 +974,4 @@ main() {
 
 }
 
-main "${1:-latest}"
+main "$@"
