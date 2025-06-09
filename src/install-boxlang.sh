@@ -1,6 +1,10 @@
 #!/bin/bash
 
-## BOXLANG INSTALLER
+# BoxLang Installer Script
+# This script helps install BoxLang® runtime and tools on your system.
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
 ###########################################################################
 # Global Color Variables
@@ -38,14 +42,18 @@ setup_colors() {
 	fi
 }
 
-# Initialize colors at script startup
-setup_colors
+###########################################################################
+# Global Variables
+###########################################################################
+# Global temporary directory variable for all temporary operations
+TEMP_DIR="${TMPDIR:-/tmp}"
 
 ###########################################################################
 # Pre-flight Checks
 ###########################################################################
 # Verifies required dependencies are installed: curl, unzip and jq
 preflight_check() {
+	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
 	local missing_deps=()
 
 	command -v curl >/dev/null 2>&1 || missing_deps+=("curl")
@@ -81,6 +89,43 @@ preflight_check() {
 		fi
 		return 1
 	fi
+
+	###########################################################################
+	# Java Version Check
+	###########################################################################
+	if ! check_java_version; then
+		printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
+		printf "${YELLOW}Please install Java 21+ and ensure it's in your PATH.${NORMAL}\n"
+		printf "${YELLOW}Recommended: OpenJDK 21+ or Oracle JRE 21+${NORMAL}\n"
+
+		if [ "$(uname)" = "Darwin" ]; then
+			printf "${BLUE}💡 On macOS, you can install Java using:${NORMAL}\n"
+			printf "   brew install openjdk@21\n"
+			printf "   or download from: https://adoptium.net/\n"
+			if command -v sdk >/dev/null 2>&1; then
+				printf "   or with SDKMAN: sdk install java 21-tem\n"
+			fi
+		elif [ "$(uname)" = "Linux" ]; then
+			if command -v apt-get >/dev/null 2>&1; then
+				printf "${BLUE}💡 On Ubuntu/Debian, you can install Java using:${NORMAL}\n"
+				printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
+			elif command -v yum >/dev/null 2>&1; then
+				printf "${BLUE}💡 On RHEL/CentOS/Fedora, you can install Java using:${NORMAL}\n"
+				printf "   sudo yum install java-21-openjdk\n"
+			elif command -v dnf >/dev/null 2>&1; then
+				printf "${BLUE}💡 On Fedora, you can install Java using:${NORMAL}\n"
+				printf "   sudo dnf install java-21-openjdk\n"
+			else
+				printf "${BLUE}💡 On Linux, you can install Java using your package manager or:${NORMAL}\n"
+				printf "   Download from: https://adoptium.net/\n"
+			fi
+			if command -v sdk >/dev/null 2>&1; then
+				printf "   or with SDKMAN: sdk install java 21-tem\n"
+			fi
+		fi
+		return 1
+	fi
+
 	return 0
 }
 
@@ -88,6 +133,7 @@ preflight_check() {
 # Java Version Check Function (Enhanced for sudo compatibility)
 ###########################################################################
 check_java_version() {
+	printf "${BLUE}🔍 Checking Java 21 installation...${NORMAL}\n"
 	local JAVA_CMD=""
 	local JAVA_VERSION=""
 
@@ -110,7 +156,7 @@ check_java_version() {
 
 	# If running under sudo, try to get the original user's environment
 	if [ -n "${SUDO_USER}" ]; then
-		printf "${YELLOW}Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
+		printf "${YELLOW}🛡️ Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
 
 		# Try to get Java from the original user's environment
 		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
@@ -163,6 +209,148 @@ check_java_version() {
 }
 
 ###########################################################################
+# Version Comparison Functions
+###########################################################################
+# Extract semantic version (Major.Minor.Patch) from version string
+extract_semantic_version() {
+	local version_string="$1"
+	# Extract version like "1.2.3" from strings like "BoxLang 1.2.3+20241201.120000" or "1.2.3+buildId"
+	echo "$version_string" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
+}
+
+# Compare two semantic versions (Major.Minor.Patch)
+# Returns: 0 if equal, 1 if first > second, 2 if first < second
+compare_versions() {
+	local version1="$1"
+	local version2="$2"
+
+	# Split versions into arrays
+	IFS='.' read -ra V1 <<< "$version1"
+	IFS='.' read -ra V2 <<< "$version2"
+
+	# Compare major, minor, patch
+	for i in 0 1 2; do
+		local v1_part=${V1[i]:-0}
+		local v2_part=${V2[i]:-0}
+
+		if [ "$v1_part" -gt "$v2_part" ]; then
+			return 1  # version1 > version2
+		elif [ "$v1_part" -lt "$v2_part" ]; then
+			return 2  # version1 < version2
+		fi
+	done
+
+	return 0  # versions are equal
+}
+
+# Get current installed BoxLang version
+get_current_version() {
+	local current_version=""
+
+	# Try to find BoxLang in common locations
+	local boxlang_candidates=(
+		"boxlang"                              # In PATH
+		"/usr/local/bin/boxlang"               # System install (symbolic link)
+		"$HOME/.local/bin/boxlang"             # User install (symbolic link)
+		"/usr/local/boxlang/bin/boxlang"       # System BoxLang installation
+		"$HOME/.local/boxlang/bin/boxlang"     # User BoxLang installation
+	)
+
+	for candidate in "${boxlang_candidates[@]}"; do
+		if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
+			local version_output=$("$candidate" --version 2>/dev/null || echo "")
+			if [ -n "$version_output" ]; then
+				current_version=$(extract_semantic_version "$version_output" | xargs )
+				if [ -n "$current_version" ]; then
+					echo "$current_version"
+					return 0
+				fi
+			fi
+		fi
+	done
+
+	return 1
+}
+
+# Get latest available BoxLang version from remote
+get_latest_version() {
+	local version_url="https://downloads.ortussolutions.com/ortussolutions/boxlang/version-latest.properties"
+	local version_info
+
+	# Download version info
+	version_info=$(curl -s "$version_url" 2>/dev/null || echo "")
+	if [ -z "$version_info" ]; then
+		return 1
+	fi
+
+	# Extract version from properties file (format: version=1.2.3+buildId)
+	local latest_version=$(echo "$version_info" | grep "^version=" | cut -d'=' -f2 | head -n1)
+	if [ -n "$latest_version" ]; then
+		extract_semantic_version "$latest_version"
+		return 0
+	fi
+
+	return 1
+}
+
+# Check for updates and optionally prompt for installation
+check_for_updates() {
+	printf "${BLUE}🔍 Checking for BoxLang updates...${NORMAL}\n"
+
+	# Get current version
+	local current_version
+	current_version=$(get_current_version)
+	if [ $? -ne 0 ] || [ -z "$current_version" ]; then
+		printf "${YELLOW}⚠️  BoxLang is not currently installed${NORMAL}\n"
+		current_version="0.0.0"
+	fi
+
+	# Get latest version
+	local latest_version
+	latest_version=$(get_latest_version)
+	if [ $? -ne 0 ] || [ -z "$latest_version" ]; then
+		printf "${RED}❌ Failed to fetch latest version information${NORMAL}\n"
+		printf "${YELLOW}Please check your internet connection and try again${NORMAL}\n"
+		return 1
+	fi
+
+	printf "${GREEN}Current version: ${current_version}${NORMAL}\n"
+	printf "${GREEN}Latest version:  ${latest_version}${NORMAL}\n"
+
+	# Compare versions
+	compare_versions "$current_version" "$latest_version"
+	local comparison_result=$?
+
+	case $comparison_result in
+		0)
+			printf "${GREEN}✅ You have the latest version of BoxLang${NORMAL}\n"
+			return 0
+			;;
+		1)
+			printf "${BLUE}🔄 You have a newer version than the latest release${NORMAL}\n"
+			printf "${YELLOW}This might be a development or snapshot build${NORMAL}\n"
+			return 0
+			;;
+		2)
+			printf "${YELLOW}🆙 A newer version of BoxLang is available!${NORMAL}\n"
+			printf "${BLUE}Would you like to update to version ${latest_version}? [Y/n] ${NORMAL}"
+			read -r response < /dev/tty
+			case "$response" in
+				[nN][oO]|[nN])
+					printf "${YELLOW}Update cancelled${NORMAL}\n"
+					return 0
+					;;
+				*)
+					printf "${GREEN}Starting update to BoxLang ${latest_version}...${NORMAL}\n"
+					# Call main installation function with latest version
+					exec "$0" "latest"
+					;;
+			esac
+			;;
+	esac
+}
+
+###########################################################################
 # PATH Check and Auto-Update Function
 ###########################################################################
 check_or_set_path() {
@@ -170,11 +358,11 @@ check_or_set_path() {
 
 	# Check if path is already in PATH
 	if echo "$PATH" | grep -q "$bin_dir"; then
-		printf "${GREEN}✅ $bin_dir is already in your PATH${NORMAL}\n"
+		printf "${GREEN}✅ [$bin_dir] is already in your PATH${NORMAL}\n"
 		return 0
 	fi
 
-	printf "${YELLOW}⚠️  $bin_dir is not in your PATH${NORMAL}\n"
+	printf "${YELLOW}⚠️  [$bin_dir] is not in your PATH${NORMAL}\n"
 
 	# Detect the appropriate shell profile file
 	local profile_file=""
@@ -228,7 +416,7 @@ check_or_set_path() {
 	fi
 
 	# Ask user for permission to auto-update
-	printf "${BLUE}❓Would you like to automatically add $bin_dir to your PATH? [Y/n] ${NORMAL}"
+	printf "${BLUE}❓Would you like to automatically add [$bin_dir] to your PATH? [Y/n] ${NORMAL}"
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
@@ -247,7 +435,7 @@ check_or_set_path() {
 	esac
 
 	# Add PATH to the profile file
-	printf "${BLUE}Adding $bin_dir to PATH in $profile_file...${NORMAL}\n"
+	printf "${BLUE}➕ Adding $bin_dir to PATH in $profile_file...${NORMAL}\n"
 
 	{
 		echo ""
@@ -259,18 +447,19 @@ check_or_set_path() {
 		fi
 	} >> "$profile_file"
 
-	printf "${GREEN}✅ Successfully added $bin_dir to PATH in $profile_file${NORMAL}\n"
+	printf "${GREEN}✅ Successfully added [$bin_dir] to PATH in $profile_file${NORMAL}\n"
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
 	# Special handling for WSL
 	if [ "$is_wsl" = true ]; then
-		printf "${BLUE}💡 WSL Note: You may need to restart your terminal or run:${NORMAL}\n"
+		printf "${RED}⚠️ IMPORTANT: You may need to restart your terminal or run:${NORMAL}\n"
 		if [ "$current_shell" = "fish" ]; then
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		else
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		fi
 	else
-		printf "${BLUE}💡 Restart your terminal or run the following to use the new PATH:${NORMAL}\n"
+		printf "${RED}⚠️ IMPORTANT: Restart your terminal or run the following to use the new PATH:${NORMAL}\n"
 		if [ "$current_shell" = "fish" ]; then
 			printf "${CYAN}source $profile_file${NORMAL}\n"
 		else
@@ -278,16 +467,18 @@ check_or_set_path() {
 		fi
 	fi
 
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+
 	# Update current session PATH
 	export PATH="$bin_dir:$PATH"
-	printf "${GREEN}✅ PATH updated for current session${NORMAL}\n"
 }
 
 ###########################################################################
 # CommandBox Installation Check and Install Function
 ###########################################################################
 check_and_install_commandbox() {
-	local bin_dir="$1"
+	local system_bin="$1"
+	local boxlang_bin="$2"
 
 	printf "${BLUE}🔍 Checking for CommandBox...${NORMAL}\n"
 
@@ -306,7 +497,6 @@ check_and_install_commandbox() {
 	read -r response < /dev/tty
 	case "$response" in
 		[nN][oO]|[nN])
-			printf "${YELLOW}Skipping CommandBox installation${NORMAL}\n"
 			printf "${BLUE}💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
 			return 0
 			;;
@@ -323,7 +513,7 @@ check_and_install_commandbox() {
 
 	# Download CommandBox
 	printf "${BLUE}Downloading CommandBox from ${commandbox_url}...${NORMAL}\n"
-	if ! env curl -L --progress-bar -o "/tmp/${commandbox_filename}" "${commandbox_url}"; then
+	if ! env curl -L --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
 		printf "${RED}❌ Failed to download CommandBox${NORMAL}\n"
 		printf "${BLUE}💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
 		return 1
@@ -331,19 +521,22 @@ check_and_install_commandbox() {
 
 	# Extract CommandBox
 	printf "${BLUE}Extracting CommandBox...${NORMAL}\n"
-	if ! unzip -o "/tmp/${commandbox_filename}" -d "/tmp/commandbox/"; then
+	if ! unzip -o "${TEMP_DIR}/${commandbox_filename}" -d "${TEMP_DIR}/commandbox/"; then
 		printf "${RED}❌ Failed to extract CommandBox${NORMAL}\n"
 		return 1
 	fi
 
-	# Install CommandBox
-	printf "${BLUE}Installing CommandBox to ${bin_dir}/box...${NORMAL}\n"
-	mv "/tmp/commandbox/box" "${bin_dir}/box"
-	chmod 755 "${bin_dir}/box"
+	# Install CommandBox to BoxLang bin directory
+	printf "${BLUE}Installing CommandBox to ${boxlang_bin}/box...${NORMAL}\n"
+	mv "${TEMP_DIR}/commandbox/box" "${boxlang_bin}/box"
+	chmod 755 "${boxlang_bin}/box"
 
+	# Create symbolic link in system bin directory
+	printf "${BLUE}Creating CommandBox symbolic link in ${system_bin}...${NORMAL}\n"
+	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
 
 	# Cleanup
-	rm -rf "/tmp/${commandbox_filename}" "/tmp/commandbox/"
+	rm -rf "${TEMP_DIR}/${commandbox_filename}" "${TEMP_DIR}/commandbox/"
 
 	printf "${GREEN}✅ CommandBox installed successfully${NORMAL}\n"
 	return 0
@@ -354,29 +547,50 @@ check_and_install_commandbox() {
 ###########################################################################
 verify_installation() {
 	local bin_dir="$1"
+	local system_bin="$2"
 	printf "${BLUE}🔍 Verifying installation...${NORMAL}\n"
 
-	# Test basic functionality
+	# Make sure BoxLang binary can emit version information
 	if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
 		printf "${RED}❌ BoxLang installation verification failed${NORMAL}\n"
 		return 1
 	fi
 
-	# Check symlinks
-	if [ ! -L "${bin_dir}/bx" ]; then
-		printf "${YELLOW}⚠️  Symbolic link 'bx' was not created properly${NORMAL}\n"
+	# Check system symbolic links
+	if [ ! -L "${system_bin}/boxlang" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'boxlang' was not created properly${NORMAL}\n"
 	fi
 
-	if [ ! -L "${bin_dir}/bx-miniserver" ]; then
-		printf "${YELLOW}⚠️  Symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
+	if [ ! -L "${system_bin}/bx" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'bx' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/boxlang-miniserver" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'boxlang-miniserver' was not created properly${NORMAL}\n"
+	fi
+
+	if [ ! -L "${system_bin}/bx-miniserver" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'bx-miniserver' was not created properly${NORMAL}\n"
 	fi
 
 	# Check helper scripts
-	if [ ! -x "${bin_dir}/install-bx-module" ]; then
-		printf "${YELLOW}⚠️  Helper script 'install-bx-module' was not installed properly${NORMAL}\n"
+	if [ ! -L "${system_bin}/install-bx-module" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'install-bx-module' was not created properly${NORMAL}\n"
+	fi
+	if [ ! -L "${system_bin}/install-boxlang" ]; then
+		printf "${YELLOW}⚠️  System symbolic link 'install-boxlang' was not created properly${NORMAL}\n"
 	fi
 
-	printf "${GREEN}✅ Installation verified successfully${NORMAL}"
+	# Check CommandBox installation (optional)
+	if [ -x "${bin_dir}/box" ]; then
+		if [ ! -L "${system_bin}/box" ]; then
+			printf "${YELLOW}⚠️  CommandBox symbolic link was not created properly${NORMAL}\n"
+		else
+			printf "${GREEN}✅ CommandBox is installed and linked${NORMAL}\n"
+		fi
+	fi
+
+	printf "${GREEN}✅ Installation verified successfully${NORMAL}\n"
 	return 0
 }
 
@@ -386,17 +600,22 @@ verify_installation() {
 uninstall_boxlang() {
 	printf "${YELLOW}🗑️  Uninstalling BoxLang...${NORMAL}\n"
 
-	# Remove binaries and symlinks
-	printf "${BLUE}Removing binaries and symlinks...${NORMAL}\n"
+	# Remove symbolic links from system bin directories
+	printf "${BLUE}Removing system symbolic links...${NORMAL}\n"
 	rm -fv /usr/local/bin/boxlang
 	rm -fv /usr/local/bin/bx
 	rm -fv /usr/local/bin/boxlang-miniserver
 	rm -fv /usr/local/bin/bx-miniserver
 	rm -fv /usr/local/bin/install-bx-module
 	rm -fv /usr/local/bin/install-boxlang
+	rm -fv /usr/local/bin/box
 
-	# Remove JAR files
-	printf "${BLUE}Removing JAR files...${NORMAL}\n"
+	# Remove BoxLang installation directory
+	printf "${BLUE}Removing BoxLang installation directory...${NORMAL}\n"
+	rm -rfv /usr/local/boxlang
+
+	# Remove legacy JAR files if they exist
+	printf "${BLUE}Removing legacy JAR files (if any)...${NORMAL}\n"
 	rm -fv /usr/local/lib/boxlang-*.jar
 
 	# Also check user-local installation
@@ -408,8 +627,16 @@ uninstall_boxlang() {
 		rm -fv "$HOME/.local/bin/bx-miniserver"
 		rm -fv "$HOME/.local/bin/install-bx-module"
 		rm -fv "$HOME/.local/bin/install-boxlang"
+		rm -fv "$HOME/.local/bin/box"
 	fi
 
+	# Remove user-local BoxLang installation directory
+	if [ -d "$HOME/.local/boxlang" ]; then
+		printf "${BLUE}Removing user-local BoxLang installation directory...${NORMAL}\n"
+		rm -rfv "$HOME/.local/boxlang"
+	fi
+
+	# Remove legacy user lib files if they exist
 	if [ -d "$HOME/.local/lib" ]; then
 		rm -fv "$HOME/.local/lib/boxlang-*.jar"
 	fi
@@ -436,42 +663,39 @@ show_help() {
 	printf "${BOLD}Options:${NORMAL}\n"
 	printf "  --help, -h        Show this help message\n"
 	printf "  --uninstall       Remove BoxLang from the system\n"
-	printf "  --system          Force system-wide installation (requires sudo)\n\n"
+	printf "  --check-update    Check if a newer version is available\n"
+	printf "  --system          Force system-wide installation (requires sudo)\n"
+	printf "  --force           Force reinstallation even if already installed\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
-	printf "  install-boxlang.sh\n"
-	printf "  install-boxlang.sh latest\n"
-	printf "  install-boxlang.sh snapshot\n"
-	printf "  install-boxlang.sh 1.2.0\n"
-	printf "  install-boxlang.sh --uninstall\n"
-	printf "  sudo install-boxlang.sh --system\n\n"
+	printf "  install-boxlang\n"
+	printf "  install-boxlang latest\n"
+	printf "  install-boxlang snapshot\n"
+	printf "  install-boxlang 1.2.0\n"
+	printf "  install-boxlang --force\n"
+	printf "  install-boxlang --uninstall\n"
+	printf "  install-boxlang --check-update\n"
+	printf "  sudo install-boxlang --system\n\n"
 	printf "${BOLD}Installation Methods:${NORMAL}\n"
 	printf "  🌐 One-liner: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash${NORMAL}\n"
 	printf "  📦 With version: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- snapshot${NORMAL}\n\n"
-	printf "${BOLD}What this installer does:${NORMAL}\n"
-	printf "  ✅ Checks for Java 21+ requirement\n"
-	printf "  ✅ Downloads BoxLang® runtime and MiniServer\n"
-	printf "  ✅ Installs to /usr/local/bin and /usr/local/lib (or ~/.local/ for user install)\n"
-	printf "  ✅ Creates symbolic links: bx → boxlang, bx-miniserver → boxlang-miniserver\n"
-	printf "  ✅ Installs helper scripts: install-bx-module, install-boxlang\n"
-	printf "  ✅ Optionally installs CommandBox (BoxLang Package Manager)\n"
-	printf "  ✅ Sets up BoxLang® Home at ~/.boxlang\n"
-	printf "  ✅ Removes any previous versions\n"
-	printf "  ✅ Verifies installation\n\n"
 	printf "${BOLD}Requirements:${NORMAL}\n"
 	printf "  - Java 21 or higher (OpenJDK or Oracle JDK)\n"
 	printf "  - curl (for downloading)\n"
 	printf "  - unzip (for extracting)\n"
 	printf "  - sudo privileges (for system-wide installation)\n\n"
 	printf "${BOLD}Installation Paths:${NORMAL}\n"
-	printf "  📁 System: /usr/local/bin/ and /usr/local/lib/\n"
-	printf "  📁 User: ~/.local/bin/ and ~/.local/lib/\n"
+	printf "  📁 System BoxLang Directory: /usr/local/boxlang/\n"
+	printf "  📁 User BoxLang Directory: ~/.local/boxlang/\n"
+	printf "  📁 System Links: /usr/local/bin/\n"
+	printf "  📁 User Links: ~/.local/bin/\n"
 	printf "  📁 BoxLang Home: ~/.boxlang/\n\n"
 	printf "${BOLD}After Installation:${NORMAL}\n"
 	printf "  🚀 Start REPL: ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}\n"
 	printf "  🌐 Start MiniServer: ${GREEN}boxlang-miniserver${NORMAL} or ${GREEN}bx-miniserver${NORMAL}\n"
 	printf "  📦 Install modules: ${GREEN}install-bx-module <module-name>${NORMAL}\n"
 	printf "  📦 Package Manager: ${GREEN}box${NORMAL} (if CommandBox was installed)\n"
-	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n\n"
+	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n"
+	printf "  🔍 Check for updates: ${GREEN}install-boxlang --check-update${NORMAL}\n\n"
 	printf "${BOLD}Notes:${NORMAL}\n"
 	printf "  - Run with sudo for system-wide installation: ${GREEN}sudo install-boxlang.sh${NORMAL}\n"
 	printf "  - User installation doesn't require sudo and installs to ~/.local/\n"
@@ -486,8 +710,33 @@ show_help() {
 }
 
 ###########################################################################
+# Remove Previous Installation Function
+###########################################################################
+remove_previous_installation() {
+	# Remove previous BoxLang installation if it exists
+	if [ -d "${SYSTEM_HOME}" ]; then
+		printf "${YELLOW}🗑️ Removing previous BoxLang installation...${NORMAL}\n"
+		rm -rf "${SYSTEM_HOME}"
+
+		# Remove old symbolic links from system bin
+		rm -f "${SYSTEM_BIN}/boxlang"
+		rm -f "${SYSTEM_BIN}/bx"
+		rm -f "${SYSTEM_BIN}/box"
+		rm -f "${SYSTEM_BIN}/boxlang-miniserver"
+		rm -f "${SYSTEM_BIN}/bx-miniserver"
+		rm -f "${SYSTEM_BIN}/install-bx-module"
+		rm -f "${SYSTEM_BIN}/install-boxlang"
+		rm -f "${SYSTEM_BIN}/install-bx-site"
+	fi
+}
+
+###########################################################################
 # Parse command line arguments before main execution
 ###########################################################################
+
+# Initialize colors at script startup
+setup_colors
+
 # Check for help argument early to avoid any setup overhead
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
 	show_help
@@ -500,43 +749,104 @@ if [ "$1" = "--uninstall" ]; then
 	exit 0
 fi
 
+# Check for check-update argument
+if [ "$1" = "--check-update" ]; then
+	if ! preflight_check; then
+		exit 1
+	fi
+	check_for_updates
+	exit 0
+fi
+
+
+
+###########################################################################
+# Main script execution starts here
+###########################################################################
 main() {
 	# Only enable exit-on-error after the non-critical colorization stuff,
 	# which may fail on systems lacking tput or terminfo
 	set -e
 
-	# Set the target version
-	local TARGET_VERSION=${1}
+	# Check for --force flag in any position and remove it from args
+	local FORCE_INSTALL=false
+	local new_args=()
+	for arg in "$@"; do
+		if [ "$arg" = "--force" ]; then
+			FORCE_INSTALL=true
+		else
+			new_args+=("$arg")
+		fi
+	done
+
+	# Replace positional parameters with cleaned args
+	set -- "${new_args[@]}"
+	# Check target version argument, this could be "latest", "snapshot", or a specific version like "1.2.0" or empty for latest
+	local TARGET_VERSION=${1:-latest}
+	# If the version is "snapshot", always force it
+	if [ "$TARGET_VERSION" = "snapshot" ]; then
+		FORCE_INSTALL=true
+	fi
 
 	###########################################################################
 	# Setup Installation Directories
 	###########################################################################
-	local DESTINATION="/usr/local/"
-	local DESTINATION_LIB="/usr/local/lib"
-	local DESTINATION_BIN="/usr/local/bin"
+	# These are the system-wide installation directories
+	local SYSTEM_HOME="/usr/local/boxlang"
+	local SYSTEM_BIN="/usr/local/bin"
 
+	###########################################################################
+	# Verify if BoxLang is already installed
+	# If it is, we will exit early unless --force is used
+	# If --force is used, we will remove the existing installation first
+	###########################################################################
+
+	if [ "$FORCE_INSTALL" = false ]; then
+		printf "${BLUE}🔍 Checking for existing BoxLang installation...${NORMAL}\n"
+		local CURRENT_VERSION=$(get_current_version)
+		if [ $? -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
+			printf "${YELLOW}⚠️  BoxLang is already installed at [${SYSTEM_HOME}] with version[${CURRENT_VERSION}${NORMAL}]\n"
+			printf "${BLUE}💡 Use ${GREEN}'install-boxlang.sh --uninstall'${BLUE} to remove the existing version before reinstalling.${NORMAL}\n"
+			printf "${BLUE}💡 Or use ${GREEN}'--force'${BLUE} to do a forced reinstall.${NORMAL}\n"
+			printf "${BLUE}💡 Or use ${GREEN}'--help'${BLUE} for more information.${NORMAL}\n"
+			exit 0;
+		else
+			printf "${GREEN}✅ No previous BoxLang installation found, proceeding with fresh install...${NORMAL}\n"
+			printf "\n"
+		fi
+	else
+		printf "${YELLOW}🔄 Forcing reinstallation of BoxLang...${NORMAL}\n"
+		remove_previous_installation || {
+			printf "${RED}❌ Failed to remove previous installation, please see log for more information${NORMAL}\n"
+			exit 1
+		}
+		printf "\n"
+	fi
+
+	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
+	###########################################################################
 	if [ "$EUID" -ne 0 ] && [ "$1" != "--system" ]; then
-		printf "${YELLOW}Installing to user directory (~/.local) since not running as root${NORMAL}\n"
-		printf "${BLUE}💡 Use 'sudo install-boxlang.sh' for system-wide installation${NORMAL}\n\n"
-		DESTINATION="$HOME/.local/"
-		DESTINATION_BIN="$HOME/.local/bin"
-		DESTINATION_LIB="$HOME/.local/lib"
-		mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB"
+		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+		printf "${YELLOW}🥸 Installing to user directory (~/.local) since not running as root${NORMAL}\n"
+		printf "${BLUE}💡 Use ${GREEN}'sudo install-boxlang.sh'${BLUE} for system-wide installation${NORMAL}\n"
+		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+		printf "\n"
+		SYSTEM_HOME="$HOME/.local/boxlang"
+		SYSTEM_BIN="$HOME/.local/bin"
 	fi
 
 	###########################################################################
 	# Pre-flight Checks
+	# This function checks for necessary tools and environment
 	###########################################################################
-	printf "${BLUE}🔍 Running pre-flight checks...${NORMAL}\n"
-
 	if ! preflight_check; then
 		exit 1
 	fi
-
 	###########################################################################
 	# Setup Global Variables
 	###########################################################################
+	local INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
 	local SNAPSHOT_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-snapshot.zip"
 	local SNAPSHOT_URL_MINISERVER="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-snapshot.zip"
     local LATEST_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-latest.zip"
@@ -558,154 +868,99 @@ main() {
 		local DOWNLOAD_URL_MINISERVER=${VERSIONED_URL_MINISERVER}
 	fi
 
-	###########################################################################
-	# Java Version Check
-	###########################################################################
-	printf "${BLUE}🔍 Checking Java installation...${NORMAL}\n"
-
-	if ! check_java_version; then
-		printf "${RED}❌ Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
-		printf "${YELLOW}Please install Java 21+ and ensure it's in your PATH.${NORMAL}\n"
-		printf "${YELLOW}Recommended: OpenJDK 21+ or Oracle JRE 21+${NORMAL}\n"
-
-		if [ "$(uname)" = "Darwin" ]; then
-			printf "${BLUE}💡 On macOS, you can install Java using:${NORMAL}\n"
-			printf "   brew install openjdk@21\n"
-			printf "   or download from: https://adoptium.net/\n"
-			if command -v sdk >/dev/null 2>&1; then
-				printf "   or with SDKMAN: sdk install java 21-tem\n"
-			fi
-		elif [ "$(uname)" = "Linux" ]; then
-			if command -v apt-get >/dev/null 2>&1; then
-				printf "${BLUE}💡 On Ubuntu/Debian, you can install Java using:${NORMAL}\n"
-				printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
-			elif command -v yum >/dev/null 2>&1; then
-				printf "${BLUE}💡 On RHEL/CentOS/Fedora, you can install Java using:${NORMAL}\n"
-				printf "   sudo yum install java-21-openjdk\n"
-			elif command -v dnf >/dev/null 2>&1; then
-				printf "${BLUE}💡 On Fedora, you can install Java using:${NORMAL}\n"
-				printf "   sudo dnf install java-21-openjdk\n"
-			else
-				printf "${BLUE}💡 On Linux, you can install Java using your package manager or:${NORMAL}\n"
-				printf "   Download from: https://adoptium.net/\n"
-			fi
-			if command -v sdk >/dev/null 2>&1; then
-				printf "   or with SDKMAN: sdk install java 21-tem\n"
-			fi
-		fi
-
-		exit 1
-	fi
+	# BoxLang installation structure
+	local DESTINATION_BIN="${SYSTEM_HOME}/bin"
+	local DESTINATION_LIB="${SYSTEM_HOME}/lib"
+	local DESTINATION_ASSETS="${SYSTEM_HOME}/assets"
+	local DESTINATION_SCRIPTS="${SYSTEM_HOME}/scripts"
+	mkdir -p "$DESTINATION_BIN" "$DESTINATION_LIB" "$DESTINATION_ASSETS" "$DESTINATION_SCRIPTS" "$SYSTEM_BIN" "${TEMP_DIR}"
 
 	# Start the installation
-	printf "${GREEN}"
-	echo ''
-	echo '*************************************************************************'
-	echo 'Welcome to the BoxLang® Quick Installer'
-	echo '*************************************************************************'
-	printf "${NORMAL}"
-	printf "${BLUE}Downloading BoxLang® [${TARGET_VERSION}] from [${DOWNLOAD_URL}]${NORMAL}\n"
-	printf "${RED}Please wait...${NORMAL}\n"
+	printf "${BLUE}🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]${NORMAL}\n"
+	printf "${RED}⌛ Downloading Please wait...${NORMAL}\n"
 
-	# Ensure destination folders
-	mkdir -p /tmp
-	mkdir -p "$DESTINATION_BIN"
-	mkdir -p "$DESTINATION_LIB"
-
-	# Uninstall previous versions
-    printf "${YELLOW}Removing previous versions (if any)...${NORMAL}\n"
-	rm -fv "${DESTINATION_LIB}"/boxlang-*.jar
-
-	# Download with progress bar
-	rm -f /tmp/boxlang.zip
-	env curl -L --progress-bar -o /tmp/boxlang.zip "${DOWNLOAD_URL}" || {
-		printf "${RED}Error: Download of BoxLang® binary failed${NORMAL}\n"
+	# Download BoxLang
+	rm -f "${TEMP_DIR}"/boxlang.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
+		printf "${RED}🔴 Error: Download of BoxLang® binary failed${NORMAL}\n"
 		exit 1
 	}
-	rm -f /tmp/boxlang-miniserver.zip
-	env curl -L --progress-bar -o /tmp/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
-		printf "${RED}Error: Download of BoxLang® MiniServer binary failed${NORMAL}\n"
+	# Download BoxLang MiniServer
+	rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
+		printf "${RED}🔴 Error: Download of BoxLang® MiniServer binary failed${NORMAL}\n"
+		exit 1
+	}
+	# Download BoxLang Installer Bundle
+	rm -f "${TEMP_DIR}"/boxlang-installer.zip
+	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
+		printf "${RED}🔴 Error: Download of BoxLang® Installer bundle failed${NORMAL}\n"
 		exit 1
 	}
 
-	# Inflate it
+	# Inflate them
 	printf "\n"
-	printf "${BLUE}Unzipping BoxLang®...${NORMAL}\n"
+	printf "${BLUE}🛺 Unzipping Assets to ${SYSTEM_HOME}...${NORMAL}\n"
 	printf "\n"
-	unzip -o /tmp/boxlang.zip -d "${DESTINATION}"
-	unzip -o /tmp/boxlang-miniserver.zip -d "${DESTINATION}"
+	unzip -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
+	unzip -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
+	unzip -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
 
-	# Make it executable
+	# Make them executable
 	printf "\n"
-	printf "${BLUE}Making BoxLang® Executable...${NORMAL}\n"
-	chmod 755 "${DESTINATION_BIN}/boxlang"
-	chmod 755 "${DESTINATION_BIN}/boxlang-miniserver"
+	printf "${BLUE}⚡Making Assets Executable...${NORMAL}\n"
+	chmod -R 755 "${SYSTEM_HOME}"
 
-	# Add links
-	printf "\n"
-	printf "${BLUE}Adding symbolic links...${NORMAL}\n"
+	# Add internal links within BoxLang home
+	printf "${BLUE}🔗 Adding system symbolic links...${NORMAL}\n"
 	ln -sf "${DESTINATION_BIN}/boxlang" "${DESTINATION_BIN}/bx"
 	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${DESTINATION_BIN}/bx-miniserver"
+	ln -sf "${DESTINATION_BIN}/boxlang" "${SYSTEM_BIN}/boxlang"
+	ln -sf "${DESTINATION_BIN}/bx" "${SYSTEM_BIN}/bx"
+	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${SYSTEM_BIN}/boxlang-miniserver"
+	ln -sf "${DESTINATION_BIN}/bx-miniserver" "${SYSTEM_BIN}/bx-miniserver"
+	ln -sf "${DESTINATION_SCRIPTS}/install-boxlang.sh" "${SYSTEM_BIN}/install-boxlang"
+	ln -sf "${DESTINATION_SCRIPTS}/install-bx-module.sh" "${SYSTEM_BIN}/install-bx-module"
+	ln -sf "${DESTINATION_SCRIPTS}/install-bx-site.sh" "${SYSTEM_BIN}/install-bx-site"
 
-	# Install the Installer scripts
-	printf "\n"
-	printf "${BLUE}Installing BoxLang® Module & Core Installer Scripts [install-bx-module, install-boxlang]...${NORMAL}\n"
-	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-bx-module" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-bx-module.sh"
-	chmod 755 "${DESTINATION_BIN}/install-bx-module"
-	env curl -Lk --progress-bar -o "${DESTINATION_BIN}/install-boxlang" "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/master/src/install-boxlang.sh"
-	chmod 755 "${DESTINATION_BIN}/install-boxlang"
-
-	# CommandBox Install
-	printf "\n"
-	check_and_install_commandbox "$DESTINATION_BIN"
+	# CommandBox Installation
+	# In the future this will be part of BoxLang
+	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
 
 	# Cleanup
 	printf "\n"
-	printf "${BLUE}Cleaning up...${NORMAL}\n"
-	rm -f /tmp/boxlang.zip
-	rm -f /tmp/boxlang-miniserver.zip
-	rm -f ${DESTINATION_BIN}/boxlang.bat
-	rm -f ${DESTINATION_BIN}/boxlang-miniserver.bat
-	rm -f ${DESTINATION_BIN}/install-boxlang.ps1
-	rm -f ${DESTINATION_BIN}/install-bx-module.ps1
+	printf "${BLUE}🗑️  Cleaning up...${NORMAL}\n"
+	rm -f "${TEMP_DIR}"/boxlang*.zip
+	# Remove Windows-specific files that may have been downloaded
+	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
+	rm -f "${DESTINATION_SCRIPTS}"/*.bat "${DESTINATION_SCRIPTS}"/*.ps1
 
 	# Verify installation
-	printf "\n"
-	verify_installation "$DESTINATION_BIN"
+	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
-	# Check PATH
-	printf "\n"
-	check_or_set_path "$DESTINATION_BIN"
+	# Check PATH for local user execution mostly.
+	check_or_set_path "$SYSTEM_BIN"
 
 	printf "${GREEN}"
-	echo ''
-	echo "♨ BoxLang® Binaries are now installed to [$DESTINATION_BIN]"
-	echo "☕ BoxLang® JARs are now installed to [$DESTINATION_LIB]"
-	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang]"
-	echo ""
-	echo 'You can change the BoxLang Home by setting the [BOXLANG_HOME] environment variable in your shell profile'
-	echo 'Just copy the following line to override the location if you want'
-	echo ''
-	printf "${BLUE}${BOLD}"
-	echo "export BOXLANG_HOME=~/.boxlang"
-	echo "${NORMAL}"
-	echo ''
-	echo "${MAGENTA}✅ You can start a REPL by running: boxlang${NORMAL}"
-	echo "${MAGENTA}✅ You can start a MiniServer by running: boxlang-miniserver${NORMAL}"
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
+	echo "♨ BoxLang® Installation Directory: [${SYSTEM_HOME}]"
+	echo "🔗 System Links: [${SYSTEM_BIN}]"
+	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
+	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
-	echo ''
-	echo '*************************************************************************'
+	printf "\n"
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
-	echo '*************************************************************************'
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
 	echo "You can also buy support and enhanced versions at https://boxlang.io/plans"
 	echo 'p.s. Follow us at https://x.com/tryboxlang.'
 	echo 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
 	echo 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
-	echo '*************************************************************************'
+	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "Copyright and Registered Trademarks of Ortus Solutions, Corp"
 	printf "${NORMAL}"
 
 }
 
-main "${1:-latest}"
+main "$@"

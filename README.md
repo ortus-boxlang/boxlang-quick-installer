@@ -23,38 +23,66 @@ Holy Ghost which is given unto us. ." Romans 5:5
 
 ----
 
-This is the BoxLang quick installer for Mac and *NIX systems. It will download and install the latest version of BoxLang and the
-BoxLang MiniServer for you.
+This is the BoxLang quick installer for Mac, *NIX, and Windows systems. It allows you to quickly install the BoxLang runtime and its modules, as well as the BoxLang MiniServer.
+It also comes with several command scripts to help you manage your BoxLang installation and modules.
 
-You can also install any version of BoxLang by passing the version number as an argument to the script.
+## Command Scripts
+
+The following commands are available for both Windows and Mac/*NIX systems. Please note that all commands have a `--help` option to get more information on how to use them:
+
+- `install-boxlang`: Installs the latest, snapshot or any version of BoxLang.
+- `install-bx-module`: Installs modules from ForgeBox to your system or local project.
+- `install-jre.ps1`: Installs the Java Runtime Environment (JRE) 21 for BoxLang on Windows systems.
+
+## Binaries
+
+The following binaries are installed to your system or local project:
+
+- `boxlang` or `bx`: Runs the BoxLang Runtime.  Please see the [BoxLang documentation](https://boxlang.ortusbooks.com/getting-started/running-boxlang) for more information on how to use it.
+- `boxlang-miniserver` or `bx-miniserver`: Runs the BoxLang MiniServer.  Please see the [BoxLang documentation](https://boxlang.ortusbooks.com/getting-started/running-boxlang-miniserver) for more information on how to use it.
+
+## Requirements
+
+- Java 21 or higher
+- A supported operating system (Mac, *NIX, or Windows)
+- Following Packages for Mac/Unix systems:
+  - `curl`
+  - `unzip`
+  - `jq`
 
 ## Usage
 
+### Mac and *NIX
+
+You can use the following command to install BoxLang on Mac and *NIX systems:
+
 ```bash
-/bin/bash -c "$(curl -fsSL https://downloads.ortussolutions.com/ortussolutions/boxlang/install-boxlang.sh)"
+# User installation
+/bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
+
+# System-wide installation
+sudo /bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
+
+# Get Help
+install-boxlang --help
 ```
+
+### Windows
+
+You can use the following command to install BoxLang on Windows:
 
 ```PowerShell
-iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/development/src/Run-InstallBoxLang.ps1'))
-```
-
-## Module Installation
-
-You can use the following command for module installation to the installed BoxLang Home:
-
-```bash
-install-bx-module <module-name>
-```
-
-If you want to install it to a local boxlang_modules folder you can use the following command:
-
-```bash
-install-bx-module <module-name> --local
+Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString(''https://install-windows.boxlang.io''))"'
 ```
 
 ## Contributing
 
-- All code should be formatted using either our Java Formatter or the CFFormatter.
-- All code should have a license/copyright header based on [CodeHeader.txt](workbench/CodeHeader.txt)
+Here is the [contribution guide](CONTRIBUTING.md) for this project.
+
+## License
+
+This project is licensed under the [Apache License, Version 2.0](LICENSE).
+
+----
 
 Made with ♥️ in USA 🇺🇸, El Salvador 🇸🇻 and Spain 🇪🇸

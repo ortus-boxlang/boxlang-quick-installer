@@ -1,3 +1,9 @@
+:: BoxLang Installation Script
+:: Description: This script installs BoxLang modules on a Windows system.
+:: Author: BoxLang Team
+:: Version: @build.version@
+:: License: Apache License, Version 2.0
+
 @echo off
 @REM Install BoxLang Modules
 
