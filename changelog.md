@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Creation of new boxlang installation home according to the OS and the user.
   - User: `~/.local/boxlang`
   - System Wide: `/usr/local/boxlang`
-- Download installer scripts from the repo and install them as `${installation_home}/scripts`
+- Download installer scripts from the repo instead of one by one
 - Add a new flag to check if there is a new version of BoxLang available: `--check-update`
 
 ## [1.7.1] - 2025-06-07
