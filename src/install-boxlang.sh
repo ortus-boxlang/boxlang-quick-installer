@@ -821,6 +821,7 @@ main() {
 			printf "${YELLOW}⚠️  BoxLang is already installed at [${SYSTEM_HOME}] with version[${CURRENT_VERSION}${NORMAL}]\n"
 			printf "${BLUE}💡 Use ${GREEN}'install-boxlang.sh --uninstall'${BLUE} to remove the existing version before reinstalling.${NORMAL}\n"
 			printf "${BLUE}💡 Or use ${GREEN}'--force'${BLUE} to do a forced reinstall.${NORMAL}\n"
+			printf "${BLUE}💡 Or use ${GREEN}'--help'${BLUE} for more information.${NORMAL}\n"
 			exit 0;
 		else
 			printf "${GREEN}✅ No previous BoxLang installation found, proceeding with fresh install...${NORMAL}\n"
