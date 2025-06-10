@@ -339,6 +339,8 @@ function Test-JavaVersion {
                 } elseif ($versionOutput -match '"1\.(\d+)\.') {
                     $majorVersion = [int]$matches[1]  # Handle legacy 1.8 format
                 } elseif ($versionOutput -match 'version (\d+)\.') {
+                    $majorVersion = [int]$matches[1] # Handle Adoptium version format
+				} elseif ($versionOutput -match 'openjdk (\d+)\.') {
                     $majorVersion = [int]$matches[1]
                 } else {
                     continue
