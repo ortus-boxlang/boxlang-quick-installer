@@ -377,7 +377,7 @@ if ($args[0] -eq "--list") {
     }
 
     # Ensure no other arguments after --list [--local]
-    if ($remainingArgs.Count -gt 0) {
+    if ($remainingArgs.Count -gt 1) {
         Write-Host "❌ Error: --list command does not accept additional arguments" -ForegroundColor Red
         Write-Host "💡 Usage: install-bx-module.ps1 --list [--local]" -ForegroundColor Yellow
         exit 1
