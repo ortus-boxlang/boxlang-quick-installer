@@ -8,80 +8,6 @@ $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
 
-# Check for help argument early to avoid any setup overhead
-if ($args.Count -ge 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
-    Show-Help
-    exit 0
-}
-
-# Check for uninstall argument
-if ($args.Count -ge 1 -and $args[0] -eq "--uninstall") {
-    Uninstall-BoxLang
-    exit 0
-}
-
-# Check for check-update argument
-if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
-    if (-not (Test-Prerequisites)) {
-        exit 1
-    }
-    Test-ForUpdates
-    exit 0
-}
-
-# Parse arguments to check for --force flag and remove it from args
-$FORCE_INSTALL = $false
-$newArgs = @()
-foreach ($arg in $args) {
-    if ($arg -eq "--force") {
-        $FORCE_INSTALL = $true
-    } else {
-        $newArgs += $arg
-    }
-}
-
-# $TARGET_VERSION = "latest"
-$TARGET_VERSION = if ($newArgs.Count -ge 1 -and $newArgs[0] -notmatch "^--") { $newArgs[0] } else { "latest" }
-$DOWNLOAD_URL = ""
-if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
-    $TARGET_VERSION = $env:BOXLANG_TARGET_VERSION
-}
-
-# If the version is "snapshot", always force it
-if ($TARGET_VERSION -eq "snapshot") {
-    $FORCE_INSTALL = $true
-}
-
-$INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
-$SNAPSHOT_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-snapshot.zip"
-$SNAPSHOT_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-snapshot.zip"
-$LATEST_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-latest.zip"
-$LATEST_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-latest.zip"
-$VERSIONED_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/${TARGET_VERSION}/boxlang-${TARGET_VERSION}.zip"
-$VERSIONED_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/${TARGET_VERSION}/boxlang-miniserver-${TARGET_VERSION}.zip"
-$INSTALLATION_FOLDER = "c:\boxlang"
-$DESTINATION_LIB = "$INSTALLATION_FOLDER\lib"
-$DESTINATION_BIN = "$INSTALLATION_FOLDER\bin"
-$DESTINATION_HOME = "$INSTALLATION_FOLDER\home"
-$DESTINATION_SCRIPTS = "$INSTALLATION_FOLDER\scripts"
-
-# Set the progress preference to silently continue to avoid cluttering the console
-$ProgressPreference = 'SilentlyContinue'
-
-# Determine download URLs based on target version
-if ($TARGET_VERSION -eq "snapshot") {
-    $DOWNLOAD_URL = $SNAPSHOT_URL
-    $DOWNLOAD_URL_MINISERVER = $SNAPSHOT_URL_MINISERVER
-}
-elseif ($TARGET_VERSION -eq "latest" ) {
-    $DOWNLOAD_URL = $LATEST_URL
-    $DOWNLOAD_URL_MINISERVER = $LATEST_URL_MINISERVER
-}
-else {
-    $DOWNLOAD_URL = $VERSIONED_URL
-    $DOWNLOAD_URL_MINISERVER = $VERSIONED_URL_MINISERVER
-}
-
 ###########################################################################
 # Help Function
 ###########################################################################
@@ -179,6 +105,12 @@ function Show-Help {
     Write-Host "  💬 Community: https://boxlang.io/community"
 }
 
+# Check for help argument early to avoid any setup overhead
+if ($args.Count -ge 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
+    Show-Help
+    exit 0
+}
+
 ###########################################################################
 # Uninstall Function
 ###########################################################################
@@ -202,6 +134,262 @@ function Uninstall-BoxLang {
     Write-Host -ForegroundColor Green "✅ BoxLang uninstalled successfully"
     Write-Host -ForegroundColor Blue "💡 BoxLang Home directory was preserved"
     Write-Host -ForegroundColor Blue "💡 To remove it completely, delete the .boxlang folder in your user directory"
+}
+
+# Check for uninstall argument
+if ($args.Count -ge 1 -and $args[0] -eq "--uninstall") {
+    Uninstall-BoxLang
+    exit 0
+}
+
+###########################################################################
+# Preflight Checks Function
+###########################################################################
+function Test-Prerequisites {
+    Write-Host -ForegroundColor Blue "🔍 Running pre-flight checks..."
+
+    $missingDeps = @()
+
+    # Check for PowerShell (obviously available, but check version)
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        $missingDeps += "PowerShell 5.1+"
+    }
+
+    # Check for internet connectivity
+    try {
+        $testConnection = Test-NetConnection -ComputerName "downloads.ortussolutions.com" -Port 443 -InformationLevel Quiet -ErrorAction SilentlyContinue
+        if (-not $testConnection) {
+            $missingDeps += "Internet connectivity"
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Yellow "⚠️  Could not verify internet connectivity"
+    }
+
+    if ($missingDeps.Count -gt 0) {
+        Write-Host -ForegroundColor Red "❌ Missing required dependencies: $($missingDeps -join ', ')"
+        Write-Host -ForegroundColor Blue "💡 Please ensure you have:"
+        foreach ($dep in $missingDeps) {
+            Write-Host "   - $dep"
+        }
+        return $false
+    }
+
+    Write-Host -ForegroundColor Green "✅ Pre-flight checks passed"
+    return $true
+}
+
+###########################################################################
+# Version Comparison Functions
+###########################################################################
+
+# Extract semantic version (Major.Minor.Patch) from version string
+function Get-SemanticVersion {
+    param([string]$VersionString)
+
+    # Extract version like "1.2.3" from strings like "BoxLang v1.2.3+20241201.120000" or "1.2.3+buildId"
+    if ($VersionString -match '(\d+\.\d+\.\d+)') {
+        return $matches[1]
+    }
+    return $null
+}
+
+# Get current installed BoxLang version
+function Get-CurrentBoxLangVersion {
+    # Try to find BoxLang in common locations
+    $boxlangCandidates = @(
+        "boxlang",                                    # In PATH
+        "C:\boxlang\bin\boxlang.bat",                # Standard Windows install
+        "$env:USERPROFILE\.local\bin\boxlang.bat"    # User install
+    )
+
+    foreach ($candidate in $boxlangCandidates) {
+        try {
+            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                $versionOutput = & $candidate --version 2>$null
+                if ($versionOutput) {
+                    $currentVersion = Get-SemanticVersion -VersionString ($versionOutput | Out-String)
+                    if ($currentVersion) {
+                        return $currentVersion
+                    }
+                }
+            }
+        }
+        catch {
+            # Continue to next candidate
+        }
+    }
+
+    return $null
+}
+
+# Get latest available BoxLang version from remote
+function Get-LatestBoxLangVersion {
+    $versionUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang/version-latest.properties"
+
+    try {
+        # Download version info
+        $versionInfo = Invoke-WebRequest -Uri $versionUrl -UseBasicParsing -ErrorAction Stop
+        if (-not $versionInfo.Content) {
+            return $null
+        }
+
+        # Extract version from properties file (format: version=1.2.3+buildId)
+        $versionLines = $versionInfo.Content -split "`n"
+        foreach ($line in $versionLines) {
+            if ($line -match "^version=(.+)$") {
+                $latestVersion = Get-SemanticVersion -VersionString $matches[1]
+	            if ($latestVersion) {
+                    return $latestVersion
+                }
+            }
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Red "❌ Failed to fetch version information: $($_.Exception.Message)"
+        return $null
+    }
+
+    return $null
+}
+
+# Compare two semantic versions (Major.Minor.Patch)
+# Returns: 0 if equal, 1 if first > second, -1 if first < second
+function Compare-Versions {
+    param(
+        [string]$Version1,
+        [string]$Version2
+    )
+
+    $v1Parts = $Version1.Split('.')
+    $v2Parts = $Version2.Split('.')
+
+    # Compare major, minor, patch
+    for ($i = 0; $i -lt 3; $i++) {
+        $v1Part = if ($i -lt $v1Parts.Length) { [int]$v1Parts[$i] } else { 0 }
+        $v2Part = if ($i -lt $v2Parts.Length) { [int]$v2Parts[$i] } else { 0 }
+
+        if ($v1Part -gt $v2Part) {
+            return 1  # version1 > version2
+        }
+        elseif ($v1Part -lt $v2Part) {
+            return -1  # version1 < version2
+        }
+    }
+
+    return 0  # versions are equal
+}
+
+# Check for updates and optionally prompt for installation
+function Test-ForUpdates {
+    Write-Host -ForegroundColor Blue "🔍 Checking for BoxLang updates..."
+
+    # Get current version
+    $currentVersion = Get-CurrentBoxLangVersion
+    if (-not $currentVersion) {
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is not currently installed"
+        Write-Host -ForegroundColor Blue "💡 Run '.\install-boxlang.ps1' to install the latest version"
+        return
+    }
+
+    # Get latest version
+    $latestVersion = Get-LatestBoxLangVersion
+    if (-not $latestVersion) {
+        Write-Host -ForegroundColor Red "❌ Failed to fetch latest version information"
+        Write-Host -ForegroundColor Yellow "Please check your internet connection and try again"
+        return
+    }
+
+    Write-Host -ForegroundColor Green "Current version: $currentVersion"
+    Write-Host -ForegroundColor Green "Latest version:  $latestVersion"
+
+    # Compare versions
+    $comparisonResult = Compare-Versions -Version1 $currentVersion -Version2 $latestVersion
+
+    switch ($comparisonResult) {
+        0 {
+            Write-Host -ForegroundColor Green "✅ You have the latest version of BoxLang"
+        }
+        1 {
+            Write-Host -ForegroundColor Blue "🔄 You have a newer version than the latest release"
+            Write-Host -ForegroundColor Yellow "This might be a development or snapshot build"
+        }
+        -1 {
+            Write-Host -ForegroundColor Yellow "🆙 A newer version of BoxLang is available!"
+            $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            if ($response -notmatch "^[nN]") {
+                Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
+                # Call the script again with latest version
+                & $PSCommandPath "latest"
+                exit 0
+            }
+            else {
+                Write-Host -ForegroundColor Yellow "Update cancelled"
+            }
+        }
+    }
+}
+
+# Check for check-update argument
+if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
+    if (-not (Test-Prerequisites)) {
+        exit 1
+    }
+    Test-ForUpdates
+    exit 0
+}
+
+# Parse arguments to check for --force flag and remove it from args
+$FORCE_INSTALL = $false
+$newArgs = @()
+foreach ($arg in $args) {
+    if ($arg -eq "--force") {
+        $FORCE_INSTALL = $true
+    } else {
+        $newArgs += $arg
+    }
+}
+
+# $TARGET_VERSION = "latest"
+$TARGET_VERSION = if ($newArgs.Count -ge 1 -and $newArgs[0] -notmatch "^--") { $newArgs[0] } else { "latest" }
+$DOWNLOAD_URL = ""
+if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
+    $TARGET_VERSION = $env:BOXLANG_TARGET_VERSION
+}
+
+# If the version is "snapshot", always force it
+if ($TARGET_VERSION -eq "snapshot") {
+    $FORCE_INSTALL = $true
+}
+
+$INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
+$SNAPSHOT_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-snapshot.zip"
+$SNAPSHOT_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-snapshot.zip"
+$LATEST_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxlang-latest.zip"
+$LATEST_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-latest.zip"
+$VERSIONED_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/${TARGET_VERSION}/boxlang-${TARGET_VERSION}.zip"
+$VERSIONED_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/${TARGET_VERSION}/boxlang-miniserver-${TARGET_VERSION}.zip"
+$INSTALLATION_FOLDER = "c:\boxlang"
+$DESTINATION_LIB = "$INSTALLATION_FOLDER\lib"
+$DESTINATION_BIN = "$INSTALLATION_FOLDER\bin"
+$DESTINATION_HOME = "$INSTALLATION_FOLDER\home"
+$DESTINATION_SCRIPTS = "$INSTALLATION_FOLDER\scripts"
+
+# Set the progress preference to silently continue to avoid cluttering the console
+$ProgressPreference = 'SilentlyContinue'
+
+# Determine download URLs based on target version
+if ($TARGET_VERSION -eq "snapshot") {
+    $DOWNLOAD_URL = $SNAPSHOT_URL
+    $DOWNLOAD_URL_MINISERVER = $SNAPSHOT_URL_MINISERVER
+}
+elseif ($TARGET_VERSION -eq "latest" ) {
+    $DOWNLOAD_URL = $LATEST_URL
+    $DOWNLOAD_URL_MINISERVER = $LATEST_URL_MINISERVER
+}
+else {
+    $DOWNLOAD_URL = $VERSIONED_URL
+    $DOWNLOAD_URL_MINISERVER = $VERSIONED_URL_MINISERVER
 }
 
 ###########################################################################
@@ -259,43 +447,6 @@ function Update-PathVariable {
     [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
     Write-Host -ForegroundColor Green "✅ Successfully added $BinDir to PATH"
     Write-Host -ForegroundColor Blue "💡 Restart your terminal to use the new PATH"
-}
-
-###########################################################################
-# Preflight Checks Function
-###########################################################################
-function Test-Prerequisites {
-    Write-Host -ForegroundColor Blue "🔍 Running pre-flight checks..."
-
-    $missingDeps = @()
-
-    # Check for PowerShell (obviously available, but check version)
-    if ($PSVersionTable.PSVersion.Major -lt 5) {
-        $missingDeps += "PowerShell 5.1+"
-    }
-
-    # Check for internet connectivity
-    try {
-        $testConnection = Test-NetConnection -ComputerName "downloads.ortussolutions.com" -Port 443 -InformationLevel Quiet -ErrorAction SilentlyContinue
-        if (-not $testConnection) {
-            $missingDeps += "Internet connectivity"
-        }
-    }
-    catch {
-        Write-Host -ForegroundColor Yellow "⚠️  Could not verify internet connectivity"
-    }
-
-    if ($missingDeps.Count -gt 0) {
-        Write-Host -ForegroundColor Red "❌ Missing required dependencies: $($missingDeps -join ', ')"
-        Write-Host -ForegroundColor Blue "💡 Please ensure you have:"
-        foreach ($dep in $missingDeps) {
-            Write-Host "   - $dep"
-        }
-        return $false
-    }
-
-    Write-Host -ForegroundColor Green "✅ Pre-flight checks passed"
-    return $true
 }
 
 # Perform preflight checks
@@ -373,157 +524,6 @@ function Test-JavaVersion {
 # Perform Java version check
 if (-not (Test-JavaVersion)) {
     exit 1
-}
-
-###########################################################################
-# Version Comparison Functions
-###########################################################################
-
-# Extract semantic version (Major.Minor.Patch) from version string
-function Get-SemanticVersion {
-    param([string]$VersionString)
-
-    # Extract version like "1.2.3" from strings like "BoxLang v1.2.3+20241201.120000" or "1.2.3+buildId"
-    if ($VersionString -match '(\d+\.\d+\.\d+)') {
-        return $matches[1]
-    }
-    return $null
-}
-
-# Compare two semantic versions (Major.Minor.Patch)
-# Returns: 0 if equal, 1 if first > second, -1 if first < second
-function Compare-Versions {
-    param(
-        [string]$Version1,
-        [string]$Version2
-    )
-
-    $v1Parts = $Version1.Split('.')
-    $v2Parts = $Version2.Split('.')
-
-    # Compare major, minor, patch
-    for ($i = 0; $i -lt 3; $i++) {
-        $v1Part = if ($i -lt $v1Parts.Length) { [int]$v1Parts[$i] } else { 0 }
-        $v2Part = if ($i -lt $v2Parts.Length) { [int]$v2Parts[$i] } else { 0 }
-
-        if ($v1Part -gt $v2Part) {
-            return 1  # version1 > version2
-        }
-        elseif ($v1Part -lt $v2Part) {
-            return -1  # version1 < version2
-        }
-    }
-
-    return 0  # versions are equal
-}
-
-# Get current installed BoxLang version
-function Get-CurrentBoxLangVersion {
-    # Try to find BoxLang in common locations
-    $boxlangCandidates = @(
-        "boxlang",                                    # In PATH
-        "C:\boxlang\bin\boxlang.bat",                # Standard Windows install
-        "$env:USERPROFILE\.local\bin\boxlang.bat"    # User install
-    )
-
-    foreach ($candidate in $boxlangCandidates) {
-        try {
-            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-                $versionOutput = & $candidate --version 2>$null
-                if ($versionOutput) {
-                    $currentVersion = Get-SemanticVersion -VersionString ($versionOutput | Out-String)
-                    if ($currentVersion) {
-                        return $currentVersion
-                    }
-                }
-            }
-        }
-        catch {
-            # Continue to next candidate
-        }
-    }
-
-    return $null
-}
-
-# Get latest available BoxLang version from remote
-function Get-LatestBoxLangVersion {
-    $versionUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang/version-latest.properties"
-
-    try {
-        # Download version info
-        $versionInfo = Invoke-WebRequest -Uri $versionUrl -UseBasicParsing -ErrorAction Stop
-        if (-not $versionInfo.Content) {
-            return $null
-        }
-
-        # Extract version from properties file (format: version=1.2.3+buildId)
-        $versionLines = $versionInfo.Content -split "`n"
-        foreach ($line in $versionLines) {
-            if ($line -match "^version=(.+)$") {
-                $latestVersion = Get-SemanticVersion -VersionString $matches[1]
-                if ($latestVersion) {
-                    return $latestVersion
-                }
-            }
-        }
-    }
-    catch {
-        Write-Host -ForegroundColor Red "❌ Failed to fetch version information: $($_.Exception.Message)"
-        return $null
-    }
-
-    return $null
-}
-
-# Check for updates and optionally prompt for installation
-function Test-ForUpdates {
-    Write-Host -ForegroundColor Blue "🔍 Checking for BoxLang updates..."
-
-    # Get current version
-    $currentVersion = Get-CurrentBoxLangVersion
-    if (-not $currentVersion) {
-        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is not currently installed"
-        Write-Host -ForegroundColor Blue "💡 Run '.\install-boxlang.ps1' to install the latest version"
-        return
-    }
-
-    # Get latest version
-    $latestVersion = Get-LatestBoxLangVersion
-    if (-not $latestVersion) {
-        Write-Host -ForegroundColor Red "❌ Failed to fetch latest version information"
-        Write-Host -ForegroundColor Yellow "Please check your internet connection and try again"
-        return
-    }
-
-    Write-Host -ForegroundColor Green "Current version: $currentVersion"
-    Write-Host -ForegroundColor Green "Latest version:  $latestVersion"
-
-    # Compare versions
-    $comparisonResult = Compare-Versions -Version1 $currentVersion -Version2 $latestVersion
-
-    switch ($comparisonResult) {
-        0 {
-            Write-Host -ForegroundColor Green "✅ You have the latest version of BoxLang"
-        }
-        1 {
-            Write-Host -ForegroundColor Blue "🔄 You have a newer version than the latest release"
-            Write-Host -ForegroundColor Yellow "This might be a development or snapshot build"
-        }
-        -1 {
-            Write-Host -ForegroundColor Yellow "🆙 A newer version of BoxLang is available!"
-            $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
-            if ($response -notmatch "^[nN]") {
-                Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
-                # Call the script again with latest version
-                & $PSCommandPath "latest"
-                exit 0
-            }
-            else {
-                Write-Host -ForegroundColor Yellow "Update cancelled"
-            }
-        }
-    }
 }
 
 # CommandBox Installation Check and Install
