@@ -235,7 +235,7 @@ function Get-LatestBoxLangVersion {
         }
 
         # Extract version from properties file (format: version=1.2.3+buildId)
-        $versionLines = $versionInfo.Content -split "`n"
+        $versionLines = $versionInfo -split "`n"
         foreach ($line in $versionLines) {
             if ($line -match "^version=(.+)$") {
                 $latestVersion = Get-SemanticVersion -VersionString $matches[1]
