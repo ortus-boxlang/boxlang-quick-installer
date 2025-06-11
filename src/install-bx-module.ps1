@@ -43,6 +43,43 @@ function Parse-ModuleList {
     return $modules
 }
 
+function Get-SnapshotVersionFromForgebox {
+    param([string]$ModuleName)
+
+    Write-Host "🔍 Getting latest snapshot version from FORGEBOX..." -ForegroundColor Yellow
+
+    try {
+        # Store versions JSON From ForgeBox (versions only)
+        $versionsJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/versions" -ErrorAction Stop
+
+        # Validate API response
+        if (-not $versionsJson -or -not $versionsJson.data) {
+            Write-Host "❌ Error: Failed to fetch version information from FORGEBOX" -ForegroundColor Red
+            exit 1
+        }
+
+        # Find the first version with "-snapshot" in the versions array
+        $version = $versionsJson.data | Where-Object { $_.version -like "*-snapshot*" } | Select-Object -First 1 | Select-Object -ExpandProperty version
+
+        # Validate parsed data
+        if (-not $version) {
+            Write-Host "❌ Error: No snapshot version(s) found for module '$ModuleName' in FORGEBOX" -ForegroundColor Red
+            exit 1
+        }
+
+        # Build download URL from the version (following the same pattern as specific versions)
+        $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+
+        return @{
+            Version = $version
+            DownloadUrl = $downloadUrl
+        }
+    } catch {
+        Write-Host "❌ Error: Failed to fetch version information from FORGEBOX: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 function Show-Help {
     Write-Host "📦 BoxLang Module Installer" -ForegroundColor Green
     Write-Host ""
@@ -190,9 +227,13 @@ function Install-Module {
         exit 1
     }
 
-    # Fetch latest version if not specified
+    # Fetch version based on specification
     if (-not $targetVersion) {
         $forgeboxResult = Get-LatestVersionFromForgebox $targetModule
+        $targetVersion = $forgeboxResult.Version
+        $downloadUrl = $forgeboxResult.DownloadUrl
+    } elseif ($targetVersion -eq "be" -or $targetVersion -eq "snapshot") {
+        $forgeboxResult = Get-SnapshotVersionFromForgebox $targetModule
         $targetVersion = $forgeboxResult.Version
         $downloadUrl = $forgeboxResult.DownloadUrl
     } else {
@@ -344,17 +385,7 @@ function Remove-Module {
 if ($args.Count -eq 0) {
     Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
     Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
-    Write-Host "Usage: install-bx-module.ps1 <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]" -ForegroundColor Yellow
-    Write-Host "   or: install-bx-module.ps1 --remove <module-name> [<module-name> ...] [--force] [--local]" -ForegroundColor Yellow
-    Write-Host "- <module-name>: The name of the module to install or remove." -ForegroundColor Yellow
-    Write-Host "- [@<version>]: (Optional) The specific version of the module to install." -ForegroundColor Yellow
-    Write-Host "- Multiple modules can be specified, separated by spaces or commas." -ForegroundColor Yellow
-    Write-Host "- If no version is specified we will ask FORGEBOX for the latest version" -ForegroundColor Yellow
-    Write-Host "- Use --remove to remove modules instead of installing them" -ForegroundColor Yellow
-    Write-Host "- Use --force with --remove to skip confirmation prompts" -ForegroundColor Yellow
-    Write-Host "- Use --local to install to/remove from a local boxlang_modules folder instead of the BoxLang HOME" -ForegroundColor Yellow
-    Write-Host "- Use --list to show installed modules (can be combined with --local)" -ForegroundColor Yellow
-    Write-Host "- Use --help to show this message" -ForegroundColor Yellow
+	Show-Help
     exit 1
 }
 

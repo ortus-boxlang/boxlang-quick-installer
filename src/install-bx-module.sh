@@ -114,18 +114,6 @@ list_modules() {
 get_latest_version_from_forgebox() {
 	local MODULE_NAME=${1}
 
-	command -v jq >/dev/null 2>&1 || {
-		printf "${RED}❌ Error: [jq] binary is not installed and we need it in order to parse JSON from FORGEBOX${NORMAL}\n"
-		printf "${YELLOW}💡 Please install jq from https://stedolan.github.io/jq/download/ or via your package manager${NORMAL}\n"
-		printf "${YELLOW}For example, on MacOS you can install it via brew with:${NORMAL}\n"
-		printf "${BLUE}brew install jq${NORMAL}\n"
-		printf "${YELLOW}For example, on Linux you can install it via apt-get with:${NORMAL}\n"
-		printf "${BLUE}apt-get install jq${NORMAL}\n"
-		printf "${YELLOW}For example, on Windows you can install it via choco or winget with:${NORMAL}\n"
-		printf "${BLUE}choco install jq or winget install jqlang.jq${NORMAL}\n"
-		exit 1
-	}
-
 	printf "${YELLOW}🔍 No version specified, getting latest version from FORGEBOX...${NORMAL}\n"
 
 	# Store Entry JSON From ForgeBox
@@ -150,6 +138,39 @@ get_latest_version_from_forgebox() {
 		printf "${RED}❌ Error: No download URL found for module '${MODULE_NAME}'${NORMAL}\n"
 		exit 1
 	fi
+
+	# Return values via global variables
+	TARGET_VERSION="$VERSION"
+	DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
+}
+
+get_snapshot_version_from_forgebox() {
+	local MODULE_NAME=${1}
+
+	printf "${YELLOW}🔍 Getting latest snapshot version from FORGEBOX...${NORMAL}\n"
+
+	# Store versions JSON From ForgeBox (versions only)
+	local VERSIONS_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions")
+
+	#echo "${VERSIONS_JSON}" | jq -e '.data'
+
+	# Validate API response
+	if [ -z "$VERSIONS_JSON" ] || [ "$VERSIONS_JSON" = "null" ]; then
+		printf "${RED}❌ Error: Failed to fetch version information from FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	# Find the first version with "-snapshot" in the versions array
+	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[] | select(.version | contains("-snapshot")) | .version' | head -n 1)
+
+	# Validate parsed data
+	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+		printf "${RED}❌ Error: No snapshot version(s) found for module '${MODULE_NAME}' in FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	# Build download URL from the version (following the same pattern as specific versions)
+	local DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
 
 	# Return values via global variables
 	TARGET_VERSION="$VERSION"
@@ -181,9 +202,13 @@ install_module() {
 		exit 1
 	}
 
-	# Fetch latest version if not specified
+	# Fetch version based on specification
 	if [ -z "${TARGET_VERSION+x}" ] || [ -z "$TARGET_VERSION" ]; then
 		get_latest_version_from_forgebox "$TARGET_MODULE"
+		# Use the global variables set by the function
+		local DOWNLOAD_URL="$DOWNLOAD_URL"
+	elif [ "$TARGET_VERSION" = "be" ] || [ "$TARGET_VERSION" = "snapshot" ]; then
+		get_snapshot_version_from_forgebox "$TARGET_MODULE"
 		# Use the global variables set by the function
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
 	else
@@ -198,6 +223,7 @@ install_module() {
 	if [ -d "${DESTINATION}" ]; then
 		printf "${YELLOW}⚠️  Module '${TARGET_MODULE}' is already installed at ${DESTINATION}${NORMAL}\n"
 		printf "${YELLOW}🔄 Proceeding with installation (will overwrite existing)...${NORMAL}\n"
+		rm -rf "${DESTINATION}"
 	fi
 
 	# Inform the user
@@ -218,7 +244,7 @@ install_module() {
 
 	# Download module
 	printf "${BLUE}⬇️  Downloading from ${DOWNLOAD_URL}...${NORMAL}\n"
-	if ! curl -L --fail -o "${TEMP_FILE}" "${DOWNLOAD_URL}"; then
+	if ! curl -L --fail --progress-bar -o "${TEMP_FILE}" "${DOWNLOAD_URL}"; then
 		printf "${RED}❌ Error: Download failed${NORMAL}\n"
 		exit 1
 	fi
@@ -349,17 +375,7 @@ main() {
 	if [ $# -eq 0 ]; then
 		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
 		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
-		printf "${YELLOW}Usage: install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]${NORMAL}\n"
-		printf "${YELLOW}   or: install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]${NORMAL}\n"
-		printf "${YELLOW}- <module-name>: The name of the module to install or remove.${NORMAL}\n"
-		printf "${YELLOW}- [@<version>]: (Optional) The specific version of the module to install.${NORMAL}\n"
-		printf "${YELLOW}- Multiple modules can be specified, separated by spaces or commas.${NORMAL}\n"
-		printf "${YELLOW}- If no version is specified we will ask FORGEBOX for the latest version${NORMAL}\n"
-		printf "${YELLOW}- Use --remove to remove modules instead of installing them${NORMAL}\n"
-		printf "${YELLOW}- Use --force with --remove to skip confirmation prompts${NORMAL}\n"
-		printf "${YELLOW}- Use --local to install to/remove from a local boxlang_modules folder instead of the BoxLang HOME${NORMAL}\n"
-		printf "${YELLOW}- Use --list to show installed modules (can be combined with --local)${NORMAL}\n"
-		printf "${YELLOW}- Use --help to show this message${NORMAL}\n"
+		show_help
 		exit 1
 	fi
 

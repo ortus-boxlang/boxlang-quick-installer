@@ -9,9 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Improved the `install-bx-module` so when no module is defined, show the help message.
+- Add support for `be` or `snapshot` versions of modules.
+
 ## [1.10.0] - 2025-06-11
 
+### Fixed
+
+- Windows Updates
+
 ## [1.9.0] - 2025-06-10
+
+### Fixed
+
+- Windows Updates
 
 ## [1.8.0] - 2025-06-09
 
