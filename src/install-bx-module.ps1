@@ -22,22 +22,22 @@ function Parse-ModuleList {
     param([string[]]$Arguments)
 
     $modules = @()
-    $input = ""
+    $moduleList = ""
 
     # Concatenate all arguments into a single string, skipping flags
     foreach ($arg in $Arguments) {
         if (-not $arg.StartsWith("--")) {
-            $input += " $arg"
+            $moduleList += " $arg"
         }
     }
 
     # Replace commas with spaces and normalize whitespace
-    $input = $input -replace ",", " " -replace "\s+", " "
-    $input = $input.Trim()
+    $moduleList = $moduleList -replace ",", " " -replace "\s+", " "
+    $moduleList = $moduleList.Trim()
 
     # Split by spaces and add to array
-    if ($input) {
-        $modules = $input -split " " | Where-Object { $_ -ne "" }
+    if ($moduleList) {
+        $modules = $moduleList -split " " | Where-Object { $_ -ne "" }
     }
 
     return $modules
@@ -170,17 +170,17 @@ function Get-LatestVersionFromForgebox {
 }
 
 function Install-Module {
-    param([string]$Input)
+    param([string]$moduleName)
 
     $targetModule = ""
     $targetVersion = ""
 
-    if ($Input.Contains("@")) {
-        $parts = $Input -split "@"
+    if ($moduleName.Contains("@")) {
+        $parts = $moduleName -split "@"
         $targetModule = $parts[0].ToLower()
         $targetVersion = $parts[1]
     } else {
-        $targetModule = $Input.ToLower()
+        $targetModule = $moduleName.ToLower()
     }
 
     # Validate module name
@@ -377,7 +377,7 @@ if ($args[0] -eq "--list") {
     }
 
     # Ensure no other arguments after --list [--local]
-    if ($remainingArgs.Count -gt 0) {
+    if ($remainingArgs.Count -gt 1) {
         Write-Host "❌ Error: --list command does not accept additional arguments" -ForegroundColor Red
         Write-Host "💡 Usage: install-bx-module.ps1 --list [--local]" -ForegroundColor Yellow
         exit 1
