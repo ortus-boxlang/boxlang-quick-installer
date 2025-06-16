@@ -329,10 +329,8 @@ install_version() {
     # Determine download URLs
     local boxlang_url=""
     local miniserver_url=""
-    local installer_url="$INSTALLER_URL"
     local boxlang_cache=""
     local miniserver_cache=""
-    local installer_cache=""
 
     case "$version" in
         "latest")
@@ -355,8 +353,6 @@ install_version() {
             ;;
     esac
 
-    installer_cache="$BVM_CACHE_DIR/boxlang-installer.zip"
-
     # Create version directory
     mkdir -p "$version_dir"
 
@@ -372,14 +368,6 @@ install_version() {
     print_info "Downloading BoxLang MiniServer from $miniserver_url"
     if ! curl -fsSL "$miniserver_url" -o "$miniserver_cache"; then
         print_error "Failed to download BoxLang MiniServer"
-        rm -rf "$version_dir"
-        return 1
-    fi
-
-    # Download BoxLang installer scripts
-    print_info "Downloading BoxLang helper scripts from $installer_url"
-    if ! curl -fsSL "$installer_url" -o "$installer_cache"; then
-        print_error "Failed to download BoxLang helper scripts"
         rm -rf "$version_dir"
         return 1
     fi
@@ -400,31 +388,9 @@ install_version() {
         return 1
     fi
 
-    # Extract helper scripts to bin directory
-    print_info "Extracting helper scripts..."
-    if ! unzip -q "$installer_cache" -d "$version_dir/bin"; then
-        print_error "Failed to extract helper scripts"
-        rm -rf "$version_dir"
-        return 1
-    fi
-
-    # Create scripts directory and move scripts there
-    mkdir -p "$version_dir/scripts"
-    if [ -d "$version_dir/bin" ]; then
-        # Move script files to scripts directory
-        find "$version_dir/bin" -name "*.sh" -exec mv {} "$version_dir/scripts/" \; 2>/dev/null || true
-        find "$version_dir/bin" -name "*.ps1" -exec rm {} \; 2>/dev/null || true  # Remove Windows scripts
-        find "$version_dir/bin" -name "*.bat" -exec rm {} \; 2>/dev/null || true  # Remove Windows scripts
-    fi
-
     # Make all executables in bin directory executable
     if [ -d "$version_dir/bin" ]; then
         find "$version_dir/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
-    fi
-
-    # Make all scripts executable
-    if [ -d "$version_dir/scripts" ]; then
-        find "$version_dir/scripts" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
     fi
 
     # Create internal symlinks (bx -> boxlang, bx-miniserver -> boxlang-miniserver)
@@ -436,30 +402,16 @@ install_version() {
         ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
     fi
 
-    # Create symlinks to scripts in bin directory for easy access
-    if [ -d "$version_dir/scripts" ]; then
-        for script in "$version_dir/scripts"/*.sh; do
-            if [ -f "$script" ]; then
-                script_name=$(basename "$script" .sh)
-                # Don't create symlink for install-boxlang itself to avoid confusion
-                if [ "$script_name" != "install-boxlang" ]; then
-                    ln -sf "../scripts/$(basename "$script")" "$version_dir/bin/$script_name"
-                fi
-            fi
-        done
-    fi
-
     # Clean up cache files for non-latest/snapshot versions
     if [ "$version" != "latest" ] && [ "$version" != "snapshot" ]; then
         rm -f "$boxlang_cache" "$miniserver_cache"
     fi
-    rm -f "$installer_cache"  # Always clean up installer cache
 
     print_success "BoxLang $version installed successfully"
     print_info "Components installed:"
     print_info "  - BoxLang runtime (boxlang, bx)"
     print_info "  - BoxLang MiniServer (boxlang-miniserver, bx-miniserver)"
-    print_info "  - Helper scripts (install-bx-module, install-bx-site)"
+    print_info "Helper scripts are managed by BVM and available globally"
     print_info "Use 'bvm use $version' to switch to this version"
 }
 
@@ -568,43 +520,25 @@ exec_miniserver() {
     exec "$miniserver_bin" "$@"
 }
 
-# Execute install-bx-module script with current version
+# Execute install-bx-module script from BVM installation
 exec_module_installer() {
-    if [ ! -L "$BVM_CURRENT_LINK" ] || [ ! -e "$BVM_CURRENT_LINK" ]; then
-        print_error "No BoxLang version currently active"
-        print_info "Install and use a version with: bvm install latest && bvm use latest"
-        return 1
-    fi
-
-    local module_script="$BVM_CURRENT_LINK/bin/install-bx-module"
+    local module_script="$BVM_HOME/scripts/install-bx-module.sh"
     if [ ! -x "$module_script" ]; then
-        # Try scripts directory
-        module_script="$BVM_CURRENT_LINK/scripts/install-bx-module.sh"
-        if [ ! -x "$module_script" ]; then
-            print_error "install-bx-module script not found or not executable"
-            return 1
-        fi
+        print_error "install-bx-module.sh not found in BVM installation"
+        print_info "Try reinstalling BVM to get the latest helper scripts"
+        return 1
     fi
 
     exec "$module_script" "$@"
 }
 
-# Execute install-bx-site script with current version
+# Execute install-bx-site script from BVM installation
 exec_site_installer() {
-    if [ ! -L "$BVM_CURRENT_LINK" ] || [ ! -e "$BVM_CURRENT_LINK" ]; then
-        print_error "No BoxLang version currently active"
-        print_info "Install and use a version with: bvm install latest && bvm use latest"
-        return 1
-    fi
-
-    local site_script="$BVM_CURRENT_LINK/bin/install-bx-site"
+    local site_script="$BVM_HOME/scripts/install-bx-site.sh"
     if [ ! -x "$site_script" ]; then
-        # Try scripts directory
-        site_script="$BVM_CURRENT_LINK/scripts/install-bx-site.sh"
-        if [ ! -x "$site_script" ]; then
-            print_error "install-bx-site script not found or not executable"
-            return 1
-        fi
+        print_error "install-bx-site.sh not found in BVM installation"
+        print_info "Try reinstalling BVM to get the latest helper scripts"
+        return 1
     fi
 
     exec "$site_script" "$@"
@@ -705,26 +639,6 @@ check_health() {
                 print_warning "Missing binaries: ${missing_binaries[*]}"
                 print_info "Some features may not be available"
             fi
-
-            # Check helper scripts
-            local expected_scripts=(
-                "install-bx-module"
-                "install-bx-site"
-            )
-
-            local missing_scripts=()
-            for script in "${expected_scripts[@]}"; do
-                if [ ! -e "$BVM_CURRENT_LINK/bin/$script" ] && [ ! -e "$BVM_CURRENT_LINK/scripts/$script.sh" ]; then
-                    missing_scripts+=("$script")
-                fi
-            done
-
-            if [ ${#missing_scripts[@]} -eq 0 ]; then
-                print_success "All helper scripts are present"
-            else
-                print_warning "Missing helper scripts: ${missing_scripts[*]}"
-                print_info "Some functionality may not be available"
-            fi
         else
             print_error "Current version link is broken"
             rm -f "$BVM_CURRENT_LINK"
@@ -734,6 +648,28 @@ check_health() {
     else
         print_warning "No current version set"
         print_info "Use 'bvm use <version>' to set a current version"
+    fi
+
+    # Check BVM helper scripts (these are version-independent)
+    print_info "Checking BVM helper scripts..."
+    local bvm_scripts_dir="$BVM_HOME/scripts"
+    local expected_bvm_scripts=(
+        "install-bx-module.sh"
+        "install-bx-site.sh"
+    )
+
+    local missing_bvm_scripts=()
+    for script in "${expected_bvm_scripts[@]}"; do
+        if [ ! -x "$bvm_scripts_dir/$script" ]; then
+            missing_bvm_scripts+=("$script")
+        fi
+    done
+
+    if [ ${#missing_bvm_scripts[@]} -eq 0 ]; then
+        print_success "All BVM helper scripts are present"
+    else
+        print_warning "Missing BVM helper scripts: ${missing_bvm_scripts[*]}"
+        print_info "Reinstall BVM to get the latest helper scripts"
     fi
 
     # Check prerequisites

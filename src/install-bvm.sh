@@ -123,6 +123,49 @@ install_bvm() {
     # Make BVM executable
     chmod +x "$bvm_script"
 
+    # Install helper scripts that are part of BVM project
+    print_info "Installing BVM helper scripts..."
+    local scripts_dir="$BVM_HOME/scripts"
+    mkdir -p "$scripts_dir"
+
+    # Copy helper scripts from project if available locally
+    local project_dir="$(dirname "$0")"
+    if [ -f "$project_dir/install-bx-module.sh" ]; then
+        cp "$project_dir/install-bx-module.sh" "$scripts_dir/"
+        chmod +x "$scripts_dir/install-bx-module.sh"
+        print_info "Installed install-bx-module.sh"
+    fi
+
+    if [ -f "$project_dir/install-bx-site.sh" ]; then
+        cp "$project_dir/install-bx-site.sh" "$scripts_dir/"
+        chmod +x "$scripts_dir/install-bx-site.sh"
+        print_info "Installed install-bx-site.sh"
+    fi
+
+    # If scripts weren't found locally, download them (for remote installation)
+    if [ ! -f "$scripts_dir/install-bx-module.sh" ] || [ ! -f "$scripts_dir/install-bx-site.sh" ]; then
+        print_info "Downloading helper scripts from remote..."
+        local base_url="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src"
+
+        if [ ! -f "$scripts_dir/install-bx-module.sh" ]; then
+            if curl -fsSL "$base_url/install-bx-module.sh" -o "$scripts_dir/install-bx-module.sh"; then
+                chmod +x "$scripts_dir/install-bx-module.sh"
+                print_info "Downloaded install-bx-module.sh"
+            else
+                print_warning "Failed to download install-bx-module.sh"
+            fi
+        fi
+
+        if [ ! -f "$scripts_dir/install-bx-site.sh" ]; then
+            if curl -fsSL "$base_url/install-bx-site.sh" -o "$scripts_dir/install-bx-site.sh"; then
+                chmod +x "$scripts_dir/install-bx-site.sh"
+                print_info "Downloaded install-bx-site.sh"
+            else
+                print_warning "Failed to download install-bx-site.sh"
+            fi
+        fi
+    fi
+
     # Create convenience wrapper scripts for direct access to BoxLang tools
     print_info "Creating convenience wrapper scripts..."
 
@@ -158,14 +201,26 @@ EOF
     cat > "$BVM_HOME/bin/install-bx-module" << 'EOF'
 #!/bin/bash
 # BoxLang module installer wrapper script for BVM
-exec "$(dirname "$0")/bvm" module "$@"
+BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
+if [ -x "$BVM_HOME/scripts/install-bx-module.sh" ]; then
+    exec "$BVM_HOME/scripts/install-bx-module.sh" "$@"
+else
+    echo "Error: install-bx-module.sh not found in BVM installation"
+    exit 1
+fi
 EOF
 
     # Create install-bx-site wrapper
     cat > "$BVM_HOME/bin/install-bx-site" << 'EOF'
 #!/bin/bash
 # BoxLang site installer wrapper script for BVM
-exec "$(dirname "$0")/bvm" site "$@"
+BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
+if [ -x "$BVM_HOME/scripts/install-bx-site.sh" ]; then
+    exec "$BVM_HOME/scripts/install-bx-site.sh" "$@"
+else
+    echo "Error: install-bx-site.sh not found in BVM installation"
+    exit 1
+fi
 EOF
 
     # Make all wrapper scripts executable
