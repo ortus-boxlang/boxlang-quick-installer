@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Snapshot builds now detect it and update the url accordingly for the quick installer
 - `install-boxlang` refactoring to be similar to all scripts.
 
 ## [1.11.0] - 2025-06-11
