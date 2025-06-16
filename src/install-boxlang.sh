@@ -731,39 +731,31 @@ remove_previous_installation() {
 }
 
 ###########################################################################
-# Parse command line arguments before main execution
+# Command Handlers
 ###########################################################################
 
-# Initialize colors at script startup
-setup_colors
-
-# Check for help argument early to avoid any setup overhead
-if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-	show_help
-	exit 0
-fi
-
-# Check for uninstall argument
-if [ "$1" = "--uninstall" ]; then
+# Handle the uninstall command
+handle_uninstall() {
 	uninstall_boxlang
-	exit 0
-fi
+}
 
-# Check for check-update argument
-if [ "$1" = "--check-update" ]; then
+# Handle the check-update command
+handle_check_update() {
 	if ! preflight_check; then
 		exit 1
 	fi
 	check_for_updates
-	exit 0
-fi
+}
 
+# Handle the help command
+handle_help() {
+	show_help
+}
 
+# Handle the main installation
+handle_install() {
+	local args=("$@")
 
-###########################################################################
-# Main script execution starts here
-###########################################################################
-main() {
 	# Only enable exit-on-error after the non-critical colorization stuff,
 	# which may fail on systems lacking tput or terminfo
 	set -e
@@ -771,18 +763,18 @@ main() {
 	# Check for --force flag in any position and remove it from args
 	local FORCE_INSTALL=false
 	local new_args=()
-	for arg in "$@"; do
+	for arg in "${args[@]}"; do
 		if [ "$arg" = "--force" ]; then
 			FORCE_INSTALL=true
+		elif [ "$arg" = "--system" ]; then
+			new_args+=("$arg")
 		else
 			new_args+=("$arg")
 		fi
 	done
 
-	# Replace positional parameters with cleaned args
-	set -- "${new_args[@]}"
 	# Check target version argument, this could be "latest", "snapshot", or a specific version like "1.2.0" or empty for latest
-	local TARGET_VERSION=${1:-latest}
+	local TARGET_VERSION=${new_args[0]:-latest}
 	# If the version is "snapshot", always force it
 	if [ "$TARGET_VERSION" = "snapshot" ]; then
 		FORCE_INSTALL=true
@@ -826,7 +818,7 @@ main() {
 	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
 	###########################################################################
-	if [ "$EUID" -ne 0 ] && [ "$1" != "--system" ]; then
+	if [ "$EUID" -ne 0 ] && [[ ! " ${new_args[@]} " =~ " --system " ]]; then
 		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 		printf "${YELLOW}🥸 Installing to user directory (~/.local) since not running as root${NORMAL}\n"
 		printf "${BLUE}💡 Use ${GREEN}'sudo install-boxlang.sh'${BLUE} for system-wide installation${NORMAL}\n"
@@ -843,6 +835,7 @@ main() {
 	if ! preflight_check; then
 		exit 1
 	fi
+
 	###########################################################################
 	# Setup Global Variables
 	###########################################################################
@@ -960,7 +953,68 @@ main() {
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "Copyright and Registered Trademarks of Ortus Solutions, Corp"
 	printf "${NORMAL}"
-
 }
 
+###########################################################################
+# Main Function
+###########################################################################
+
+main() {
+	local command=""
+	local args=()
+
+	# Initialize colors at script startup
+	setup_colors
+
+	# Parse arguments to identify command and options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			"--help"|"-h")
+				command="help"
+				break
+				;;
+			"--uninstall")
+				command="uninstall"
+				break
+				;;
+			"--check-update")
+				command="check-update"
+				break
+				;;
+			*)
+				args+=("$1")
+				;;
+		esac
+		shift
+	done
+
+	# If no command was specified, it's an install operation
+	if [ -z "$command" ]; then
+		command="install"
+	fi
+
+	# Handle commands
+	case "$command" in
+		"help")
+			handle_help
+			;;
+		"uninstall")
+			handle_uninstall
+			;;
+		"check-update")
+			handle_check_update
+			;;
+		"install")
+			handle_install "${args[@]}"
+			;;
+		*)
+			printf "${RED}❌ Unknown command: $command${NORMAL}\n"
+			printf "\n"
+			handle_help
+			exit 1
+			;;
+	esac
+}
+
+# Run main function with all arguments
 main "$@"
