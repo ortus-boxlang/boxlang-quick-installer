@@ -443,25 +443,6 @@ check_or_set_path() {
 		return 0
 	fi
 
-	# Ask user for permission to auto-update
-	printf "${BLUE}❓Would you like to automatically add [$bin_dir] to your PATH? [Y/n] ${NORMAL}"
-	read -r response < /dev/tty
-	case "$response" in
-		[nN][oO]|[nN])
-			printf "${YELLOW}Skipping automatic PATH update${NORMAL}\n"
-			printf "${BLUE}Manually add this to your shell profile ($profile_file):${NORMAL}\n"
-			if [ "$current_shell" = "fish" ]; then
-				printf "${CYAN}set -gx PATH $bin_dir \$PATH${NORMAL}\n\n"
-			else
-				printf "${CYAN}$path_export${NORMAL}\n\n"
-			fi
-			return 0
-			;;
-		*)
-			# Default to yes
-			;;
-	esac
-
 	# Add PATH to the profile file
 	printf "${BLUE}➕ Adding $bin_dir to PATH in $profile_file...${NORMAL}\n"
 
