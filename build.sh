@@ -10,10 +10,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Download URL Prefixes
-DOWNLOAD_URL_PRODUCTION="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
-DOWNLOAD_URL_SNAPSHOT="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/snapshot"
-
 # Logging functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -162,25 +158,20 @@ main() {
     cp -v changelog.md build/changelog.md
     cp -v version.json build/version.json
 
-	# If there is a --snapshot incoming?
-	if [[ "$1" == "--snapshot" ]]; then
-		log_info "Using snapshot download URL"
-		DOWNLOAD_URL="$DOWNLOAD_URL_SNAPSHOT"
+
+	local INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
+    # If snapshot build, append prefix to URL in the following files
+	# build/install-boxlang.sh
+	# build/install-boxlang.ps1
+	# build/install-bvm.sh
+    if [[ "${1:-}" == "--snapshot" ]]; then
+        log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
+		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
 	else
-		log_info "Using production download URL"
-		DOWNLOAD_URL="$DOWNLOAD_URL_PRODUCTION"
-	fi
-
-	# Replace @REPO_URL_PREFIX@ in files
-	log_info "Replacing @REPO_URL_PREFIX@ in files..."
-	find build -type f -exec sed -i "s|@REPO_URL_PREFIX@|$DOWNLOAD_URL|g" {} +
-
-	# Ensure the replacement was successful
-	if grep -r "@REPO_URL_PREFIX@" build/; then
-		log_error "Replacement of @REPO_URL_PREFIX@ failed"
-		exit 1
-	fi
-	# Replace @REPO_URL_PREFIX@ in all files in the build directory
+		log_info "Standard build detected, using default installer URL..."
+    fi
 
     # Generate checksums (excluding checksum files themselves)
     generate_checksums "build" ".tmp"
