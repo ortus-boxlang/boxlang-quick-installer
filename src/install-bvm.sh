@@ -1,33 +1,18 @@
 #!/bin/bash
+
 # BVM (BoxLang Version Manager) Installer
 # This script installs BVM and sets up the environment
+# Author: BoxLang Team
+# Version: @build.version@
+# License: Apache License, Version 2.0
 
+# Only enable exit-on-error after the non-critical colorization stuff,
+# which may fail on systems lacking tput or terminfo
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NORMAL='\033[0m'
-
-# Initialize colors if terminal supports them
-if [ -t 1 ] && command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1; then
-    RED="$(tput setaf 1)"
-    GREEN="$(tput setaf 2)"
-    YELLOW="$(tput setaf 3)"
-    BLUE="$(tput setaf 4)"
-    BOLD="$(tput bold)"
-    NORMAL="$(tput sgr0)"
-else
-    RED=""
-    GREEN=""
-    YELLOW=""
-    BLUE=""
-    BOLD=""
-    NORMAL=""
-fi
+###########################################################################
+# Global Variables + Helpers
+###########################################################################
 
 # Global variables
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
@@ -57,6 +42,39 @@ print_header() {
 # Check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+# Colors
+setup_colors() {
+	# Use colors, but only if connected to a terminal, and that terminal supports them.
+	if which tput >/dev/null 2>&1; then
+		ncolors=$(tput colors)
+	fi
+	if [ -t 1 ] && [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		RED="$(tput setaf 1)"
+		GREEN="$(tput setaf 2)"
+		YELLOW="$(tput setaf 3)"
+		BLUE="$(tput setaf 4)"
+		BOLD="$(tput bold)"
+		NORMAL="$(tput sgr0)"
+		MAGENTA="$(tput setaf 5)"
+		CYAN="$(tput setaf 6)"
+		WHITE="$(tput setaf 7)"
+		BLACK="$(tput setaf 0)"
+		UNDERLINE="$(tput smul)"
+	else
+		RED=""
+		GREEN=""
+		YELLOW=""
+		BLUE=""
+		BOLD=""
+		NORMAL=""
+		MAGENTA=""
+		CYAN=""
+		WHITE=""
+		BLACK=""
+		UNDERLINE=""
+	fi
 }
 
 # Check prerequisites
@@ -319,7 +337,7 @@ setup_path() {
 }
 
 # Show post-install instructions
-show_instructions() {
+show_help() {
     print_header "Installation Complete!"
     printf "\n"
     print_success "BVM has been installed successfully"
@@ -348,6 +366,8 @@ show_instructions() {
 
 # Main installation function
 main() {
+	setup_colors
+
     print_header "BVM (BoxLang Version Manager) Installer"
     printf "\n"
 
@@ -367,7 +387,7 @@ main() {
     fi
 
     # Show instructions
-    show_instructions
+    show_help
 }
 
 # Run main function

@@ -6,9 +6,43 @@
 # Version: @build.version@
 # License: Apache License, Version 2.0
 
+# Only enable exit-on-error after the non-critical colorization stuff,
+# which may fail on systems lacking tput or terminfo
+set -e
+
 ###########################################################################
-# Global Color Variables
+# Global Variables + Helpers
 ###########################################################################
+
+# Global temporary directory variable for all temporary operations
+TEMP_DIR="${TMPDIR:-/tmp}"
+
+# Print colored output
+print_info() {
+    printf "${BLUE}ℹ $1${NORMAL}\n"
+}
+
+print_success() {
+    printf "${GREEN}✅ $1${NORMAL}\n"
+}
+
+print_warning() {
+    printf "${YELLOW}⚠️  $1${NORMAL}\n"
+}
+
+print_error() {
+    printf "${RED}❌ $1${NORMAL}\n"
+}
+
+print_header() {
+    printf "${BOLD}${CYAN}$1${NORMAL}\n"
+}
+
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # Initialize colors globally so all functions can use them
 setup_colors() {
 	# Use colors, but only if connected to a terminal, and that terminal supports them.
@@ -43,12 +77,6 @@ setup_colors() {
 }
 
 ###########################################################################
-# Global Variables
-###########################################################################
-# Global temporary directory variable for all temporary operations
-TEMP_DIR="${TMPDIR:-/tmp}"
-
-###########################################################################
 # Pre-flight Checks
 ###########################################################################
 # Verifies required dependencies are installed: curl, unzip and jq
@@ -56,9 +84,9 @@ preflight_check() {
 	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
 	local missing_deps=()
 
-	command -v curl >/dev/null 2>&1 || missing_deps+=("curl")
-	command -v unzip >/dev/null 2>&1 || missing_deps+=("unzip")
-	command -v jq >/dev/null 2>&1 || missing_deps+=("jq")
+	command_exists curl || missing_deps+=("curl")
+	command_exists unzip || missing_deps+=("unzip")
+	command_exists jq || missing_deps+=("jq")
 
 	if [ ${#missing_deps[@]} -ne 0 ]; then
 		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"
@@ -73,16 +101,16 @@ preflight_check() {
 				fi
 			done
 		elif [ "$(uname)" = "Linux" ]; then
-			if command -v apt-get >/dev/null 2>&1; then
+			if command_exists apt-get; then
 				printf "${BLUE}💡 On Ubuntu/Debian, install with:${NORMAL}\n"
 				printf "   sudo apt update && sudo apt install ${missing_deps[*]}\n"
-			elif command -v yum >/dev/null 2>&1; then
+			elif command_exists yum; then
 				printf "${BLUE}💡 On RHEL/CentOS, install with:${NORMAL}\n"
 				printf "   sudo yum install ${missing_deps[*]}\n"
-			elif command -v dnf >/dev/null 2>&1; then
+			elif command_exists dnf; then
 				printf "${BLUE}💡 On Fedora, install with:${NORMAL}\n"
 				printf "   sudo dnf install ${missing_deps[*]}\n"
-			elif command -v pacman >/dev/null 2>&1; then
+			elif command_exists pacman; then
 				printf "${BLUE}💡 On Arch Linux, install with:${NORMAL}\n"
 				printf "   sudo pacman -S ${missing_deps[*]}\n"
 			fi
@@ -102,24 +130,24 @@ preflight_check() {
 			printf "${BLUE}💡 On macOS, you can install Java using:${NORMAL}\n"
 			printf "   brew install openjdk@21\n"
 			printf "   or download from: https://adoptium.net/\n"
-			if command -v sdk >/dev/null 2>&1; then
+			if command_exists sdk; then
 				printf "   or with SDKMAN: sdk install java 21-tem\n"
 			fi
 		elif [ "$(uname)" = "Linux" ]; then
-			if command -v apt-get >/dev/null 2>&1; then
+			if command_exists apt-get; then
 				printf "${BLUE}💡 On Ubuntu/Debian, you can install Java using:${NORMAL}\n"
 				printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
-			elif command -v yum >/dev/null 2>&1; then
+			elif command_exists yum; then
 				printf "${BLUE}💡 On RHEL/CentOS/Fedora, you can install Java using:${NORMAL}\n"
 				printf "   sudo yum install java-21-openjdk\n"
-			elif command -v dnf >/dev/null 2>&1; then
+			elif command_exists dnf; then
 				printf "${BLUE}💡 On Fedora, you can install Java using:${NORMAL}\n"
 				printf "   sudo dnf install java-21-openjdk\n"
 			else
 				printf "${BLUE}💡 On Linux, you can install Java using your package manager or:${NORMAL}\n"
 				printf "   Download from: https://adoptium.net/\n"
 			fi
-			if command -v sdk >/dev/null 2>&1; then
+			if command_exists sdk; then
 				printf "   or with SDKMAN: sdk install java 21-tem\n"
 			fi
 		fi
@@ -189,7 +217,7 @@ check_java_version() {
 				fi
 			done
 		else
-			if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
+			if command_exists "$candidate" || [ -x "$candidate" ]; then
 				local version_output=$("$candidate" -version 2>&1)
 				if [ $? -eq 0 ]; then
 					JAVA_VERSION=$(extract_java_version "$version_output")
@@ -257,7 +285,7 @@ get_current_version() {
 	)
 
 	for candidate in "${boxlang_candidates[@]}"; do
-		if command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ]; then
+		if command_exists "$candidate" || [ -x "$candidate" ]; then
 			local version_output=$("$candidate" --version 2>/dev/null || echo "")
 			if [ -n "$version_output" ]; then
 				current_version=$(extract_semantic_version "$version_output" | xargs )
@@ -483,7 +511,7 @@ check_and_install_commandbox() {
 	printf "${BLUE}🔍 Checking for CommandBox...${NORMAL}\n"
 
 	# Check if CommandBox is already available
-	if command -v box >/dev/null 2>&1; then
+	if command_exists box; then
 		printf "${GREEN}✅ CommandBox is already installed and available${NORMAL}\n"
 		return 0
 	fi
@@ -730,35 +758,9 @@ remove_previous_installation() {
 	fi
 }
 
-###########################################################################
-# Command Handlers
-###########################################################################
-
-# Handle the uninstall command
-handle_uninstall() {
-	uninstall_boxlang
-}
-
-# Handle the check-update command
-handle_check_update() {
-	if ! preflight_check; then
-		exit 1
-	fi
-	check_for_updates
-}
-
-# Handle the help command
-handle_help() {
-	show_help
-}
-
 # Handle the main installation
-handle_install() {
+install_boxlang() {
 	local args=("$@")
-
-	# Only enable exit-on-error after the non-critical colorization stuff,
-	# which may fail on systems lacking tput or terminfo
-	set -e
 
 	# Check for --force flag in any position and remove it from args
 	local FORCE_INSTALL=false
@@ -996,25 +998,25 @@ main() {
 	# Handle commands
 	case "$command" in
 		"help")
-			handle_help
+			show_help
 			;;
 		"uninstall")
-			handle_uninstall
+			uninstall_boxlang
 			;;
 		"check-update")
-			handle_check_update
+			check_for_updates
 			;;
 		"install")
-			handle_install "${args[@]}"
+			install_boxlang "${args[@]}"
 			;;
 		*)
 			printf "${RED}❌ Unknown command: $command${NORMAL}\n"
 			printf "\n"
-			handle_help
+			show_help
 			exit 1
 			;;
 	esac
 }
 
-# Run main function with all arguments
+# Run main function
 main "$@"

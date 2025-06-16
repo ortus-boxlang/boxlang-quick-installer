@@ -69,6 +69,11 @@ else
     exit 1
 fi
 
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # Helper functions
 print_header() {
     printf "${BLUE}"
@@ -169,7 +174,7 @@ validate_port() {
     fi
 
     # Check if port is in use
-    if command -v lsof >/dev/null 2>&1; then
+    if command_exists lsof; then
         if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
             print_warning "Port $port is already in use"
             return 1
@@ -547,7 +552,7 @@ main() {
     print_header
 
     # Check dependencies
-    if ! command -v boxlang-miniserver >/dev/null 2>&1; then
+    if ! command_exists boxlang-miniserver; then
         print_error "boxlang-miniserver not found. Please install BoxLang first."
         exit 1
     fi
