@@ -8,6 +8,10 @@ $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
 
+# Command line flags - empty = prompt, true = install, false = skip
+$INSTALL_COMMANDBOX = ""
+$NON_INTERACTIVE = $false
+
 ###########################################################################
 # Help Function
 ###########################################################################
@@ -37,6 +41,9 @@ function Show-Help {
     Write-Host "  --uninstall       Remove BoxLang from the system"
     Write-Host "  --check-update    Check if a newer version is available"
     Write-Host "  --force           Force reinstallation even if already installed"
+    Write-Host "  --with-commandbox Install CommandBox without prompting"
+    Write-Host "  --without-commandbox Skip CommandBox installation"
+    Write-Host "  --yes, -y         Use defaults for all prompts (installs CommandBox)"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
     Write-Host ""
@@ -45,6 +52,9 @@ function Show-Help {
     Write-Host "  .\install-boxlang.ps1 snapshot"
     Write-Host "  .\install-boxlang.ps1 1.2.0"
     Write-Host "  .\install-boxlang.ps1 --force"
+    Write-Host "  .\install-boxlang.ps1 --with-commandbox"
+    Write-Host "  .\install-boxlang.ps1 --without-commandbox"
+    Write-Host "  .\install-boxlang.ps1 --yes"
     Write-Host "  .\install-boxlang.ps1 --uninstall"
     Write-Host "  .\install-boxlang.ps1 --check-update"
     Write-Host ""
@@ -54,6 +64,12 @@ function Show-Help {
     Write-Host -ForegroundColor Green "iwr -useb https://boxlang.io/install.ps1 | iex"
     Write-Host -NoNewline "  📦 With version: "
     Write-Host -ForegroundColor Green "`$env:BOXLANG_TARGET_VERSION='snapshot'; iwr -useb https://boxlang.io/install.ps1 | iex"
+    Write-Host -NoNewline "  📦 With CommandBox: "
+    Write-Host -ForegroundColor Green "iwr -useb https://boxlang.io/install.ps1 | iex --with-commandbox"
+    Write-Host -NoNewline "  📦 Without CommandBox: "
+    Write-Host -ForegroundColor Green "iwr -useb https://boxlang.io/install.ps1 | iex --without-commandbox"
+    Write-Host -NoNewline "  📦 Use defaults: "
+    Write-Host -ForegroundColor Green "iwr -useb https://boxlang.io/install.ps1 | iex --yes"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Requirements:"
     Write-Host ""
@@ -339,14 +355,28 @@ if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
     exit 0
 }
 
-# Parse arguments to check for --force flag and remove it from args
+# Parse arguments to check for flags and remove them from args
 $FORCE_INSTALL = $false
 $newArgs = @()
 foreach ($arg in $args) {
-    if ($arg -eq "--force") {
-        $FORCE_INSTALL = $true
-    } else {
-        $newArgs += $arg
+    switch ($arg) {
+        "--force" {
+            $FORCE_INSTALL = $true
+        }
+        "--with-commandbox" {
+            $INSTALL_COMMANDBOX = $true
+        }
+        "--without-commandbox" {
+            $INSTALL_COMMANDBOX = $false
+        }
+        { $_ -eq "--yes" -or $_ -eq "-y" } {
+            # Setup all defaults here - install CommandBox by default
+            $INSTALL_COMMANDBOX = $true
+            $NON_INTERACTIVE = $true
+        }
+        default {
+            $newArgs += $arg
+        }
     }
 }
 
@@ -433,12 +463,17 @@ function Update-PathVariable {
 
     Write-Host -ForegroundColor Yellow "⚠️  $BinDir is not in your PATH"
 
-    # Ask user for permission to auto-update
-    $response = Read-Host "Would you like to automatically add $BinDir to your PATH? [Y/n]"
-    if ($response -match "^[nN]") {
-        Write-Host -ForegroundColor Yellow "Skipping automatic PATH update"
-        Write-Host -ForegroundColor Blue "Manually add $BinDir to your system PATH"
-        return
+    # If non-interactive mode (--yes flag was used), auto-update PATH
+    if ($NON_INTERACTIVE) {
+        Write-Host -ForegroundColor Green "Adding $BinDir to PATH (automatic mode)..."
+    } else {
+        # Ask user for permission to auto-update
+        $response = Read-Host "Would you like to automatically add $BinDir to your PATH? [Y/n]"
+        if ($response -match "^[nN]") {
+            Write-Host -ForegroundColor Yellow "Skipping automatic PATH update"
+            Write-Host -ForegroundColor Blue "Manually add $BinDir to your system PATH"
+            return
+        }
     }
 
     # Add to PATH
@@ -541,13 +576,30 @@ function Check-And-Install-CommandBox {
         return $true
     }
 
+    # Check command line flags first
+    if ($INSTALL_COMMANDBOX -eq $false) {
+        Write-Host -ForegroundColor Yellow "Skipping CommandBox installation (--without-commandbox specified)"
+        Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
+        return $false
+    }
+
     Write-Host -ForegroundColor Yellow "⚠️  CommandBox is not installed"
     Write-Host -ForegroundColor Blue "💡 CommandBox is the Package Manager for BoxLang®"
     Write-Host -ForegroundColor Blue "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more"
     Write-Host ""
 
-    # Ask user if they want to install CommandBox
-    $response = Read-Host "Would you like to install CommandBox? [Y/n]"
+    # If flag is explicitly set to true, install without prompting
+    if ($INSTALL_COMMANDBOX -eq $true) {
+        Write-Host -ForegroundColor Green "Installing CommandBox (automatic mode)..."
+    } else {
+        # Ask user if they want to install CommandBox
+        $response = Read-Host "Would you like to install CommandBox? [Y/n]"
+        if ($response -match "^[nN]") {
+            Write-Host -ForegroundColor Yellow "Skipping CommandBox installation"
+            Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
+            return $false
+        }
+    }
     if ($response -match "^[nN]") {
         Write-Host -ForegroundColor Yellow "Skipping CommandBox installation"
         Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
