@@ -44,7 +44,7 @@ fi
 ###########################################################################
 install_bvm() {
     # Create BVM directory
-    print_info "📁 Creating BVM directory at [$BVM_HOME]"
+    print_info "Creating BVM directory at [$BVM_HOME]"
     mkdir -p "$BVM_HOME/bin" "$BVM_HOME/versions" "$BVM_HOME/cache" "$BVM_HOME/scripts"
     local bvm_script="$BVM_HOME/bin/bvm"
 	local scripts_dir="$BVM_HOME/scripts"
