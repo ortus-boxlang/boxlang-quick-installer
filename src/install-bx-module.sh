@@ -15,64 +15,8 @@ set -e
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
-# Print colored output
-print_info() {
-    printf "${BLUE}ℹ $1${NORMAL}\n"
-}
-
-print_success() {
-    printf "${GREEN}✅ $1${NORMAL}\n"
-}
-
-print_warning() {
-    printf "${YELLOW}⚠️  $1${NORMAL}\n"
-}
-
-print_error() {
-    printf "${RED}❌ $1${NORMAL}\n"
-}
-
-print_header() {
-    printf "${BOLD}${CYAN}$1${NORMAL}\n"
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Initialize colors globally so all functions can use them
-setup_colors() {
-	# Use colors, but only if connected to a terminal, and that terminal supports them.
-	if which tput >/dev/null 2>&1; then
-		ncolors=$(tput colors)
-	fi
-	if [ -t 1 ] && [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
-		RED="$(tput setaf 1)"
-		GREEN="$(tput setaf 2)"
-		YELLOW="$(tput setaf 3)"
-		BLUE="$(tput setaf 4)"
-		BOLD="$(tput bold)"
-		NORMAL="$(tput sgr0)"
-		MAGENTA="$(tput setaf 5)"
-		CYAN="$(tput setaf 6)"
-		WHITE="$(tput setaf 7)"
-		BLACK="$(tput setaf 0)"
-		UNDERLINE="$(tput smul)"
-	else
-		RED=""
-		GREEN=""
-		YELLOW=""
-		BLUE=""
-		BOLD=""
-		NORMAL=""
-		MAGENTA=""
-		CYAN=""
-		WHITE=""
-		BLACK=""
-		UNDERLINE=""
-	fi
-}
+# Include the helper functions
+source ./helpers/helpers.sh
 
 ###########################################################################
 # ACTION FUNCTIONS

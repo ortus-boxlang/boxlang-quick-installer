@@ -18,104 +18,28 @@ set -e
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
 BVM_SOURCE_URL="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/bvm.sh"
 
-# Print functions
-print_info() {
-    printf "${BLUE}ℹ $1${NORMAL}\n"
-}
+# Helpers
+if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	source "$(dirname "$0")/helpers/helpers.sh"
+elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
+	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+else
+	# Download helpers.sh if it doesn't exist locally
+	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
+	helpers_url="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/helpers/helpers.sh"
+	helpers_file="${TEMP_DIR}/helpers.sh"
 
-print_success() {
-    printf "${GREEN}✅ $1${NORMAL}\n"
-}
-
-print_warning() {
-    printf "${YELLOW}⚠️  $1${NORMAL}\n"
-}
-
-print_error() {
-    printf "${RED}❌ $1${NORMAL}\n"
-}
-
-print_header() {
-    printf "${BOLD}${GREEN}$1${NORMAL}\n"
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Colors
-setup_colors() {
-	# Use colors, but only if connected to a terminal, and that terminal supports them.
-	if which tput >/dev/null 2>&1; then
-		ncolors=$(tput colors)
-	fi
-	if [ -t 1 ] && [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
-		RED="$(tput setaf 1)"
-		GREEN="$(tput setaf 2)"
-		YELLOW="$(tput setaf 3)"
-		BLUE="$(tput setaf 4)"
-		BOLD="$(tput bold)"
-		NORMAL="$(tput sgr0)"
-		MAGENTA="$(tput setaf 5)"
-		CYAN="$(tput setaf 6)"
-		WHITE="$(tput setaf 7)"
-		BLACK="$(tput setaf 0)"
-		UNDERLINE="$(tput smul)"
+	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
+		source "$helpers_file"
 	else
-		RED=""
-		GREEN=""
-		YELLOW=""
-		BLUE=""
-		BOLD=""
-		NORMAL=""
-		MAGENTA=""
-		CYAN=""
-		WHITE=""
-		BLACK=""
-		UNDERLINE=""
+		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
+		exit 1
 	fi
-}
+fi
 
-# Check prerequisites
-check_prerequisites() {
-    print_info "Checking prerequisites..."
-
-    local missing_deps=()
-
-    command_exists curl || missing_deps+=("curl")
-    command_exists unzip || missing_deps+=("unzip")
-    command_exists jq || missing_deps+=("jq")
-
-    if [ ${#missing_deps[@]} -ne 0 ]; then
-        print_error "Missing required dependencies: ${missing_deps[*]}"
-
-        if [ "$(uname)" = "Darwin" ]; then
-            print_info "On macOS, install missing dependencies with Homebrew:"
-            for dep in "${missing_deps[@]}"; do
-                printf "  brew install %s\n" "$dep"
-            done
-        elif [ "$(uname)" = "Linux" ]; then
-            if command_exists apt-get; then
-                print_info "On Ubuntu/Debian, install with:"
-                printf "  sudo apt update && sudo apt install %s\n" "${missing_deps[*]}"
-            elif command_exists yum; then
-                print_info "On RHEL/CentOS, install with:"
-                printf "  sudo yum install %s\n" "${missing_deps[*]}"
-            elif command_exists pacman; then
-                print_info "On Arch Linux, install with:"
-                printf "  sudo pacman -S %s\n" "${missing_deps[*]}"
-            fi
-        fi
-
-        return 1
-    fi
-
-    print_success "All prerequisites satisfied"
-    return 0
-}
-
+###########################################################################
 # Install BVM
+###########################################################################
 install_bvm() {
     print_header "Installing BoxLang Version Manager (BVM)"
 
@@ -247,7 +171,9 @@ EOF
     print_success "BVM script and wrappers installed to $BVM_HOME/bin"
 }
 
+###########################################################################
 # Setup PATH
+###########################################################################
 setup_path() {
     local bvm_bin="$BVM_HOME/bin"
     local profile_file=""
@@ -336,7 +262,9 @@ setup_path() {
     fi
 }
 
-# Show post-install instructions
+###########################################################################
+# Help and Instructions
+###########################################################################
 show_help() {
     print_header "Installation Complete!"
     printf "\n"
@@ -364,17 +292,22 @@ show_help() {
     printf "\n"
 }
 
+###########################################################################
 # Main installation function
+###########################################################################
 main() {
 	setup_colors
 
     print_header "BVM (BoxLang Version Manager) Installer"
     printf "\n"
 
-    # Check prerequisites
-    if ! check_prerequisites; then
-        exit 1
-    fi
+    ###########################################################################
+	# Pre-flight Checks
+	# This function checks for necessary tools and environment
+	###########################################################################
+	if ! preflight_check; then
+		exit 1
+	fi
 
     # Install BVM
     if ! install_bvm; then

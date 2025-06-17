@@ -5,6 +5,7 @@ BVM is a simple version manager for BoxLang, similar to jenv or nvm. It allows y
 ## BVM vs Single-Version Installer
 
 **Choose BVM if you:**
+
 - 🔄 Work on multiple projects that might need different BoxLang versions
 - 🧪 Want to test your code against different BoxLang releases
 - 🚀 Need to switch between stable and snapshot versions
@@ -12,12 +13,14 @@ BVM is a simple version manager for BoxLang, similar to jenv or nvm. It allows y
 - 🛠️ Are a BoxLang developer or advanced user
 
 **Choose the single-version installer (`install-boxlang.sh`) if you:**
+
 - 📌 Only need one BoxLang version system-wide
 - 🎯 Want the simplest possible installation
 - 🏢 Are setting up production servers with a specific BoxLang version
 - ⚡ Want the fastest installation with minimal overhead
 
 **Both installers provide identical functionality:**
+
 - ✅ Same BoxLang runtime and MiniServer
 - ✅ Same helper scripts (`install-bx-module`, `install-bx-site`, etc.)
 - ✅ Same command-line tools (`boxlang`, `bx`, `boxlang-miniserver`, etc.)
@@ -109,15 +112,18 @@ bvm exec --version
 When you install a BoxLang version with BVM, it downloads and sets up:
 
 ### Core Components
+
 - **BoxLang Runtime** (`boxlang`, `bx`) - The main BoxLang interpreter
 - **BoxLang MiniServer** (`boxlang-miniserver`, `bx-miniserver`) - Web application server
 
 ### Helper Scripts
+
 - **install-bx-module** - BoxLang module installer
 - **install-bx-site** - BoxLang site installer
 - **Other utility scripts** - Various helper tools
 
 ### Integration
+
 - **Wrapper scripts** - BVM creates wrapper scripts so you can use `boxlang`, `bx`, `boxlang-miniserver`, etc. directly
 - **Version management** - All tools automatically use the currently active BoxLang version
 
@@ -176,6 +182,7 @@ bvm clean
 If you currently have BoxLang installed via `install-boxlang.sh` and want to switch to BVM for version management:
 
 ### 1. Uninstall Current BoxLang (Recommended)
+
 ```bash
 # Remove system-wide installation
 sudo install-boxlang.sh --uninstall
@@ -185,11 +192,13 @@ install-boxlang.sh --uninstall
 ```
 
 ### 2. Install BVM
+
 ```bash
 curl -fsSL https://boxlang.io/install-bvm.sh | bash
 ```
 
 ### 3. Install Your Preferred BoxLang Version
+
 ```bash
 # Install the same version you had before
 bvm install latest  # or specific version like 1.2.0
@@ -197,6 +206,7 @@ bvm use latest
 ```
 
 ### 4. Verify Everything Works
+
 ```bash
 bvm doctor
 boxlang --version
@@ -214,16 +224,19 @@ boxlang --version
 ### Installing Prerequisites
 
 **macOS (with Homebrew):**
+
 ```bash
 brew install curl unzip jq
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt update && sudo apt install curl unzip jq
 ```
 
 **RHEL/CentOS/Fedora:**
+
 ```bash
 sudo dnf install curl unzip jq
 ```
@@ -239,21 +252,25 @@ source ~/.bashrc  # or ~/.zshrc, ~/.profile, etc.
 ## Troubleshooting
 
 ### BVM not found after installation
+
 - Restart your terminal
 - Check that `~/.bvm/bin` is in your PATH
 - Run `source ~/.bashrc` (or your shell's profile file)
 
 ### BoxLang not found after switching versions
+
 - Run `bvm doctor` to check installation health
 - Verify the version exists with `bvm list`
 - Try `bvm use <version>` again
 
 ### Download failures
+
 - Check your internet connection
 - Verify the version exists with `bvm list-remote`
 - Try clearing cache with `bvm clean`
 
 ### Health check
+
 ```bash
 bvm doctor
 ```
@@ -280,3 +297,5 @@ Licensed under the Apache License, Version 2.0. See the LICENSE file for details
 - 📖 Documentation: https://boxlang.io/docs
 - 💾 GitHub: https://github.com/ortus-boxlang/boxlang
 - 💬 Community: https://boxlang.io/community
+- 🧑‍💻 Try: https://try.boxlang.io
+- 🫶 Professional Support: https://boxlang.io/plans

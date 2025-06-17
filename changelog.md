@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Encapsulation with helper functions in `helpers/helpers.sh` for better code organization.
+- Experimental BoxLang Version Manager (`bvm`) to manage multiple BoxLang versions.
+- Updated `preflight_check` to beginning to make sure we don't leave folders behind.
 - Added non interactive mode to the `install-boxlang` command by using the `--yes, -y` flag for all prompts.
 - Added `--with-commandbox` flag to the `install-boxlang` command to install CommandBox automatically.
 - Added `--without-commandbox` flag to the `install-boxlang` command to skip CommandBox installation.
