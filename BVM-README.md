@@ -32,13 +32,15 @@ The only difference is that BVM adds version management capabilities on top.
 
 - 📦 **Install complete BoxLang environment** - runtime, MiniServer, and helper scripts
 - 🔄 **Switch between versions easily** - change your active BoxLang version with one command
-- 📋 **List installed versions** - see what's installed locally
-- 🌐 **List remote versions** - see what's available for download
-- 🗑️ **Clean uninstall** - remove versions you no longer need
-- 🔍 **Health check** - verify your BVM installation
-- 🧹 **Cache management** - clean up downloaded files
-- 🚀 **Execute BoxLang components** - run BoxLang, MiniServer, and helper scripts through BVM
+- 📋 **List installed versions** - see what's installed locally with `bvm list` or `bvm ls`
+- 🌐 **List remote versions** - see what's available for download with `bvm list-remote` or `bvm ls-remote`
+- 🗑️ **Clean uninstall** - remove versions you no longer need with `bvm uninstall`, `bvm remove`, or `bvm rm`
+- 🔍 **Health check** - verify your BVM installation with `bvm doctor` or `bvm health`
+- 🧹 **Cache management** - clean up downloaded files with `bvm clean`
+- 🚀 **Execute BoxLang components** - run BoxLang, MiniServer through BVM with version management
 - 🔗 **Seamless integration** - wrapper scripts make all tools available in PATH
+- ⚡ **Command aliases** - convenient short aliases for all major commands
+- 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
 
 ## Quick Start
 
@@ -71,6 +73,12 @@ bvm list
 
 # Run BoxLang
 bvm exec --version
+
+# Get help
+bvm help
+# or use aliases
+bvm --help
+bvm -h
 ```
 
 ## Commands
@@ -85,27 +93,32 @@ bvm exec --version
 - `bvm use <version>` - Switch to a specific BoxLang version
 - `bvm current` - Show currently active BoxLang version
 - `bvm uninstall <version>` - Uninstall a specific BoxLang version
+  - Aliases: `bvm remove <version>`, `bvm rm <version>`
 
 ### Information
 
 - `bvm list` - List all installed BoxLang versions
+  - Alias: `bvm ls`
 - `bvm list-remote` - List available BoxLang versions for download
+  - Alias: `bvm ls-remote`
 - `bvm which` - Show path to current BoxLang installation
 - `bvm version` - Show BVM version
+  - Aliases: `bvm --version`, `bvm -v`
 
 ### Execution
 
 - `bvm exec <args>` - Execute BoxLang with current version
-- `bvm run <args>` - Alias for exec
+  - Alias: `bvm run <args>`
 - `bvm miniserver <args>` - Start BoxLang MiniServer with current version
-- `bvm module <args>` - Run install-bx-module script with current version
-- `bvm site <args>` - Run install-bx-site script with current version
+  - Aliases: `bvm mini-server <args>`, `bvm ms <args>`
 
 ### Maintenance
 
 - `bvm clean` - Clean cache and temporary files
 - `bvm doctor` - Check BVM installation health
+  - Alias: `bvm health`
 - `bvm help` - Show help message
+  - Aliases: `bvm --help`, `bvm -h`
 
 ## What BVM Installs
 
@@ -118,14 +131,15 @@ When you install a BoxLang version with BVM, it downloads and sets up:
 
 ### Helper Scripts
 
-- **install-bx-module** - BoxLang module installer
-- **install-bx-site** - BoxLang site installer
+- **install-bx-module** - BoxLang module installer (available in PATH after installation)
+- **install-bx-site** - BoxLang site installer (available in PATH after installation)
 - **Other utility scripts** - Various helper tools
 
 ### Integration
 
 - **Wrapper scripts** - BVM creates wrapper scripts so you can use `boxlang`, `bx`, `boxlang-miniserver`, etc. directly
 - **Version management** - All tools automatically use the currently active BoxLang version
+- **Helper script integration** - All helper scripts work with the currently active BoxLang version
 
 ## Examples
 
@@ -140,9 +154,13 @@ bvm use 1.2.0
 
 # See what's installed
 bvm list
+# or use the short alias
+bvm ls
 
 # Check what versions are available
 bvm list-remote
+# or use the short alias
+bvm ls-remote
 
 # Run BoxLang REPL
 bvm exec
@@ -154,14 +172,10 @@ bvm miniserver
 # or use the direct command
 boxlang-miniserver --port 8080
 
-# Install a BoxLang module
-bvm module bx-orm
-# or use the direct command
+# Install a BoxLang module (using helper script)
 install-bx-module bx-orm
 
-# Install a BoxLang site template
-bvm site mysite
-# or use the direct command
+# Install a BoxLang site template (using helper script)
 install-bx-site mysite
 
 # Run a BoxLang script
