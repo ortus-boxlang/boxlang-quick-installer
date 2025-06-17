@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.12.0] - 2025-06-17
+### Fixed
 
-## [1.11.0] - 2025-06-11
+- `bvm` can't find source helpers in the `helpers` directory, you need the full path to the helper functions.
+
+## [1.12.0] - 2025-06-17
 
 ### Added
 

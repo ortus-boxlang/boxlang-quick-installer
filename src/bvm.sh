@@ -10,9 +10,6 @@ set -e
 # Global Variables + Helpers
 ###########################################################################
 
-# Include the helper functions
-source ./helpers/helpers.sh
-
 # Global Variables
 BVM_VERSION="@build.version@"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
@@ -31,6 +28,9 @@ SNAPSHOT_URL="$DOWNLOAD_BASE_URL/boxlang-snapshot.zip"
 LATEST_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-latest.zip"
 SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
+
+# Helpers
+source "${BVM_HOME}/scripts/helpers/helpers.sh"
 
 ###########################################################################
 # Utility Functions
