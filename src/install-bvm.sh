@@ -211,7 +211,6 @@ setup_path() {
 # Help and Instructions
 ###########################################################################
 show_help() {
-    print_header "Installation Complete!"
     printf "\n"
     print_success "BVM has been installed successfully"
     printf "\n"
