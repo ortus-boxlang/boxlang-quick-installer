@@ -11,7 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Do not ask the user for the path portions, just add it.
+- Added non interactive mode to the `install-boxlang` command by using the `--yes, -y` flag for all prompts.
+- Added `--with-commandbox` flag to the `install-boxlang` command to install CommandBox automatically.
+- Added `--without-commandbox` flag to the `install-boxlang` command to skip CommandBox installation.
+- Do not ask the user for the path portions, just add it, if not it doesn't work anyways
 - Snapshot builds now detect it and update the url accordingly for the quick installer
 - `install-boxlang` refactoring to be similar to all scripts.
 

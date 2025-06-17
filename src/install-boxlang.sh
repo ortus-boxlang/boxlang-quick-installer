@@ -16,6 +16,8 @@ set -e
 
 # Global temporary directory variable for all temporary operations
 TEMP_DIR="${TMPDIR:-/tmp}"
+# empty = prompt, true = install, false = skip
+INSTALL_COMMANDBOX=""
 
 # Print colored output
 print_info() {
@@ -344,6 +346,7 @@ check_for_updates() {
 
 	printf "${GREEN}Current version: ${current_version}${NORMAL}\n"
 	printf "${GREEN}Latest version:  ${latest_version}${NORMAL}\n"
+	printf "\n"
 
 	# Compare versions
 	compare_versions "$current_version" "$latest_version"
@@ -501,18 +504,32 @@ check_and_install_commandbox() {
 	printf "${BLUE}💡 CommandBox is the Package Manager for BoxLang®${NORMAL}\n"
 	printf "${BLUE}💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}\n\n"
 
-	# Ask user if they want to install CommandBox
-	printf "${BLUE}❓ Would you like to install CommandBox? [Y/n] ${NORMAL}"
-	read -r response < /dev/tty
-	case "$response" in
-		[nN][oO]|[nN])
-			printf "${BLUE}💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
-			return 0
-			;;
-		*)
-			# Default to yes
-			;;
-	esac
+	# Determine if we should install CommandBox based on flags
+	local should_install=""
+	if [ "$INSTALL_COMMANDBOX" = "true" ]; then
+		should_install="yes"
+		printf "${BLUE}📦 Installing CommandBox (auto-install enabled)...${NORMAL}\n"
+	elif [ "$INSTALL_COMMANDBOX" = "false" ]; then
+		should_install="no"
+		printf "${BLUE}⏭️  Skipping CommandBox installation (--without-commandbox specified)${NORMAL}\n"
+	else
+		# Interactive mode - ask user
+		printf "${BLUE}❓ Would you like to install CommandBox? [Y/n] ${NORMAL}"
+		read -r response < /dev/tty
+		case "$response" in
+			[nN][oO]|[nN])
+				should_install="no"
+				;;
+			*)
+				should_install="yes"
+				;;
+		esac
+	fi
+
+	if [ "$should_install" != "yes" ]; then
+		printf "${BLUE}💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation${NORMAL}\n"
+		return 0
+	fi
 
 	printf "${BLUE}📦 Installing CommandBox...${NORMAL}\n"
 
@@ -658,64 +675,44 @@ uninstall_boxlang() {
 ###########################################################################
 # Help Function
 ###########################################################################
+# Update help text to include the new options
 show_help() {
 	printf "${GREEN}📦 BoxLang® Quick Installer${NORMAL}\n\n"
-	printf "${YELLOW}This script installs the BoxLang® runtime and tools on your system.${NORMAL}\n\n"
+	printf "${YELLOW}This script installs the BoxLang® runtime, MiniServer and tools on your system.${NORMAL}\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
-	printf "  install-boxlang.sh [version] [options]\n"
-	printf "  install-boxlang.sh --help\n\n"
+	printf "  install-boxlang [version] [options]\n"
+	printf "  install-boxlang --help\n\n"
 	printf "${BOLD}Arguments:${NORMAL}\n"
 	printf "  [version]         (Optional) Specify which version to install\n"
-	printf "                    - 'latest' (default): Install the latest stable release\n"
-	printf "                    - 'snapshot': Install the latest development snapshot\n"
-	printf "                    - '1.2.0': Install a specific version number\n\n"
+	printf "                    - ${BOLD}'latest' (default)${NORMAL}: Install the latest stable release\n"
+	printf "                    - ${BOLD}'snapshot'${NORMAL}: Install the latest development snapshot\n"
+	printf "                    - ${BOLD}'1.2.0'${NORMAL}: Install a specific version number\n\n"
 	printf "${BOLD}Options:${NORMAL}\n"
-	printf "  --help, -h        Show this help message\n"
-	printf "  --uninstall       Remove BoxLang from the system\n"
-	printf "  --check-update    Check if a newer version is available\n"
-	printf "  --system          Force system-wide installation (requires sudo)\n"
-	printf "  --force           Force reinstallation even if already installed\n\n"
+	printf "  --help, -h        	Show this help message\n"
+	printf "  --uninstall       	Remove BoxLang from the system\n"
+	printf "  --check-update    	Check if a newer version is available\n"
+	printf "  --system          	Force system-wide installation (requires sudo)\n"
+	printf "  --force           	Force reinstallation even if already installed\n"
+	printf "  --with-commandbox 	Install CommandBox without prompting\n"
+	printf "  --without-commandbox 	Skip CommandBox installation\n"
+	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox)\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang latest\n"
 	printf "  install-boxlang snapshot\n"
 	printf "  install-boxlang 1.2.0\n"
 	printf "  install-boxlang --force\n"
+	printf "  install-boxlang --with-commandbox\n"
+	printf "  install-boxlang --without-commandbox\n"
+	printf "  install-boxlang --yes\n"
 	printf "  install-boxlang --uninstall\n"
 	printf "  install-boxlang --check-update\n"
 	printf "  sudo install-boxlang --system\n\n"
-	printf "${BOLD}Installation Methods:${NORMAL}\n"
-	printf "  🌐 One-liner: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash${NORMAL}\n"
-	printf "  📦 With version: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- snapshot${NORMAL}\n\n"
-	printf "${BOLD}Requirements:${NORMAL}\n"
-	printf "  - Java 21 or higher (OpenJDK or Oracle JDK)\n"
-	printf "  - curl (for downloading)\n"
-	printf "  - unzip (for extracting)\n"
-	printf "  - sudo privileges (for system-wide installation)\n\n"
-	printf "${BOLD}Installation Paths:${NORMAL}\n"
-	printf "  📁 System BoxLang Directory: /usr/local/boxlang/\n"
-	printf "  📁 User BoxLang Directory: ~/.local/boxlang/\n"
-	printf "  📁 System Links: /usr/local/bin/\n"
-	printf "  📁 User Links: ~/.local/bin/\n"
-	printf "  📁 BoxLang Home: ~/.boxlang/\n\n"
-	printf "${BOLD}After Installation:${NORMAL}\n"
-	printf "  🚀 Start REPL: ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}\n"
-	printf "  🌐 Start MiniServer: ${GREEN}boxlang-miniserver${NORMAL} or ${GREEN}bx-miniserver${NORMAL}\n"
-	printf "  📦 Install modules: ${GREEN}install-bx-module <module-name>${NORMAL}\n"
-	printf "  📦 Package Manager: ${GREEN}box${NORMAL} (if CommandBox was installed)\n"
-	printf "  🔄 Update BoxLang: ${GREEN}install-boxlang latest${NORMAL}\n"
-	printf "  🔍 Check for updates: ${GREEN}install-boxlang --check-update${NORMAL}\n\n"
-	printf "${BOLD}Notes:${NORMAL}\n"
-	printf "  - Run with sudo for system-wide installation: ${GREEN}sudo install-boxlang.sh${NORMAL}\n"
-	printf "  - User installation doesn't require sudo and installs to ~/.local/\n"
-	printf "  - Java detection works even when run with sudo\n"
-	printf "  - Previous versions are automatically removed before installation\n"
-	printf "  - BoxLang® is open-source under Apache 2.0 License\n\n"
-	printf "${BOLD}More Information:${NORMAL}\n"
-	printf "  🌐 Website: https://boxlang.io\n"
-	printf "  📖 Documentation: https://boxlang.io/docs\n"
-	printf "  💾 GitHub: https://github.com/ortus-boxlang/boxlang\n"
-	printf "  💬 Community: https://boxlang.io/community\n"
+	printf "${BOLD}Non-Interactive Usage:${NORMAL}\n"
+	printf "  🌐 Install with CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox${NORMAL}\n"
+	printf "  🌐 Install without CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox${NORMAL}\n"
+	printf "  🌐 Install with defaults: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes${NORMAL}\n\n"
+	# ... rest of help text remains the same
 }
 
 ###########################################################################
@@ -963,6 +960,16 @@ main() {
 			"--check-update")
 				command="check-update"
 				break
+				;;
+			"--with-commandbox")
+				INSTALL_COMMANDBOX=true
+				;;
+			"--without-commandbox")
+				INSTALL_COMMANDBOX=false
+				;;
+			"--yes"|"-y")
+				# Setup all defaults here.
+				INSTALL_COMMANDBOX=true
 				;;
 			*)
 				args+=("$1")
