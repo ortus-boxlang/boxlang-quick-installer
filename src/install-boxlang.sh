@@ -33,7 +33,7 @@ else
 
 	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
 		chmod +x "$helpers_file"
-		cat $helpers_file
+		cat "$helpers_file"
 		source "$helpers_file"
 		printf "${GREEN}✅ Helper functions downloaded successfully${NORMAL}\n"
 	else
