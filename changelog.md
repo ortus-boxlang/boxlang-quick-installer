@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--version/-v` flag to all commands to show the version of the command.
 - Encapsulation with helper functions in `helpers/helpers.sh` for better code organization.
 - Experimental BoxLang Version Manager (`bvm`) to manage multiple BoxLang versions.
 - Updated `preflight_check` to beginning to make sure we don't leave folders behind.

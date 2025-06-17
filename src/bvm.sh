@@ -14,10 +14,11 @@ set -e
 source ./helpers/helpers.sh
 
 # Global Variables
-BVM_VERSION="1.0.0"
+BVM_VERSION="@build.version@"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
 BVM_CACHE_DIR="$BVM_HOME/cache"
 BVM_VERSIONS_DIR="$BVM_HOME/versions"
+BVM_SCRIPTS_DIR="$BVM_HOME/scripts"
 BVM_CURRENT_LINK="$BVM_HOME/current"
 BVM_CONFIG_FILE="$BVM_HOME/config"
 
@@ -35,66 +36,9 @@ INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
 # Utility Functions
 ###########################################################################
 
-
 # Ensure BVM directories exist
 ensure_bvm_dirs() {
-    mkdir -p "$BVM_HOME" "$BVM_CACHE_DIR" "$BVM_VERSIONS_DIR"
-}
-
-# Check prerequisites
-check_prerequisites() {
-    local missing_deps=()
-
-    command_exists curl || missing_deps+=("curl")
-    command_exists unzip || missing_deps+=("unzip")
-    command_exists jq || missing_deps+=("jq")
-
-    if [ ${#missing_deps[@]} -ne 0 ]; then
-        print_error "Missing required dependencies: ${missing_deps[*]}"
-        print_info "Please install the missing dependencies and try again"
-        return 1
-    fi
-
-    return 0
-}
-
-# Extract semantic version from version string
-extract_version() {
-    local version_string="$1"
-    echo "$version_string" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
-}
-
-# Compare two semantic versions
-# Returns: 0 if equal, 1 if v1 > v2, 2 if v1 < v2
-compare_versions() {
-    local v1="$1"
-    local v2="$2"
-
-    if [ "$v1" = "$v2" ]; then
-        return 0
-    fi
-
-    local IFS='.'
-    local i v1_array=($v1) v2_array=($v2)
-
-    # Fill empty fields with zeros
-    for ((i=${#v1_array[@]}; i<${#v2_array[@]}; i++)); do
-        v1_array[i]=0
-    done
-    for ((i=${#v2_array[@]}; i<${#v1_array[@]}; i++)); do
-        v2_array[i]=0
-    done
-
-    for ((i=0; i<${#v1_array[@]}; i++)); do
-        if ((10#${v1_array[i]} > 10#${v2_array[i]})); then
-            return 1
-        fi
-        if ((10#${v1_array[i]} < 10#${v2_array[i]})); then
-            return 2
-        fi
-    done
-
-    return 0
+    mkdir -p "$BVM_HOME" "$BVM_CACHE_DIR" "$BVM_VERSIONS_DIR" "$BVM_SCRIPTS_DIR"
 }
 
 ###########################################################################
@@ -122,8 +66,6 @@ show_help() {
     printf "  ${GREEN}exec${NORMAL} <args>          Execute BoxLang with current version\n"
     printf "  ${GREEN}run${NORMAL} <args>           Alias for exec\n"
     printf "  ${GREEN}miniserver${NORMAL} <args>    Start BoxLang MiniServer\n"
-    printf "  ${GREEN}module${NORMAL} <args>        Run install-bx-module script\n"
-    printf "  ${GREEN}site${NORMAL} <args>          Run install-bx-site script\n"
     printf "  ${GREEN}clean${NORMAL}                Clean cache and temporary files\n"
     printf "  ${GREEN}doctor${NORMAL}               Check BVM installation health\n"
     printf "  ${GREEN}version${NORMAL}              Show BVM version\n"
@@ -138,8 +80,6 @@ show_help() {
     printf "  bvm exec --version\n"
     printf "  bvm run --help\n"
     printf "  bvm miniserver --port 8080\n"
-    printf "  bvm module bx-orm\n"
-    printf "  bvm site mysite\n"
     printf "  bvm clean\n"
     printf "  bvm doctor\n"
     printf "  bvm uninstall 1.1.0\n\n"
@@ -468,30 +408,6 @@ exec_miniserver() {
     exec "$miniserver_bin" "$@"
 }
 
-# Execute install-bx-module script from BVM installation
-exec_module_installer() {
-    local module_script="$BVM_HOME/scripts/install-bx-module.sh"
-    if [ ! -x "$module_script" ]; then
-        print_error "install-bx-module.sh not found in BVM installation"
-        print_info "Try reinstalling BVM to get the latest helper scripts"
-        return 1
-    fi
-
-    exec "$module_script" "$@"
-}
-
-# Execute install-bx-site script from BVM installation
-exec_site_installer() {
-    local site_script="$BVM_HOME/scripts/install-bx-site.sh"
-    if [ ! -x "$site_script" ]; then
-        print_error "install-bx-site.sh not found in BVM installation"
-        print_info "Try reinstalling BVM to get the latest helper scripts"
-        return 1
-    fi
-
-    exec "$site_script" "$@"
-}
-
 # Clean cache and temporary files
 clean_cache() {
     print_info "Cleaning BVM cache and temporary files..."
@@ -661,11 +577,6 @@ main() {
 
 	setup_colors
 
-    # Check prerequisites
-    if ! check_prerequisites; then
-        exit 1
-    fi
-
     case "$command" in
         "install")
             install_version "$1"
@@ -693,12 +604,6 @@ main() {
             ;;
         "miniserver"|"mini-server"|"ms")
             exec_miniserver "$@"
-            ;;
-        "module"|"mod")
-            exec_module_installer "$@"
-            ;;
-        "site")
-            exec_site_installer "$@"
             ;;
         "clean")
             clean_cache

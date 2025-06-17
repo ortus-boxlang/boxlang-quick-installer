@@ -14,7 +14,8 @@ set -e
 # Global Variables + Helpers
 ###########################################################################
 
-# Global temporary directory variable for all temporary operations
+# Global Variables
+INSTALLER_VERSION="@build.version@"
 TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
@@ -451,7 +452,7 @@ uninstall_boxlang() {
 # Help Function
 ###########################################################################
 show_help() {
-	printf "${GREEN}📦 BoxLang® Quick Installer${NORMAL}\n\n"
+	printf "${GREEN}📦 BoxLang® Quick Installer v${INSTALLER_VERSION}${NORMAL}\n\n"
 	printf "${YELLOW}This script installs the BoxLang® runtime, MiniServer and tools on your system.${NORMAL}\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
 	printf "  install-boxlang [version] [options]\n"
@@ -751,6 +752,10 @@ main() {
 				command="check-update"
 				break
 				;;
+			"--version"|"-v")
+				command="version"
+				break
+				;;
 			"--with-commandbox")
 				INSTALL_COMMANDBOX=true
 				;;
@@ -767,6 +772,9 @@ main() {
 		esac
 		shift
 	done
+
+	echo $command
+	exit;
 
 	# If no command was specified, it's an install operation
 	if [ -z "$command" ]; then
@@ -786,6 +794,10 @@ main() {
 			;;
 		"install")
 			install_boxlang "${args[@]}"
+			;;
+		"version")
+			# Print the installer version
+			printf "${GREEN}BoxLang Installer Version: ${INSTALLER_VERSION}${NORMAL}\n"
 			;;
 		*)
 			printf "${RED}❌ Unknown command: $command${NORMAL}\n"
