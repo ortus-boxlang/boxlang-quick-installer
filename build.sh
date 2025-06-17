@@ -158,7 +158,6 @@ main() {
     cp -v changelog.md build/changelog.md
     cp -v version.json build/version.json
 
-
 	local INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
     # If snapshot build, append prefix to URL in the following files
 	# build/install-boxlang.sh
@@ -166,8 +165,11 @@ main() {
 	# build/install-bvm.sh
     if [[ "${1:-}" == "--snapshot" ]]; then
         log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
+		log_info "boxlang.sh"
 		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+		log_info "boxlang.ps1"
 		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+		log_info "bvm.sh"
 		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
 	else
 		log_info "Standard build detected, using default installer URL..."
