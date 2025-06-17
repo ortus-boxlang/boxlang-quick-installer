@@ -761,6 +761,14 @@ install_boxlang() {
 	fi
 
 	###########################################################################
+	# Pre-flight Checks
+	# This function checks for necessary tools and environment
+	###########################################################################
+	if ! preflight_check; then
+		exit 1
+	fi
+
+	###########################################################################
 	# Setup Installation Directories
 	###########################################################################
 	# These are the system-wide installation directories
@@ -806,14 +814,6 @@ install_boxlang() {
 		printf "\n"
 		SYSTEM_HOME="$HOME/.local/boxlang"
 		SYSTEM_BIN="$HOME/.local/bin"
-	fi
-
-	###########################################################################
-	# Pre-flight Checks
-	# This function checks for necessary tools and environment
-	###########################################################################
-	if ! preflight_check; then
-		exit 1
 	fi
 
 	###########################################################################
