@@ -421,7 +421,6 @@ clean_cache() {
 
     # Clean any temporary files
     rm -f /tmp/bvm_* 2>/dev/null || true
-
     print_success "Cleanup complete"
 }
 
