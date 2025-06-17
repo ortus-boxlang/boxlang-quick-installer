@@ -775,9 +775,6 @@ main() {
 		shift
 	done
 
-	echo $command
-	exit;
-
 	# If no command was specified, it's an install operation
 	if [ -z "$command" ]; then
 		command="install"
@@ -811,5 +808,4 @@ main() {
 }
 
 # Run main function
-echo "Running BoxLang Installer..."
 main "$@"
