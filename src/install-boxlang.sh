@@ -811,4 +811,5 @@ main() {
 }
 
 # Run main function
+echo "Running BoxLang Installer..."
 main "$@"
