@@ -10,9 +10,6 @@ set -e
 # Global Variables + Helpers
 ###########################################################################
 
-# Include the helper functions
-source ./helpers/helpers.sh
-
 # Global Variables
 BVM_VERSION="@build.version@"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
@@ -31,6 +28,9 @@ SNAPSHOT_URL="$DOWNLOAD_BASE_URL/boxlang-snapshot.zip"
 LATEST_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-latest.zip"
 SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
+
+# Helpers
+source "${BVM_HOME}/scripts/helpers/helpers.sh"
 
 ###########################################################################
 # Utility Functions
@@ -57,6 +57,7 @@ show_help() {
     printf "                         - 'latest': Install latest stable release\n"
     printf "                         - 'snapshot': Install latest development snapshot\n"
     printf "                         - '1.2.0': Install specific version\n"
+    printf "                         Use --force to reinstall an existing version\n"
     printf "  ${GREEN}use${NORMAL} <version>         Switch to a specific BoxLang version\n"
     printf "  ${GREEN}current${NORMAL}               Show currently active BoxLang version\n"
     printf "  ${GREEN}list${NORMAL}                  List all installed BoxLang versions\n"
@@ -74,6 +75,7 @@ show_help() {
     printf "${BOLD}EXAMPLES:${NORMAL}\n"
     printf "  bvm install latest\n"
     printf "  bvm install 1.2.0\n"
+    printf "  bvm install latest --force\n"
     printf "  bvm use 1.2.0\n"
     printf "  bvm list\n"
     printf "  bvm current\n"
@@ -107,21 +109,11 @@ list_remote_versions() {
         printf "  snapshot (development build)\n"
 
         # Parse GitHub releases
-        if command_exists jq; then
-            jq -r '.[].tag_name' "$temp_file" 2>/dev/null | head -10 | while read -r version; do
-                if [ -n "$version" ] && [ "$version" != "null" ]; then
-                    printf "  %s\n" "$version"
-                fi
-            done
-        else
-            # Fallback without jq
-            grep -o '"tag_name":[^,]*' "$temp_file" | cut -d'"' -f4 | head -10 | while read -r version; do
-                if [ -n "$version" ]; then
-                    printf "  %s\n" "$version"
-                fi
-            done
-        fi
-
+		jq -r '.[].tag_name' "$temp_file" 2>/dev/null | head -10 | while read -r version; do
+			if [ -n "$version" ] && [ "$version" != "null" ]; then
+				printf "  %s\n" "$version"
+			fi
+		done
         rm -f "$temp_file"
     else
         print_warning "Could not fetch remote versions"
@@ -194,6 +186,7 @@ show_which() {
 # Install a BoxLang version
 install_version() {
     local version="$1"
+    local force_install="$2"
 
     if [ -z "$version" ]; then
         print_error "Please specify a version to install"
@@ -205,11 +198,19 @@ install_version() {
 
     local version_dir="$BVM_VERSIONS_DIR/$version"
 
-    # Check if version is already installed
-    if [ -d "$version_dir" ]; then
+    # Check if version is already installed (unless force is used)
+    if [ -d "$version_dir" ] && [ "$force_install" != "--force" ]; then
         print_warning "BoxLang $version is already installed"
         print_info "Use 'bvm use $version' to switch to this version"
+        print_info "Use 'bvm install $version --force' to reinstall"
         return 0
+    fi
+
+    # If force install and version exists, remove it first
+    if [ -d "$version_dir" ] && [ "$force_install" = "--force" ]; then
+        print_info "Force reinstalling BoxLang $version..."
+        print_info "Removing existing installation..."
+        rm -rf "$version_dir"
     fi
 
     print_info "Installing BoxLang $version..."
@@ -246,7 +247,7 @@ install_version() {
 
     # Download BoxLang runtime
     print_info "Downloading BoxLang runtime from $boxlang_url"
-    if ! curl -fsSL "$boxlang_url" -o "$boxlang_cache"; then
+    if ! env curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
         rm -rf "$version_dir"
         return 1
@@ -254,7 +255,7 @@ install_version() {
 
     # Download BoxLang MiniServer
     print_info "Downloading BoxLang MiniServer from $miniserver_url"
-    if ! curl -fsSL "$miniserver_url" -o "$miniserver_cache"; then
+    if ! env curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
         rm -rf "$version_dir"
         return 1
@@ -593,7 +594,20 @@ main() {
 
     case "$command" in
         "install")
-            install_version "$1"
+            # Handle --force flag for install command
+            local version="$1"
+            local force_flag=""
+
+            # Check if second argument is --force
+            if [ "$2" = "--force" ]; then
+                force_flag="--force"
+            # Check if first argument is --force (version comes second)
+            elif [ "$1" = "--force" ]; then
+                force_flag="--force"
+                version="$2"
+            fi
+
+            install_version "$version" "$force_flag"
             ;;
         "use")
             use_version "$1"
