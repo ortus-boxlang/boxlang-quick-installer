@@ -165,13 +165,18 @@ main() {
 	# build/install-bvm.sh
     if [[ "${1:-}" == "--snapshot" ]]; then
         log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
-		log_info "boxlang.sh"
-		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
-		log_info "boxlang.ps1"
-		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
-		log_info "bvm.sh"
-		sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
-	else
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS requires empty string after -i
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+        else
+            # Linux doesn't use empty string after -i
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+        fi
+    else
 		log_info "Standard build detected, using default installer URL..."
     fi
 
