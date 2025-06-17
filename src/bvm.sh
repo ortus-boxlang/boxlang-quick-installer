@@ -107,21 +107,11 @@ list_remote_versions() {
         printf "  snapshot (development build)\n"
 
         # Parse GitHub releases
-        if command_exists jq; then
-            jq -r '.[].tag_name' "$temp_file" 2>/dev/null | head -10 | while read -r version; do
-                if [ -n "$version" ] && [ "$version" != "null" ]; then
-                    printf "  %s\n" "$version"
-                fi
-            done
-        else
-            # Fallback without jq
-            grep -o '"tag_name":[^,]*' "$temp_file" | cut -d'"' -f4 | head -10 | while read -r version; do
-                if [ -n "$version" ]; then
-                    printf "  %s\n" "$version"
-                fi
-            done
-        fi
-
+		jq -r '.[].tag_name' "$temp_file" 2>/dev/null | head -10 | while read -r version; do
+			if [ -n "$version" ] && [ "$version" != "null" ]; then
+				printf "  %s\n" "$version"
+			fi
+		done
         rm -f "$temp_file"
     else
         print_warning "Could not fetch remote versions"
@@ -246,7 +236,7 @@ install_version() {
 
     # Download BoxLang runtime
     print_info "Downloading BoxLang runtime from $boxlang_url"
-    if ! curl -fsSL "$boxlang_url" -o "$boxlang_cache"; then
+    if ! env curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
         rm -rf "$version_dir"
         return 1
@@ -254,7 +244,7 @@ install_version() {
 
     # Download BoxLang MiniServer
     print_info "Downloading BoxLang MiniServer from $miniserver_url"
-    if ! curl -fsSL "$miniserver_url" -o "$miniserver_cache"; then
+    if ! env curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
         rm -rf "$version_dir"
         return 1
