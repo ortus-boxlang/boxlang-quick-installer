@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2025-06-17
+
 ### Fixed
 
 - `bvm` can't find source helpers in the `helpers` directory, you need the full path to the helper functions.
@@ -153,7 +155,9 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.1...HEAD
+
+[1.12.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...v1.12.1
 
 [1.12.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.11.0...v1.12.0
 
