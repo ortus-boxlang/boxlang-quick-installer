@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2025-06-17
+
+## [1.11.0] - 2025-06-11
+
 ### Added
 
 - `--version/-v` flag to all commands to show the version of the command.
@@ -147,7 +151,9 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...HEAD
+
+[1.12.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.11.0...v1.12.0
 
 [1.11.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.10.0...v1.11.0
 
