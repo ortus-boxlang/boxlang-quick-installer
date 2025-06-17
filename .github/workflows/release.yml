@@ -53,7 +53,7 @@ jobs:
 
       - name: Build the Installer
         run: |
-          ./build.sh
+          ./build.sh ${{ env.SNAPSHOT == 'true' && '--snapshot' || '' }}
 
       - name: Commit Changelog [unreleased] with latest version
         uses: EndBug/add-and-commit@v9.1.4

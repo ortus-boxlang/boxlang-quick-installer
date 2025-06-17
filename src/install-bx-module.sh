@@ -6,8 +6,21 @@
 # Version: @build.version@
 # License: Apache License, Version 2.0
 
+set -e
+
+###########################################################################
+# Global Variables + Helpers
+###########################################################################
+
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
+
+# Include the helper functions
+source ./helpers/helpers.sh
+
+###########################################################################
+# ACTION FUNCTIONS
+###########################################################################
 
 parse_module_list() {
 	local modules=()
@@ -197,7 +210,7 @@ install_module() {
 	fi
 
 	# Check curl existence
-	command -v curl >/dev/null 2>&1 || {
+	command_exists curl || {
 		printf "${RED}❌ Error: curl is required but not installed${NORMAL}\n"
 		exit 1
 	}
@@ -348,28 +361,7 @@ remove_module() {
 }
 
 main() {
-	# Use colors if the terminal supports them
-	if which tput >/dev/null 2>&1; then
-		ncolors=$(tput colors)
-	fi
-	if [ -t 1 ] && [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
-		RED="$(tput setaf 1)"
-		GREEN="$(tput setaf 2)"
-		YELLOW="$(tput setaf 3)"
-		BLUE="$(tput setaf 4)"
-		BOLD="$(tput bold)"
-		NORMAL="$(tput sgr0)"
-	else
-		RED=""
-		GREEN=""
-		YELLOW=""
-		BLUE=""
-		BOLD=""
-		NORMAL=""
-	fi
-
-	# Enable exit-on-error
-	set -e
+	setup_colors
 
 	# Check if no arguments are passed
 	if [ $# -eq 0 ]; then

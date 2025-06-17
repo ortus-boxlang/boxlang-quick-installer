@@ -136,7 +136,7 @@ main() {
 
     # Get version from version.json
     local version=$(jq -r '.INSTALLER_VERSION' version.json)
-    log_info "Building version: $version"
+    log_info "Building version: [$version]"
 
     # Cleanup previous builds
     log_info "Cleaning up previous builds..."
@@ -157,6 +157,30 @@ main() {
     log_info "Copying additional files..."
     cp -v changelog.md build/changelog.md
     cp -v version.json build/version.json
+
+	local INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
+    # If snapshot build, append prefix to URL in the following files
+	# build/install-boxlang.sh
+	# build/install-boxlang.ps1
+	# build/install-bvm.sh
+    if [[ "${1:-}" == "--snapshot" ]]; then
+        log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS requires empty string after -i
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+			sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
+        else
+            # Linux doesn't use empty string after -i
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+			sed -i "s|@build.version@|${version}|g" build/bvm.sh
+        fi
+    else
+		log_info "Standard build detected, using default installer URL..."
+    fi
 
     # Generate checksums (excluding checksum files themselves)
     generate_checksums "build" ".tmp"

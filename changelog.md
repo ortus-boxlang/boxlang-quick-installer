@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--version/-v` flag to all commands to show the version of the command.
+- Encapsulation with helper functions in `helpers/helpers.sh` for better code organization.
+- Experimental BoxLang Version Manager (`bvm`) to manage multiple BoxLang versions.
+- Updated `preflight_check` to beginning to make sure we don't leave folders behind.
+- Added non interactive mode to the `install-boxlang` command by using the `--yes, -y` flag for all prompts.
+- Added `--with-commandbox` flag to the `install-boxlang` command to install CommandBox automatically.
+- Added `--without-commandbox` flag to the `install-boxlang` command to skip CommandBox installation.
+- Do not ask the user for the path portions, just add it, if not it doesn't work anyways
+- Snapshot builds now detect it and update the url accordingly for the quick installer
+- `install-boxlang` refactoring to be similar to all scripts.
+
+## [1.11.0] - 2025-06-11
+
+### Added
+
 - Improved the `install-bx-module` so when no module is defined, show the help message.
 - Add support for `be` or `snapshot` versions of modules.
 

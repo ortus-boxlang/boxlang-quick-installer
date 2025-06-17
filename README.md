@@ -83,6 +83,15 @@ Here is the [contribution guide](CONTRIBUTING.md) for this project.
 
 This project is licensed under the [Apache License, Version 2.0](LICENSE).
 
+## Support
+
+- 🌐 Website: https://boxlang.io
+- 📖 Documentation: https://boxlang.io/docs
+- 💾 GitHub: https://github.com/ortus-boxlang/boxlang
+- 💬 Community: https://boxlang.io/community
+- 🧑‍💻 Try: https://try.boxlang.io
+- 🫶 Professional Support: https://boxlang.io/plans
+
 ----
 
 Made with ♥️ in USA 🇺🇸, El Salvador 🇸🇻 and Spain 🇪🇸
