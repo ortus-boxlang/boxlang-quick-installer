@@ -425,118 +425,18 @@ clean_cache() {
     print_success "Cleanup complete"
 }
 
+###########################################################################
 # Check BVM installation health
+###########################################################################
 check_health() {
-    print_header "BVM Health Check"
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_header "❤️‍🔥 BVM Health Check ❤️‍🔥"
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
     printf "\n"
 
     local issues=0
 
-    # Check BVM home directory
-    if [ -d "$BVM_HOME" ]; then
-        print_success "BVM home directory exists: $BVM_HOME"
-    else
-        print_error "BVM home directory missing: $BVM_HOME"
-        ((issues++))
-    fi
-
-    # Check versions directory
-    if [ -d "$BVM_VERSIONS_DIR" ]; then
-        print_success "Versions directory exists: $BVM_VERSIONS_DIR"
-        local version_count=$(find "$BVM_VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-        print_info "Installed versions: $version_count"
-    else
-        print_warning "Versions directory missing: $BVM_VERSIONS_DIR"
-        mkdir -p "$BVM_VERSIONS_DIR"
-        print_info "Created versions directory"
-    fi
-
-    # Check cache directory
-    if [ -d "$BVM_CACHE_DIR" ]; then
-        print_success "Cache directory exists: $BVM_CACHE_DIR"
-    else
-        print_warning "Cache directory missing: $BVM_CACHE_DIR"
-        mkdir -p "$BVM_CACHE_DIR"
-        print_info "Created cache directory"
-    fi
-
-    # Check current version link
-    if [ -L "$BVM_CURRENT_LINK" ]; then
-        if [ -e "$BVM_CURRENT_LINK" ]; then
-            local current_version=$(basename "$(readlink "$BVM_CURRENT_LINK")")
-            print_success "Current version link is valid: $current_version"
-
-            # Check if BoxLang executable exists
-            local boxlang_bin="$BVM_CURRENT_LINK/bin/boxlang"
-            if [ -x "$boxlang_bin" ]; then
-                print_success "BoxLang executable is accessible"
-
-                # Try to get version
-                if "$boxlang_bin" --version >/dev/null 2>&1; then
-                    print_success "BoxLang executable works correctly"
-                else
-                    print_warning "BoxLang executable may have issues"
-                    ((issues++))
-                fi
-            else
-                print_error "BoxLang executable not found or not executable"
-                ((issues++))
-            fi
-
-            # Check other expected binaries
-            local expected_binaries=(
-                "bx"
-                "boxlang-miniserver"
-                "bx-miniserver"
-            )
-
-            local missing_binaries=()
-            for binary in "${expected_binaries[@]}"; do
-                if [ ! -e "$BVM_CURRENT_LINK/bin/$binary" ]; then
-                    missing_binaries+=("$binary")
-                fi
-            done
-
-            if [ ${#missing_binaries[@]} -eq 0 ]; then
-                print_success "All expected binaries are present"
-            else
-                print_warning "Missing binaries: ${missing_binaries[*]}"
-                print_info "Some features may not be available"
-            fi
-        else
-            print_error "Current version link is broken"
-            rm -f "$BVM_CURRENT_LINK"
-            print_info "Removed broken link"
-            ((issues++))
-        fi
-    else
-        print_warning "No current version set"
-        print_info "Use 'bvm use <version>' to set a current version"
-    fi
-
-    # Check BVM helper scripts (these are version-independent)
-    print_info "Checking BVM helper scripts..."
-    local bvm_scripts_dir="$BVM_HOME/scripts"
-    local expected_bvm_scripts=(
-        "install-bx-module.sh"
-        "install-bx-site.sh"
-    )
-
-    local missing_bvm_scripts=()
-    for script in "${expected_bvm_scripts[@]}"; do
-        if [ ! -x "$bvm_scripts_dir/$script" ]; then
-            missing_bvm_scripts+=("$script")
-        fi
-    done
-
-    if [ ${#missing_bvm_scripts[@]} -eq 0 ]; then
-        print_success "All BVM helper scripts are present"
-    else
-        print_warning "Missing BVM helper scripts: ${missing_bvm_scripts[*]}"
-        print_info "Reinstall BVM to get the latest helper scripts"
-    fi
-
-    # Check prerequisites
+	# Check prerequisites
     print_info "Checking prerequisites..."
     local missing_deps=()
     command_exists curl || missing_deps+=("curl")
@@ -559,12 +459,127 @@ check_health() {
         print_info "Java 21+ is required to run BoxLang"
     fi
 
-    printf "\n"
-    if [ $issues -eq 0 ]; then
-        print_success "BVM installation is healthy!"
+    # Check BVM home directory
+    if [ -d "$BVM_HOME" ]; then
+        print_success "BVM home directory exists: $BVM_HOME"
     else
-        print_warning "Found $issues issue(s) - some functionality may be limited"
+        print_error "BVM home directory missing: $BVM_HOME"
+        ((issues++))
     fi
+
+    # Check versions directory
+    if [ -d "$BVM_VERSIONS_DIR" ]; then
+        print_success "Versions directory exists: $BVM_VERSIONS_DIR"
+        local version_count=$(find "$BVM_VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+        print_info "Installed versions: $version_count"
+    else
+        print_warning "Versions directory missing: $BVM_VERSIONS_DIR"
+        mkdir -p "$BVM_VERSIONS_DIR"
+        print_info "📁 Created versions directory"
+    fi
+
+    # Check cache directory
+    if [ -d "$BVM_CACHE_DIR" ]; then
+        print_success "Cache directory exists: $BVM_CACHE_DIR"
+    else
+        print_warning "Cache directory missing: $BVM_CACHE_DIR"
+        mkdir -p "$BVM_CACHE_DIR"
+        print_info "📁 Created cache directory"
+    fi
+
+    # Check current version link
+    if [ -L "$BVM_CURRENT_LINK" ]; then
+        if [ -e "$BVM_CURRENT_LINK" ]; then
+            local current_version=$(basename "$(readlink "$BVM_CURRENT_LINK")")
+            print_success "⚡ Current version link is valid: $current_version"
+
+            # Check if BoxLang executable exists
+            local boxlang_bin="$BVM_CURRENT_LINK/bin/boxlang"
+            if [ -x "$boxlang_bin" ]; then
+                print_success "⚡ BoxLang executable is accessible"
+
+                # Try to get version
+                if "$boxlang_bin" --version >/dev/null 2>&1; then
+                    print_success "⚡ BoxLang executable works correctly"
+                else
+                    print_warning "⚡ BoxLang executable may have issues"
+                    ((issues++))
+                fi
+            else
+                print_error "⚡ BoxLang executable not found or not executable"
+                ((issues++))
+            fi
+
+            # Check other expected binaries
+            local expected_binaries=(
+                "bx"
+                "boxlang-miniserver"
+                "bx-miniserver"
+            )
+
+            local missing_binaries=()
+            for binary in "${expected_binaries[@]}"; do
+                if [ ! -e "$BVM_CURRENT_LINK/bin/$binary" ]; then
+                    missing_binaries+=("$binary")
+                fi
+            done
+
+            if [ ${#missing_binaries[@]} -eq 0 ]; then
+                print_success "👊 All expected binaries are present"
+            else
+                print_warning "Missing binaries: ${missing_binaries[*]}"
+                print_info "Some features may not be available"
+            fi
+        else
+            print_error "Current version link is broken"
+            rm -f "$BVM_CURRENT_LINK"
+            print_info "Removed broken link"
+            ((issues++))
+        fi
+    else
+        print_warning "No current version set"
+        print_info "Use 'bvm use <version>' to set a current version"
+    fi
+
+    # Check BVM helper scripts
+	if [ -d "$BVM_SCRIPTS_DIR" ]; then
+        print_success "Scripts directory exists: $BVM_SCRIPTS_DIR"
+    else
+        print_warning "Scripts directory missing: $BVM_SCRIPTS_DIR"
+        mkdir -p "$BVM_SCRIPTS_DIR"
+        print_info "📁 Created scripts directory"
+    fi
+    print_info "Checking BVM helper scripts..."
+    local bvm_scripts_dir="${BVM_SCRIPTS_DIR}"
+    local expected_bvm_scripts=(
+        "install-bx-module.sh"
+        "install-bx-site.sh"
+		"install-bvm.sh"
+		"bvm.sh"
+    )
+
+    local missing_bvm_scripts=()
+    for script in "${expected_bvm_scripts[@]}"; do
+        if [ ! -x "$bvm_scripts_dir/$script" ]; then
+            missing_bvm_scripts+=("$script")
+        fi
+    done
+
+    if [ ${#missing_bvm_scripts[@]} -eq 0 ]; then
+        print_success "👊 All BVM helper scripts are present"
+    else
+        print_warning "Missing BVM helper scripts: ${missing_bvm_scripts[*]}"
+        print_info "Reinstall BVM to get the latest helper scripts"
+    fi
+
+    printf "\n"
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    if [ $issues -eq 0 ]; then
+        print_success "❤️‍🔥 BVM installation is healthy!"
+    else
+        print_warning "Found [$issues] issue(s) - some functionality may be limited"
+    fi
+	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 }
 
 ###########################################################################
