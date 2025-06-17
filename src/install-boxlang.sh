@@ -32,6 +32,8 @@ else
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
 	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
+		chmod +x "$helpers_file"
+		printf "${GREEN}✅ Helper functions downloaded successfully${NORMAL}\n"
 		source "$helpers_file"
 	else
 		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
