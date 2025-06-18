@@ -16,7 +16,11 @@ set -e
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
 # Include the helper functions
-source ./helpers/helpers.sh
+if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	source "$(dirname "$0")/helpers/helpers.sh"
+else
+	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+fi
 
 ###########################################################################
 # ACTION FUNCTIONS
