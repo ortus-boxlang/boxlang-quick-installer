@@ -55,9 +55,9 @@ install_bvm() {
 	###########################################################################
 	# Download BoxLang Installer Scripts
 	###########################################################################
-    print_info "Downloading BVM..."
+    print_info "Downloading BVM from [${INSTALLER_URL}]"
 	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		printf "${RED}🔴 Error: Download of BoxLang® Installer bundle failed${NORMAL}\n"
+		print_error "Error: Download of BoxLang® Installer bundle failed"
 		exit 1
 	}
 
