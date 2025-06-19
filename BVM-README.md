@@ -41,6 +41,48 @@ The only difference is that BVM adds version management capabilities on top.
 - 🔗 **Seamless integration** - wrapper scripts make all tools available in PATH
 - ⚡ **Command aliases** - convenient short aliases for all major commands
 - 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
+- 🎯 **Smart version detection** - automatically detects actual version numbers from installations
+
+## Version Detection & Management
+
+BVM now intelligently detects actual version numbers when installing "latest" or "snapshot" versions, providing clear and accurate version tracking.
+
+### How Version Detection Works
+
+When you install using aliases like "latest" or "snapshot", BVM:
+
+1. **Downloads the requested version** (latest stable or development snapshot)
+2. **Inspects the BoxLang JAR file** to extract the actual version number
+3. **Installs under the detected version** (e.g., `1.2.0` or `1.3.0-snapshot`)
+4. **Creates appropriate symlinks** (only for "latest" - points to the actual version)
+
+### Benefits
+
+- 🎯 **Clear version tracking** - `bvm list` shows actual version numbers, not generic aliases
+- 📋 **Accurate history** - see exactly which versions you have installed
+- 🔍 **No confusion** - distinguish between different snapshot builds
+- 🔗 **Smart symlinks** - "latest" symlink for convenience, actual versions for clarity
+
+### Example
+
+**Before** (old behavior):
+```bash
+$ bvm list
+Installed BoxLang versions:
+  * latest (current)
+    snapshot
+    1.1.0
+```
+
+**After** (new behavior):
+```bash
+$ bvm list
+Installed BoxLang versions:
+  * 1.2.0 (current)
+    latest → 1.2.0
+    1.3.0-snapshot
+    1.1.0
+```
 
 ## Quick Start
 
@@ -86,19 +128,21 @@ bvm -h
 ### Version Management
 
 - `bvm install <version>` - Install a specific BoxLang version
-  - `bvm install latest` - Install latest stable release
-  - `bvm install snapshot` - Install latest development snapshot
+  - `bvm install latest` - Install latest stable release (detects and installs actual version, e.g., `1.2.0`)
+  - `bvm install snapshot` - Install latest development snapshot (detects and installs actual version, e.g., `1.3.0-snapshot`)
   - `bvm install 1.2.0` - Install specific version
 
 - `bvm use <version>` - Switch to a specific BoxLang version
+  - Can use actual version numbers (e.g., `1.2.0`, `1.3.0-snapshot`) or `latest` symlink
 - `bvm current` - Show currently active BoxLang version
-- `bvm uninstall <version>` - Uninstall a specific BoxLang version
+- `bvm uninstall <version>` - Uninstall a specific BoxLang version (use actual version number)
   - Aliases: `bvm remove <version>`, `bvm rm <version>`
 
 ### Information
 
-- `bvm list` - List all installed BoxLang versions
+- `bvm list` - List all installed BoxLang versions (shows actual version numbers and symlinks)
   - Alias: `bvm ls`
+  - Example output: `1.2.0`, `latest → 1.2.0`, `1.3.0-snapshot`
 - `bvm list-remote` - List available BoxLang versions for download
   - Alias: `bvm ls-remote`
 - `bvm which` - Show path to current BoxLang installation
@@ -140,20 +184,31 @@ When you install a BoxLang version with BVM, it downloads and sets up:
 - **Wrapper scripts** - BVM creates wrapper scripts so you can use `boxlang`, `bx`, `boxlang-miniserver`, etc. directly
 - **Version management** - All tools automatically use the currently active BoxLang version
 - **Helper script integration** - All helper scripts work with the currently active BoxLang version
+- **Smart version detection** - Automatically detects actual version numbers from downloaded installations
 
 ## Examples
 
 ```bash
-# Install and use the latest BoxLang
-bvm install latest
-bvm use latest
+# Install and use the latest BoxLang (detects actual version)
+bvm install latest    # Downloads latest, detects version (e.g., 1.2.0), installs as 1.2.0
+bvm use latest        # Uses the latest symlink
+
+# Install a development snapshot (detects actual version)
+bvm install snapshot  # Downloads snapshot, detects version (e.g., 1.3.0-snapshot), installs as 1.3.0-snapshot
+bvm use 1.3.0-snapshot
 
 # Install a specific version
 bvm install 1.2.0
 bvm use 1.2.0
 
-# See what's installed
+# See what's installed (shows actual version numbers)
 bvm list
+# Example output:
+#   * 1.2.0 (current)
+#     latest → 1.2.0
+#     1.3.0-snapshot
+#     1.1.0
+
 # or use the short alias
 bvm ls
 
