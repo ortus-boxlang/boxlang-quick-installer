@@ -242,6 +242,17 @@ extract_semantic_version() {
 	echo "$version_string" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
 }
 
+# Check if a version string represents a snapshot version
+isSnapshotVersion() {
+	local version_string="$1"
+	# Check if version contains snapshot, beta, alpha, or other pre-release indicators
+	if [[ "$version_string" =~ (snapshot|beta|alpha|rc|SNAPSHOT|BETA|ALPHA|RC) ]]; then
+		return 0  # true - is snapshot
+	else
+		return 1  # false - is not snapshot
+	fi
+}
+
 # Compare two semantic versions (Major.Minor.Patch)
 # Returns: 0 if equal, 1 if first > second, 2 if first < second
 compare_versions() {

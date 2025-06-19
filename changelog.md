@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- BVM now stores the `latest` or `snapshot` versions with the actual version number and keep symlinks to them.
+
 ### Fixed
 
 - Do not remove optional symlinks in the `install-boxlang` command.
