@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `install-bvm` script is now also installed, so you can upgrade your BVM installation easily.
 - BVM now stores the `latest` or `snapshot` versions with the actual version number and keep symlinks to them.
 
 ### Fixed

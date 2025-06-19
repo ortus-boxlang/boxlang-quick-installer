@@ -82,6 +82,7 @@ install_bvm() {
 	# Create symlinks for install-bx-module, install-bx-site, bvm
 	ln -sf "$scripts_dir/install-bx-module.sh" "$BVM_HOME/bin/install-bx-module"
 	ln -sf "$scripts_dir/install-bx-site.sh" "$BVM_HOME/bin/install-bx-site"
+	ln -sf "$scripts_dir/install-bvm.sh" "$BVM_HOME/bin/install-bvm"
 	ln -sf "$scripts_dir/bvm.sh" "$BVM_HOME/bin/bvm"
 
     # Create convenience wrapper scripts for direct access to BoxLang tools
