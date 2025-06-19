@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Do not remove optional symlinks in the `install-boxlang` command.
 - Added `$TERM` check in case of headless systems to avoid errors in the installer scripts.
 - Fixed the `install-bx-module` to include the right helpers.
 

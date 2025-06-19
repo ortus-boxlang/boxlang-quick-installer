@@ -23,7 +23,7 @@ print_warning() {
 }
 
 print_error() {
-    printf "${RED}❌ $1${NORMAL}\n"
+    printf "${RED}🔴 $1${NORMAL}\n"
 }
 
 print_header() {
