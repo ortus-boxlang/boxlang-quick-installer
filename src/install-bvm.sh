@@ -31,6 +31,7 @@ elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
+	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 	helpers_url="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
@@ -214,9 +215,6 @@ setup_path() {
 # Help and Instructions
 ###########################################################################
 show_help() {
-    printf "\n"
-    print_success "BVM has been installed successfully"
-    printf "\n"
     print_info "To start using BVM, either:"
     printf "  1. Restart your terminal, or\n"
     printf "  2. Run: source %s\n" "$profile_file"
@@ -262,6 +260,10 @@ main() {
     if ! setup_path; then
         exit 1
     fi
+
+	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_success "❤️‍🔥 BVM has been installed successfully"
+    printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
     # Show instructions
     show_help
