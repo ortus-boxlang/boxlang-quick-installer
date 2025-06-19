@@ -57,19 +57,8 @@ resolve_version_alias() {
                 echo "latest"
             fi
             ;;
-        "snapshot")
-            # Check if snapshot symlink exists
-            local snapshot_link="$BVM_VERSIONS_DIR/snapshot"
-            if [ -L "$snapshot_link" ] && [ -e "$snapshot_link" ]; then
-                # Follow the symlink to get the actual version
-                basename "$(readlink "$snapshot_link")"
-            else
-                # Fallback to literal 'snapshot' if no symlink found
-                echo "snapshot"
-            fi
-            ;;
         *)
-            # Return the version as-is for specific version numbers
+            # Return the version as-is for all other versions (including snapshot)
             echo "$requested_version"
             ;;
     esac
@@ -404,10 +393,10 @@ install_version() {
         ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
     fi
 
-    # Create version alias symlinks for latest/snapshot
-    if [ "$original_version" = "latest" ] || [ "$original_version" = "snapshot" ]; then
-        local alias_link="$BVM_VERSIONS_DIR/$original_version"
-        print_info "Creating $original_version symlink to $version..."
+    # Create version alias symlink for latest only
+    if [ "$original_version" = "latest" ]; then
+        local alias_link="$BVM_VERSIONS_DIR/latest"
+        print_info "Creating latest symlink to $version..."
 
         # Remove existing symlink if it exists
         rm -f "$alias_link"
@@ -507,17 +496,15 @@ uninstall_version() {
             # Remove the version directory
             rm -rf "$version_dir"
 
-            # Clean up any symlinks that point to this version
-            for alias_name in "latest" "snapshot"; do
-                local alias_link="$BVM_VERSIONS_DIR/$alias_name"
-                if [ -L "$alias_link" ]; then
-                    local target_version=$(basename "$(readlink "$alias_link")" 2>/dev/null || echo "")
-                    if [ "$target_version" = "$version" ]; then
-                        print_info "Removing $alias_name symlink that pointed to $version"
-                        rm -f "$alias_link"
-                    fi
+            # Clean up the latest symlink if it points to this version
+            local latest_link="$BVM_VERSIONS_DIR/latest"
+            if [ -L "$latest_link" ]; then
+                local target_version=$(basename "$(readlink "$latest_link")" 2>/dev/null || echo "")
+                if [ "$target_version" = "$version" ]; then
+                    print_info "Removing latest symlink that pointed to $version"
+                    rm -f "$latest_link"
                 fi
-            done
+            fi
 
             print_success "BoxLang $version uninstalled successfully"
             ;;
