@@ -10,6 +10,9 @@
 # which may fail on systems lacking tput or terminfo
 set -e
 
+# We need this in case the target OS we are installing in does not have a `TERM` implementation declared
+export TERM=${TERM:-xterm-256color}
+
 ###########################################################################
 # Global Variables + Helpers
 ###########################################################################
@@ -17,8 +20,8 @@ set -e
 # Global variables
 TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
-BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/snapshot/bvm.sh"
-INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/snapshot/boxlang-installer.zip"
+BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.sh"
+INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
 
 # Helpers
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
@@ -28,6 +31,7 @@ elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
+	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 	helpers_url="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
@@ -52,9 +56,9 @@ install_bvm() {
 	###########################################################################
 	# Download BoxLang Installer Scripts
 	###########################################################################
-    print_info "Downloading BVM..."
+    print_info "Downloading BVM from [${INSTALLER_URL}]"
 	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		printf "${RED}🔴 Error: Download of BoxLang® Installer bundle failed${NORMAL}\n"
+		print_error "Error: Download of BoxLang® Installer bundle failed"
 		exit 1
 	}
 
@@ -78,6 +82,7 @@ install_bvm() {
 	# Create symlinks for install-bx-module, install-bx-site, bvm
 	ln -sf "$scripts_dir/install-bx-module.sh" "$BVM_HOME/bin/install-bx-module"
 	ln -sf "$scripts_dir/install-bx-site.sh" "$BVM_HOME/bin/install-bx-site"
+	ln -sf "$scripts_dir/install-bvm.sh" "$BVM_HOME/bin/install-bvm"
 	ln -sf "$scripts_dir/bvm.sh" "$BVM_HOME/bin/bvm"
 
     # Create convenience wrapper scripts for direct access to BoxLang tools
@@ -211,9 +216,6 @@ setup_path() {
 # Help and Instructions
 ###########################################################################
 show_help() {
-    printf "\n"
-    print_success "BVM has been installed successfully"
-    printf "\n"
     print_info "To start using BVM, either:"
     printf "  1. Restart your terminal, or\n"
     printf "  2. Run: source %s\n" "$profile_file"
@@ -259,6 +261,10 @@ main() {
     if ! setup_path; then
         exit 1
     fi
+
+	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_success "❤️‍🔥 BVM has been installed successfully"
+    printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
     # Show instructions
     show_help

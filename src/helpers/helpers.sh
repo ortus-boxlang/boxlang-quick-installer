@@ -23,7 +23,7 @@ print_warning() {
 }
 
 print_error() {
-    printf "${RED}❌ $1${NORMAL}\n"
+    printf "${RED}🔴 $1${NORMAL}\n"
 }
 
 print_header() {
@@ -240,6 +240,17 @@ extract_semantic_version() {
 	local version_string="$1"
 	# Extract version like "1.2.3" from strings like "BoxLang 1.2.3+20241201.120000" or "1.2.3+buildId"
 	echo "$version_string" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
+}
+
+# Check if a version string represents a snapshot version
+isSnapshotVersion() {
+	local version_string="$1"
+	# Check if version contains snapshot, beta, alpha, or other pre-release indicators
+	if [[ "$version_string" =~ (snapshot|beta|alpha|rc|SNAPSHOT|BETA|ALPHA|RC) ]]; then
+		return 0  # true - is snapshot
+	else
+		return 1  # false - is not snapshot
+	fi
 }
 
 # Compare two semantic versions (Major.Minor.Patch)

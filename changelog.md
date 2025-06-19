@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `install-bvm` script is now also installed, so you can upgrade your BVM installation easily.
+- BVM now stores the `latest` or `snapshot` versions with the actual version number and keep symlinks to them.
+
+### Fixed
+
+- Do not remove optional symlinks in the `install-boxlang` command.
+- Added `$TERM` check in case of headless systems to avoid errors in the installer scripts.
+- Fixed the `install-bx-module` to include the right helpers.
+
 ## [1.12.1] - 2025-06-17
 
 ### Fixed

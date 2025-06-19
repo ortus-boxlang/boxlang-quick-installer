@@ -41,6 +41,29 @@ ensure_bvm_dirs() {
     mkdir -p "$BVM_HOME" "$BVM_CACHE_DIR" "$BVM_VERSIONS_DIR" "$BVM_SCRIPTS_DIR"
 }
 
+# Resolve version aliases (latest, snapshot) to actual installed versions
+resolve_version_alias() {
+    local requested_version="$1"
+
+    case "$requested_version" in
+        "latest")
+            # Check if latest symlink exists
+            local latest_link="$BVM_VERSIONS_DIR/latest"
+            if [ -L "$latest_link" ] && [ -e "$latest_link" ]; then
+                # Follow the symlink to get the actual version
+                basename "$(readlink "$latest_link")"
+            else
+                # Fallback to literal 'latest' if no symlink found
+                echo "latest"
+            fi
+            ;;
+        *)
+            # Return the version as-is for all other versions (including snapshot)
+            echo "$requested_version"
+            ;;
+    esac
+}
+
 ###########################################################################
 # Core Functions
 ###########################################################################
@@ -144,12 +167,24 @@ list_installed_versions() {
     fi
 
     for version_dir in "$BVM_VERSIONS_DIR"/*; do
-        if [ -d "$version_dir" ]; then
+        if [ -d "$version_dir" ] || [ -L "$version_dir" ]; then
             local version=$(basename "$version_dir")
-            if [ "$version" = "$current_version" ]; then
-                printf "  ${GREEN}* %s${NORMAL} (current)\n" "$version"
+
+            # Handle symlinks (latest/snapshot aliases)
+            if [ -L "$version_dir" ]; then
+                local target_version=$(basename "$(readlink "$version_dir")")
+                if [ "$target_version" = "$current_version" ]; then
+                    printf "  ${GREEN}* %s${NORMAL} -> %s (current)\n" "$version" "$target_version"
+                else
+                    printf "    %s -> %s\n" "$version" "$target_version"
+                fi
             else
-                printf "    %s\n" "$version"
+                # Handle regular version directories
+                if [ "$version" = "$current_version" ]; then
+                    printf "  ${GREEN}* %s${NORMAL} (current)\n" "$version"
+                else
+                    printf "    %s\n" "$version"
+                fi
             fi
         fi
     done
@@ -220,6 +255,8 @@ install_version() {
     local miniserver_url=""
     local boxlang_cache=""
     local miniserver_cache=""
+    local install_dir="$version_dir"
+    local original_version="$version"
 
     case "$version" in
         "latest")
@@ -227,12 +264,16 @@ install_version() {
             miniserver_url="$LATEST_MINISERVER_URL"
             boxlang_cache="$BVM_CACHE_DIR/boxlang-latest.zip"
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-latest.zip"
+            # Use temporary directory for latest/snapshot to detect actual version
+            install_dir="$BVM_CACHE_DIR/temp-$version-$$"
             ;;
         "snapshot")
             boxlang_url="$SNAPSHOT_URL"
             miniserver_url="$SNAPSHOT_MINISERVER_URL"
             boxlang_cache="$BVM_CACHE_DIR/boxlang-snapshot.zip"
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-snapshot.zip"
+            # Use temporary directory for latest/snapshot to detect actual version
+            install_dir="$BVM_CACHE_DIR/temp-$version-$$"
             ;;
         *)
             boxlang_url="$DOWNLOAD_BASE_URL/$version/boxlang-$version.zip"
@@ -242,14 +283,14 @@ install_version() {
             ;;
     esac
 
-    # Create version directory
-    mkdir -p "$version_dir"
+    # Create installation directory
+    mkdir -p "$install_dir"
 
     # Download BoxLang runtime
     print_info "Downloading BoxLang runtime from $boxlang_url"
     if ! env curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
-        rm -rf "$version_dir"
+        rm -rf "$install_dir"
         return 1
     fi
 
@@ -257,29 +298,90 @@ install_version() {
     print_info "Downloading BoxLang MiniServer from $miniserver_url"
     if ! env curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
-        rm -rf "$version_dir"
+        rm -rf "$install_dir"
         return 1
     fi
 
     # Extract BoxLang runtime
     print_info "Extracting BoxLang runtime..."
-    if ! unzip -q "$boxlang_cache" -d "$version_dir"; then
+    if ! unzip -q "$boxlang_cache" -d "$install_dir"; then
         print_error "Failed to extract BoxLang runtime"
-        rm -rf "$version_dir"
+        rm -rf "$install_dir"
         return 1
     fi
 
     # Extract BoxLang MiniServer
     print_info "Extracting BoxLang MiniServer..."
-    if ! unzip -q "$miniserver_cache" -d "$version_dir"; then
+    if ! unzip -q "$miniserver_cache" -d "$install_dir"; then
         print_error "Failed to extract BoxLang MiniServer"
-        rm -rf "$version_dir"
+        rm -rf "$install_dir"
         return 1
     fi
 
     # Make all executables in bin directory executable
-    if [ -d "$version_dir/bin" ]; then
-        find "$version_dir/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+    if [ -d "$install_dir/bin" ]; then
+        find "$install_dir/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+    fi
+
+    # Detect actual version for latest/snapshot installations
+    local actual_version="$version"
+    if [ "$original_version" = "latest" ] || [ "$original_version" = "snapshot" ]; then
+        print_info "🔎 Version alias requested, detecting actual version number..."
+
+        # Look for boxlang JAR file in lib directory to detect version
+        local lib_dir="$install_dir/lib"
+		# Find boxlang-*.jar files matching the pattern boxlang-{version}.jar or boxlang-{version}-snapshot.jar
+		local jar_file=$(find "$lib_dir" -name "boxlang-*.jar" -type f | head -1)
+
+		if [ -n "$jar_file" ]; then
+			# Extract filename and get version from it
+			local jar_filename=$(basename "$jar_file")
+			# Remove boxlang- prefix and .jar suffix to get version
+			local detected_version=$(echo "$jar_filename" | sed 's/^boxlang-//' | sed 's/\.jar$//')
+
+			# Use extract_semantic_version helper to get clean semantic version
+			actual_version=$(extract_semantic_version "$detected_version")
+
+			# For snapshot versions, append the snapshot suffix if it's not already there
+			if [ "$original_version" = "snapshot" ] && ! isSnapshotVersion "$actual_version"; then
+				# Check if the original detected version had snapshot info
+				if isSnapshotVersion "$detected_version"; then
+					actual_version="$detected_version"
+				else
+					actual_version="${actual_version}-snapshot"
+				fi
+			fi
+
+			print_info "Detected version: $actual_version (from $jar_filename)"
+
+			# Check if this version already exists
+			local actual_version_dir="$BVM_VERSIONS_DIR/$actual_version"
+			if [ -d "$actual_version_dir" ] && [ "$force_install" != "--force" ]; then
+				print_warning "BoxLang $actual_version is already installed"
+				print_info "Use 'bvm use $actual_version' to switch to this version"
+				print_info "Use 'bvm install $original_version --force' to reinstall"
+				rm -rf "$install_dir"
+				return 0
+			fi
+
+			# If force install and version exists, remove it first
+			if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
+				print_info "Force reinstalling - removing existing $actual_version..."
+				rm -rf "$actual_version_dir"
+			fi
+
+			# Move from temporary to actual version directory
+			version_dir="$actual_version_dir"
+			mkdir -p "$(dirname "$version_dir")"
+			mv "$install_dir" "$version_dir"
+			version="$actual_version"
+		else
+			print_error "Could not find BoxLang JAR file in lib directory, using '$original_version'"
+			# cleanup and exit, this is a failure
+			rm -rf "$install_dir"
+			return 1
+		fi
+
     fi
 
     # Create internal symlinks (bx -> boxlang, bx-miniserver -> boxlang-miniserver)
@@ -291,8 +393,20 @@ install_version() {
         ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
     fi
 
+    # Create version alias symlink for latest only
+    if [ "$original_version" = "latest" ]; then
+        local alias_link="$BVM_VERSIONS_DIR/latest"
+        print_info "Creating latest symlink to $version..."
+
+        # Remove existing symlink if it exists
+        rm -f "$alias_link"
+
+        # Create new symlink pointing to the actual version directory
+        ln -sf "$version" "$alias_link"
+    fi
+
     # Clean up cache files for non-latest/snapshot versions
-    if [ "$version" != "latest" ] && [ "$version" != "snapshot" ]; then
+    if [ "$original_version" != "latest" ] && [ "$original_version" != "snapshot" ]; then
         rm -f "$boxlang_cache" "$miniserver_cache"
     fi
 
@@ -314,11 +428,20 @@ use_version() {
         return 1
     fi
 
-    local version_dir="$BVM_VERSIONS_DIR/$version"
+    # Resolve version alias (latest, snapshot) to actual version
+    local resolved_version
+    resolved_version=$(resolve_version_alias "$version")
+
+    local version_dir="$BVM_VERSIONS_DIR/$resolved_version"
 
     if [ ! -d "$version_dir" ]; then
-        print_error "BoxLang $version is not installed"
-        print_info "Install it with: bvm install $version"
+        if [ "$version" = "latest" ] || [ "$version" = "snapshot" ]; then
+            print_error "No BoxLang $version version is installed"
+            print_info "Install it with: bvm install $version"
+        else
+            print_error "BoxLang $version is not installed"
+            print_info "Install it with: bvm install $version"
+        fi
         return 1
     fi
 
@@ -328,10 +451,14 @@ use_version() {
     # Create new symlink
     ln -s "$version_dir" "$BVM_CURRENT_LINK"
 
-    print_success "Now using BoxLang $version"
+    if [ "$version" != "$resolved_version" ]; then
+        print_success "Now using BoxLang $resolved_version (resolved from '$version')"
+    else
+        print_success "Now using BoxLang $version"
+    fi
 
     # Update config
-    echo "CURRENT_VERSION=$version" > "$BVM_CONFIG_FILE"
+    echo "CURRENT_VERSION=$resolved_version" > "$BVM_CONFIG_FILE"
 }
 
 # Uninstall a BoxLang version
@@ -366,7 +493,19 @@ uninstall_version() {
     read -r confirmation
     case "$confirmation" in
         [yY][eE][sS]|[yY])
+            # Remove the version directory
             rm -rf "$version_dir"
+
+            # Clean up the latest symlink if it points to this version
+            local latest_link="$BVM_VERSIONS_DIR/latest"
+            if [ -L "$latest_link" ]; then
+                local target_version=$(basename "$(readlink "$latest_link")" 2>/dev/null || echo "")
+                if [ "$target_version" = "$version" ]; then
+                    print_info "Removing latest symlink that pointed to $version"
+                    rm -f "$latest_link"
+                fi
+            fi
+
             print_success "BoxLang $version uninstalled successfully"
             ;;
         *)
