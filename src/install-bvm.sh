@@ -20,8 +20,8 @@ export TERM=${TERM:-xterm-256color}
 # Global variables
 TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
-BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/snapshot/bvm.sh"
-INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/snapshot/boxlang-installer.zip"
+BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.sh"
+INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
 
 # Helpers
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
