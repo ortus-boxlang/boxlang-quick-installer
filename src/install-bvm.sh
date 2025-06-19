@@ -10,6 +10,9 @@
 # which may fail on systems lacking tput or terminfo
 set -e
 
+# We need this in case the target OS we are installing in does not have a `TERM` implementation declared
+export TERM=${TERM:-xterm-256color}
+
 ###########################################################################
 # Global Variables + Helpers
 ###########################################################################
