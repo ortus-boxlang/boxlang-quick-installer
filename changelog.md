@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.13.0] - 2025-06-19
 
+## [1.13.0] - 2025-06-19
+
 ### Added
 
 - The `install-bvm` script is now also installed, so you can upgrade your BVM installation easily.
@@ -170,7 +172,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 [Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...HEAD
 
-[1.13.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.1...v1.13.0
+[1.13.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...v1.13.0
+
 
 [1.12.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...v1.12.1
 
