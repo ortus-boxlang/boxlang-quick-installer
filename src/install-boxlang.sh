@@ -141,7 +141,7 @@ check_for_updates() {
 			;;
 		2)
 			print_warning "🆙 A newer version of BoxLang is available!"
-			print_info "Would you like to update to version ${latest_version}? [Y/n"
+			print_info "Would you like to update to version ${latest_version}? [Y/n]"
 			read -r response < /dev/tty
 			case "$response" in
 				[nN][oO]|[nN])
@@ -279,7 +279,7 @@ check_and_install_commandbox() {
 
 	print_warning "CommandBox is not installed"
 	print_info "💡 CommandBox is the Package Manager for BoxLang®"
-	print_info "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL"
+	print_info "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}"
 
 	# Determine if we should install CommandBox based on flags
 	local should_install=""

@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.13.0] - 2025-06-19
+### Fixed
+
+- Syntax error in the `install-boxlang` script that caused it to fail on some systems.
 
 ## [1.13.0] - 2025-06-19
 
