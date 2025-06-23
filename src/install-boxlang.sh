@@ -141,7 +141,7 @@ check_for_updates() {
 			;;
 		2)
 			print_warning "🆙 A newer version of BoxLang is available!"
-			print_info "Would you like to update to version ${latest_version}? [Y/n"
+			print_info "Would you like to update to version ${latest_version}? [Y/n]"
 			read -r response < /dev/tty
 			case "$response" in
 				[nN][oO]|[nN])
