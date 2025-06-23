@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2025-06-23
+
 ### Fixed
 
 - Syntax error in the `install-boxlang` script that caused it to fail on some systems.
@@ -172,10 +174,11 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.1...HEAD
+
+[1.13.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...v1.13.1
 
 [1.13.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...v1.13.0
-
 
 [1.12.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...v1.12.1
 
