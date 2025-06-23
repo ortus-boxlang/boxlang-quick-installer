@@ -279,7 +279,7 @@ check_and_install_commandbox() {
 
 	print_warning "CommandBox is not installed"
 	print_info "💡 CommandBox is the Package Manager for BoxLang®"
-	print_info "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL"
+	print_info "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}"
 
 	# Determine if we should install CommandBox based on flags
 	local should_install=""
