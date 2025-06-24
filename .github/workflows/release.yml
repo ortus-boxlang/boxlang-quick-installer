@@ -94,7 +94,7 @@ jobs:
           DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
       - name: Create Github Release
-        uses: taiki-e/create-gh-release-action@v1.8.0
+        uses: taiki-e/create-gh-release-action@v1.9.1
         if: env.SNAPSHOT == 'false'
         continue-on-error: true
         id: create_release
