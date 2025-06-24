@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New convention for BVM: `.bvmrc` file in the root of the project to specify the BoxLang version to use.
+- New `bvm use` command to switch between BoxLang versions according to the `.bvmrc` file
+- New `bvm local` to show the current BoxLang version in use for the current project.
+- New `bvm local {version}` command to set the BoxLang version for the current project.
 - Consistency on help commands and colors.
 - Added the `bvm uninstall` command to uninstall BVM itself.
 - Added the `bvm check-update` command to check for updates to BVM and if one is found, it will prompt to install it.

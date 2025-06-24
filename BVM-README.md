@@ -88,6 +88,106 @@ Installed BoxLang versions:
     1.1.0
 ```
 
+## Project-Specific Versions (.bvmrc)
+
+BVM supports project-specific version configuration through `.bvmrc` files, similar to tools like `jenv` or `nvm`. This allows different projects to automatically use different BoxLang versions.
+
+### How .bvmrc Works
+
+- 📁 **Per-project configuration** - Each project can have its own BoxLang version
+- 🔍 **Automatic discovery** - BVM searches from current directory up to root for `.bvmrc`
+- 🎯 **Simple format** - Just the version number on the first line
+- 🚀 **Seamless switching** - Use `bvm use` without arguments to activate the project version
+
+### Creating .bvmrc Files
+
+```bash
+# Set current directory to use latest BoxLang
+bvm local latest
+
+# Set specific version for a project
+bvm local 1.2.0
+
+# Set development snapshot
+bvm local snapshot
+
+# Show current .bvmrc version (if any)
+bvm local
+```
+
+### Using .bvmrc Files
+
+```bash
+# Activate the version specified in .bvmrc
+bvm use
+
+# This will search for .bvmrc starting from current directory
+# and going up the directory tree until found
+```
+
+### .bvmrc File Format
+
+The `.bvmrc` file is simple - just put the version on the first line:
+
+```bash
+# .bvmrc examples
+
+# Use latest stable
+latest
+
+# Use specific version
+1.3.0
+
+# Use development snapshot
+snapshot
+
+# Comments (lines starting with #) are ignored
+# Empty lines are also ignored
+```
+
+### Example Workflow
+
+```bash
+# Set up a new project
+mkdir my-boxlang-project
+cd my-boxlang-project
+
+# Configure project to use specific BoxLang version
+bvm local 1.2.0
+
+# Install the version if not already installed
+bvm install 1.2.0
+
+# Use the project version (reads from .bvmrc)
+bvm use
+
+# Verify active version
+bvm current
+
+# The .bvmrc file is created in current directory
+cat .bvmrc
+# Output: 1.2.0
+
+# When you return to this directory later, just run:
+bvm use  # Automatically uses 1.2.0 from .bvmrc
+```
+
+### Directory Hierarchy
+
+BVM searches for `.bvmrc` files starting from the current directory and walking up the directory tree:
+
+```
+/home/user/projects/
+├── .bvmrc (latest)          # Root project config
+├── project-a/
+│   ├── .bvmrc (1.2.0)      # Project A uses 1.2.0
+│   └── src/                 # When in src/, uses 1.2.0 from parent
+└── project-b/
+    ├── .bvmrc (snapshot)    # Project B uses snapshot
+    └── modules/
+        └── auth/            # When in auth/, uses snapshot from ancestor
+```
+
 ## Quick Start
 
 ### Installation
@@ -117,6 +217,10 @@ bvm current
 # List installed versions
 bvm list
 
+# Set up project-specific version
+bvm local latest              # Creates .bvmrc with 'latest'
+bvm use                       # Uses version from .bvmrc
+
 # Check for BVM updates
 bvm check-update
 
@@ -141,6 +245,9 @@ bvm -h
 
 - `bvm use <version>` - Switch to a specific BoxLang version
   - Can use actual version numbers (e.g., `1.2.0`, `1.3.0-snapshot`) or `latest` symlink
+  - `bvm use` - Use version from `.bvmrc` file (if present)
+- `bvm local <version>` - Set local BoxLang version for current directory (creates `.bvmrc`)
+  - `bvm local` - Show current `.bvmrc` version
 - `bvm current` - Show currently active BoxLang version
 - `bvm remove <version>` - Remove a specific BoxLang version (use actual version number)
   - Aliases: `bvm rm <version>`
@@ -209,6 +316,18 @@ bvm use 1.3.0-snapshot
 # Install a specific version
 bvm install 1.2.0
 bvm use 1.2.0
+
+# Project-specific versions with .bvmrc
+cd my-project
+bvm local 1.2.0       # Creates .bvmrc with "1.2.0"
+bvm use               # Uses version from .bvmrc (1.2.0)
+
+cd ../another-project
+bvm local latest      # Creates .bvmrc with "latest"
+bvm use               # Uses version from .bvmrc (latest)
+
+# Check current .bvmrc
+bvm local             # Shows current .bvmrc version
 
 # See what's installed (shows actual version numbers)
 bvm list

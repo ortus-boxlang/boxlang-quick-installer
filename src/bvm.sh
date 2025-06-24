@@ -74,6 +74,85 @@ resolve_version_alias() {
     esac
 }
 
+# Read version from .bvmrc file in current directory or parent directories
+read_bvmrc_version() {
+    local current_dir="$PWD"
+    local bvmrc_file=""
+
+    # Look for .bvmrc starting from current directory, going up to root
+    while [ "$current_dir" != "/" ]; do
+        if [ -f "$current_dir/.bvmrc" ]; then
+            bvmrc_file="$current_dir/.bvmrc"
+            break
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+
+    # If no .bvmrc found, return empty
+    if [ -z "$bvmrc_file" ]; then
+        return 1
+    fi
+
+    # Read the first non-empty, non-comment line from .bvmrc
+    local version
+    version=$(grep -v '^#' "$bvmrc_file" | grep -v '^[[:space:]]*$' | head -n1 | tr -d '[:space:]')
+
+    if [ -n "$version" ]; then
+        echo "$version"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Create or update .bvmrc file in current directory
+write_bvmrc_version() {
+    local version="$1"
+    local bvmrc_file=".bvmrc"
+
+    # If no version provided, show current .bvmrc
+    if [ -z "$version" ]; then
+        if local_version=$(read_bvmrc_version); then
+            print_success "Current .bvmrc version: $local_version"
+            local bvmrc_path
+            local current_dir="$PWD"
+            while [ "$current_dir" != "/" ]; do
+                if [ -f "$current_dir/.bvmrc" ]; then
+                    bvmrc_path="$current_dir/.bvmrc"
+                    break
+                fi
+                current_dir=$(dirname "$current_dir")
+            done
+            print_info "Found at: $bvmrc_path"
+        else
+            print_info "No .bvmrc file found in current directory or parent directories"
+            print_info "Usage: bvm local <version>"
+            print_info "Examples:"
+            print_info "  bvm local latest"
+            print_info "  bvm local snapshot"
+            print_info "  bvm local 1.2.0"
+        fi
+        return 0
+    fi
+
+    # Validate that the version exists (optional - could be a future version)
+    local resolved_version
+    resolved_version=$(resolve_version_alias "$version")
+    local version_dir="$BVM_VERSIONS_DIR/$resolved_version"
+
+    if [ ! -d "$version_dir" ]; then
+        print_warning "BoxLang [$version] is not currently installed"
+        print_info "You can still create .bvmrc, but install it later with: bvm install $version"
+    fi
+
+    echo "$version" > "$bvmrc_file"
+    print_success "Created .bvmrc with version: $version"
+
+    if [ -f "$bvmrc_file" ]; then
+        print_info "You can now use 'bvm use' (without version) to activate this version"
+    fi
+}
+
 ###########################################################################
 # Core Functions
 ###########################################################################
@@ -91,6 +170,9 @@ show_help() {
     printf "                         - '1.2.0': Install specific version\n"
     printf "                         Use --force to reinstall an existing version\n"
     printf "  ${GREEN}use${NORMAL} <version>         Switch to a specific BoxLang version\n"
+    printf "                         Use without version to read from .bvmrc\n"
+    printf "  ${GREEN}local${NORMAL} <version>       Set local BoxLang version for current directory (.bvmrc)\n"
+    printf "                         Use without version to show current .bvmrc\n"
     printf "  ${GREEN}current${NORMAL}               Show currently active BoxLang version\n"
     printf "  ${GREEN}list${NORMAL}                  List all installed BoxLang versions\n"
     printf "  ${GREEN}list-remote${NORMAL}          List available BoxLang versions for download\n"
@@ -111,6 +193,9 @@ show_help() {
     printf "  bvm install 1.2.0\n"
     printf "  bvm install latest --force\n"
     printf "  bvm use 1.2.0\n"
+    printf "  bvm use                # Read version from .bvmrc\n"
+    printf "  bvm local latest       # Set .bvmrc to 'latest'\n"
+    printf "  bvm local              # Show current .bvmrc\n"
     printf "  bvm list\n"
     printf "  bvm current\n"
     printf "  bvm exec --version\n"
@@ -435,10 +520,18 @@ install_version() {
 use_version() {
     local version="$1"
 
+    # If no version specified, try to read from .bvmrc
     if [ -z "$version" ]; then
-        print_error "Please specify a version to use"
-        print_info "Example: bvm use latest"
-        return 1
+        if version=$(read_bvmrc_version); then
+            print_info "Reading version from .bvmrc: $version"
+        else
+            print_error "No version specified and no .bvmrc file found"
+            print_info "Usage:"
+            print_info "  bvm use <version>        # Use specific version"
+            print_info "  bvm use                  # Use version from .bvmrc"
+            print_info "  echo 'latest' > .bvmrc   # Create .bvmrc file"
+            return 1
+        fi
     fi
 
     # Resolve version alias (latest, snapshot) to actual version
@@ -933,6 +1026,9 @@ main() {
             ;;
         "use")
             use_version "$1"
+            ;;
+        "local")
+            write_bvmrc_version "$1"
             ;;
         "current")
             show_current_version
