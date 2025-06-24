@@ -28,14 +28,17 @@ SNAPSHOT_URL="$DOWNLOAD_BASE_URL/boxlang-snapshot.zip"
 LATEST_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-latest.zip"
 SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
+VERSION_CHECK_URL="$INSTALLER_BASE_URL/version.json"
 
 # Helpers
-if [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
+if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	source "$(dirname "$0")/helpers/helpers.sh"
+elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
     source "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
 	printf "${RED}Error: BVM helper scripts not found. Please ensure BVM is installed correctly.${NORMAL}\n"
 	printf "${YELLOW}You can reinstall BVM using the installer script:${NORMAL}\n"
-	printf "curl -fsSL https://boxlang.io/install-bvm.sh | bash"
+	printf "curl -fsSL https://install-bvm.boxlang.io | bash"
 	exit 1
 fi
 
@@ -99,6 +102,7 @@ show_help() {
     printf "  ${GREEN}miniserver${NORMAL} <args>    Start BoxLang MiniServer\n"
     printf "  ${GREEN}clean${NORMAL}                Clean cache and temporary files\n"
     printf "  ${GREEN}doctor${NORMAL}               Check BVM installation health\n"
+    printf "  ${GREEN}check-update${NORMAL}         Check for BVM updates\n"
     printf "  ${GREEN}version${NORMAL}              Show BVM version\n"
     printf "  ${GREEN}help${NORMAL}                 Show this help message\n\n"
 
@@ -114,6 +118,7 @@ show_help() {
     printf "  bvm miniserver --port 8080\n"
     printf "  bvm clean\n"
     printf "  bvm doctor\n"
+    printf "  bvm check-update\n"
     printf "  bvm remove 1.1.0\n"
     printf "  bvm uninstall\n\n"
 
@@ -814,6 +819,92 @@ check_health() {
 }
 
 ###########################################################################
+# Check for BVM Updates
+###########################################################################
+check_bvm_updates() {
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_header "🔄 BVM Update Checker"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    printf "\n"
+
+    print_info "🔍 Checking for BVM updates...\n"
+
+    # Get current version from local version.json in scripts directory
+    local current_version=""
+    local version_file="$BVM_SCRIPTS_DIR/version.json"
+    if [ -f "$version_file" ]; then
+		current_version=$(jq -r '.INSTALLER_VERSION' "$version_file" 2>/dev/null || echo "")
+    fi
+
+    # Get latest version from remote
+    local latest_version=""
+    local temp_file="/tmp/bvm_version_check.json"
+    if curl -s "$VERSION_CHECK_URL" > "$temp_file" 2>/dev/null && [ -s "$temp_file" ]; then
+        latest_version=$(jq -r '.INSTALLER_VERSION' "$temp_file" 2>/dev/null || echo "")
+        rm -f "$temp_file"
+    fi
+
+    if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+        print_error "Failed to fetch latest version information"
+        print_warning "Please check your internet connection and try again"
+        printf "\n"
+        printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+        return 1
+    fi
+
+	# Print current and latest versions
+    printf "${GREEN}Current BVM version: %s${NORMAL}\n" "$current_version"
+    printf "${GREEN}Latest BVM version:  %s${NORMAL}\n" "$latest_version"
+    printf "\n"
+
+	# Compare versions now
+	if compare_versions "$latest_version" "$current_version"; then
+		local comparison_result=0
+	else
+		local comparison_result=$?
+	fi
+
+	case $comparison_result in
+		0)
+			print_success "🦾 You have the latest version of BVM!"
+			;;
+		1)
+			print_warning "🆙 A newer version of BVM is available!"
+			printf "\n"
+			printf "${BOLD}Would you like to upgrade to version [%s]? [Y/n]: ${NORMAL}" "$latest_version"
+			read -r upgrade_response
+
+			case "$upgrade_response" in
+				[nN][oO]|[nN])
+					print_info "Update cancelled"
+					;;
+				*)
+					print_info "🚀 Starting BVM upgrade to version [$latest_version]..."
+					local install_script="$BVM_SCRIPTS_DIR/install-bvm.sh"
+					if [ -x "$install_script" ]; then
+						print_info "⚡Executing upgrade using: $install_script"
+						exec "$install_script"
+					else
+						print_error "BVM installer script not found at: $install_script"
+						print_info "Please reinstall BVM manually using:"
+						print_info "curl -fsSL https://install-bvm.boxlang.io | bash"
+					fi
+					;;
+			esac
+			;;
+		2)
+			print_info "🧑‍💻 Your BVM version is newer than the latest release, hmm, how did that happen?"
+			;;
+		*)
+			print_error "Failed to compare versions"
+			;;
+	esac
+
+    printf "\n"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+}
+
+###########################################################################
 # Main Function
 ###########################################################################
 
@@ -872,6 +963,9 @@ main() {
             ;;
         "doctor"|"health")
             check_health
+            ;;
+        "check-update")
+            check_bvm_updates
             ;;
         "version"|"--version"|"-v")
             printf "${GREEN}📦 BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION${NORMAL}"

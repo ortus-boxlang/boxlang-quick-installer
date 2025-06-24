@@ -12,11 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Consistency on help commands and colors.
+- Added the `bvm uninstall` command to uninstall BVM itself.
+- Added the `bvm check-update` command to check for updates to BVM and if one is found, it will prompt to install it.
 
 ### Changed
 
 - In `bvm` removed the `uninstall` alias to `remove|rm` to avoid confusion with the `bvm uninstall` command, which is used to uninstall BVM itself.
-- Added the `bvm uninstall` command to uninstall BVM itself.
 
 ## [1.13.1] - 2025-06-23
 
