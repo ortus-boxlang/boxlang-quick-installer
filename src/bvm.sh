@@ -70,11 +70,10 @@ resolve_version_alias() {
 
 # Show help
 show_help() {
-    print_header "BoxLang Version Manager (BVM) v$BVM_VERSION"
-    printf "\n"
+	printf "${GREEN}📦 BoxLang Version Manager (BVM) v${BVM_VERSION}${NORMAL}\n\n"
+    printf "${YELLOW}This script manages BoxLang versions and installations.${NORMAL}\n\n"
     printf "${BOLD}USAGE:${NORMAL}\n"
     printf "  bvm <command> [arguments]\n\n"
-
     printf "${BOLD}COMMANDS:${NORMAL}\n"
     printf "  ${GREEN}install${NORMAL} <version>     Install a specific BoxLang version\n"
     printf "                         - 'latest': Install latest stable release\n"
@@ -85,7 +84,7 @@ show_help() {
     printf "  ${GREEN}current${NORMAL}               Show currently active BoxLang version\n"
     printf "  ${GREEN}list${NORMAL}                  List all installed BoxLang versions\n"
     printf "  ${GREEN}list-remote${NORMAL}          List available BoxLang versions for download\n"
-    printf "  ${GREEN}uninstall${NORMAL} <version>  Uninstall a specific BoxLang version\n"
+    printf "  ${GREEN}remove${NORMAL} <version>  Remove a specific BoxLang version\n"
     printf "  ${GREEN}which${NORMAL}                 Show path to current BoxLang installation\n"
     printf "  ${GREEN}exec${NORMAL} <args>          Execute BoxLang with current version\n"
     printf "  ${GREEN}run${NORMAL} <args>           Alias for exec\n"
@@ -462,7 +461,7 @@ use_version() {
 }
 
 # Uninstall a BoxLang version
-uninstall_version() {
+remove_version() {
     local version="$1"
 
     if [ -z "$version" ]; then
@@ -760,8 +759,8 @@ main() {
         "list-remote"|"ls-remote")
             list_remote_versions
             ;;
-        "uninstall"|"remove"|"rm")
-            uninstall_version "$1"
+        "remove"|"rm")
+            remove_version "$1"
             ;;
         "which")
             show_which
@@ -779,7 +778,7 @@ main() {
             check_health
             ;;
         "version"|"--version"|"-v")
-            printf "BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION"
+            printf "${GREEN}📦 BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION${NORMAL}"
             ;;
         "help"|"--help"|"-h"|"")
             show_help
