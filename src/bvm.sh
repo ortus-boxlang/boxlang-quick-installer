@@ -30,7 +30,14 @@ SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
 
 # Helpers
-source "${BVM_HOME}/scripts/helpers/helpers.sh"
+if [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
+    source "${BVM_HOME}/scripts/helpers/helpers.sh"
+else
+	printf "${RED}Error: BVM helper scripts not found. Please ensure BVM is installed correctly.${NORMAL}\n"
+	printf "${YELLOW}You can reinstall BVM using the installer script:${NORMAL}\n"
+	printf "curl -fsSL https://boxlang.io/install-bvm.sh | bash"
+	exit 1
+fi
 
 ###########################################################################
 # Utility Functions
@@ -85,6 +92,7 @@ show_help() {
     printf "  ${GREEN}list${NORMAL}                  List all installed BoxLang versions\n"
     printf "  ${GREEN}list-remote${NORMAL}          List available BoxLang versions for download\n"
     printf "  ${GREEN}remove${NORMAL} <version>  Remove a specific BoxLang version\n"
+    printf "  ${GREEN}uninstall${NORMAL}             Completely uninstall BVM and all BoxLang versions\n"
     printf "  ${GREEN}which${NORMAL}                 Show path to current BoxLang installation\n"
     printf "  ${GREEN}exec${NORMAL} <args>          Execute BoxLang with current version\n"
     printf "  ${GREEN}run${NORMAL} <args>           Alias for exec\n"
@@ -106,7 +114,8 @@ show_help() {
     printf "  bvm miniserver --port 8080\n"
     printf "  bvm clean\n"
     printf "  bvm doctor\n"
-    printf "  bvm uninstall 1.1.0\n\n"
+    printf "  bvm remove 1.1.0\n"
+    printf "  bvm uninstall\n\n"
 
     printf "${BOLD}ENVIRONMENT:${NORMAL}\n"
     printf "  BVM_HOME              BVM installation directory (default: ~/.bvm)\n\n"
@@ -513,6 +522,90 @@ remove_version() {
     esac
 }
 
+# Completely uninstall BVM and all BoxLang versions
+uninstall_bvm() {
+    printf "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+    printf "${BOLD}${RED}⚠️  COMPLETE BVM UNINSTALL ⚠️${NORMAL}\n"
+    printf "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+    printf "\n"
+    print_warning "This will completely remove BVM and ALL installed BoxLang versions from your system!"
+    printf "\n"
+
+    if [ -d "$BVM_HOME" ]; then
+        printf "${BOLD}The following will be permanently deleted:${NORMAL}\n\n"
+        printf "  📁 BVM home directory: %s\n" "$BVM_HOME"
+
+        # Show installed versions if any
+        if [ -d "$BVM_VERSIONS_DIR" ] && [ -n "$(ls -A "$BVM_VERSIONS_DIR" 2>/dev/null)" ]; then
+            printf "  📦 Installed BoxLang versions:\n"
+            for version_dir in "$BVM_VERSIONS_DIR"/*; do
+                if [ -d "$version_dir" ] || [ -L "$version_dir" ]; then
+                    local version=$(basename "$version_dir")
+                    if [ -L "$version_dir" ]; then
+                        local target_version=$(basename "$(readlink "$version_dir")")
+                        printf "     - %s -> %s\n" "$version" "$target_version"
+                    else
+                        printf "     - %s\n" "$version"
+                    fi
+                fi
+            done
+        else
+            printf "  📦 No BoxLang versions currently installed\n"
+        fi
+
+        # Show cache size if exists
+        if [ -d "$BVM_CACHE_DIR" ]; then
+            local cache_size=$(du -sh "$BVM_CACHE_DIR" 2>/dev/null | cut -f1 | xargs)
+            printf "  💽 Cache directory: %s (%s)\n" "$BVM_CACHE_DIR" "$cache_size"
+        fi
+
+        printf "  🗒️ Configuration and scripts\n"
+    else
+        printf "${YELLOW}BVM doesn't appear to be installed (no directory found at %s)${NORMAL}\n" "$BVM_HOME"
+        return 0
+    fi
+
+    printf "\n"
+    printf "${BOLD}${RED}This action cannot be undone!${NORMAL}\n"
+    printf "${YELLOW}Are you absolutely sure you want to completely uninstall BVM? [y/N]: ${NORMAL}"
+    read -r confirmation
+
+    case "$confirmation" in
+        [yY][eE][sS]|[yY])
+            printf "\n"
+            print_info "Uninstalling BVM..."
+
+            # Remove the entire BVM home directory
+            if [ -d "$BVM_HOME" ]; then
+                rm -rf "$BVM_HOME"
+                print_success "✅ Removed BVM home directory: $BVM_HOME"
+            fi
+
+            # Clean up any temporary files
+            rm -f /tmp/bvm_* 2>/dev/null || true
+            print_success "✅ Cleaned up temporary files"
+
+            printf "\n"
+            printf "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+            print_success "🎉 BVM has been completely uninstalled!"
+            printf "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+            printf "\n"
+            printf "${BOLD}Next steps:${NORMAL}\n"
+            printf "  • Remove any BVM-related entries from your shell profile (~/.bashrc, ~/.zshrc, etc.)\n"
+            printf "  • Remove the BVM binary from your PATH if you installed it system-wide\n"
+            printf "  • Close this terminal and open a new one to complete the cleanup\n"
+            printf "\n"
+            printf "${BOLD}Thank you for using BVM! 👋${NORMAL}\n"
+            printf "\n"
+            ;;
+        *)
+            printf "\n"
+            print_info "Uninstall cancelled - BVM remains installed"
+            printf "\n"
+            ;;
+    esac
+}
+
 # Execute BoxLang with current version
 exec_boxlang() {
     if [ ! -L "$BVM_CURRENT_LINK" ] || [ ! -e "$BVM_CURRENT_LINK" ]; then
@@ -762,6 +855,9 @@ main() {
         "remove"|"rm")
             remove_version "$1"
             ;;
+        "uninstall")
+            uninstall_bvm
+            ;;
         "which")
             show_which
             ;;
@@ -791,9 +887,6 @@ main() {
             ;;
     esac
 }
-
-# Initialize BVM
-ensure_bvm_dirs
 
 # Run main function with all arguments
 main "$@"
