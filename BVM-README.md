@@ -108,9 +108,6 @@ bvm local latest
 # Set specific version for a project
 bvm local 1.2.0
 
-# Set development snapshot
-bvm local snapshot
-
 # Show current .bvmrc version (if any)
 bvm local
 ```
@@ -137,9 +134,6 @@ latest
 
 # Use specific version
 1.3.0
-
-# Use development snapshot
-snapshot
 
 # Comments (lines starting with #) are ignored
 # Empty lines are also ignored
@@ -183,9 +177,9 @@ BVM searches for `.bvmrc` files starting from the current directory and walking 
 │   ├── .bvmrc (1.2.0)      # Project A uses 1.2.0
 │   └── src/                 # When in src/, uses 1.2.0 from parent
 └── project-b/
-    ├── .bvmrc (snapshot)    # Project B uses snapshot
+    ├── .bvmrc (1.2.0)    # Project B uses 1.2.0
     └── modules/
-        └── auth/            # When in auth/, uses snapshot from ancestor
+        └── auth/            # When in auth/, uses 1.2.0 from ancestor
 ```
 
 ## Quick Start

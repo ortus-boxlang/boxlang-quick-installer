@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- If doing `bvm install snapshot`, it will now always force install the latest snapshot version of BoxLang.
 - New convention for BVM: `.bvmrc` file in the root of the project to specify the BoxLang version to use.
 - New `bvm use` command to switch between BoxLang versions according to the `.bvmrc` file
 - New `bvm local` to show the current BoxLang version in use for the current project.

@@ -346,7 +346,7 @@ install_version() {
         rm -rf "$version_dir"
     fi
 
-    print_info "Installing BoxLang $version..."
+    print_info "Installing BoxLang [$version]..."
 
     # Determine download URLs
     local boxlang_url=""
@@ -372,6 +372,7 @@ install_version() {
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-snapshot.zip"
             # Use temporary directory for latest/snapshot to detect actual version
             install_dir="$BVM_CACHE_DIR/temp-$version-$$"
+			force_install="--force"  # Force install for snapshot to ensure fresh download
             ;;
         *)
             boxlang_url="$DOWNLOAD_BASE_URL/$version/boxlang-$version.zip"
@@ -524,6 +525,10 @@ use_version() {
     if [ -z "$version" ]; then
         if version=$(read_bvmrc_version); then
             print_info "Reading version from .bvmrc: $version"
+			if [ "$version" = "snapshot" ]; then
+				print_info "Snapshot version detected, re-downloading..."
+				install_version "snapshot" "--force"
+			fi
         else
             print_error "No version specified and no .bvmrc file found"
             print_info "Usage:"
@@ -534,20 +539,14 @@ use_version() {
         fi
     fi
 
-    # Resolve version alias (latest, snapshot) to actual version
+    # Resolve version alias (latest) to actual version
     local resolved_version
     resolved_version=$(resolve_version_alias "$version")
-
     local version_dir="$BVM_VERSIONS_DIR/$resolved_version"
 
     if [ ! -d "$version_dir" ]; then
-        if [ "$version" = "latest" ] || [ "$version" = "snapshot" ]; then
-            print_error "No BoxLang $version version is installed"
-            print_info "Install it with: bvm install $version"
-        else
-            print_error "BoxLang $version is not installed"
-            print_info "Install it with: bvm install $version"
-        fi
+		print_error "BoxLang $version is not installed"
+		print_info "Install it with: bvm install $version"
         return 1
     fi
 
