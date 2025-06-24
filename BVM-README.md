@@ -34,7 +34,7 @@ The only difference is that BVM adds version management capabilities on top.
 - 🔄 **Switch between versions easily** - change your active BoxLang version with one command
 - 📋 **List installed versions** - see what's installed locally with `bvm list` or `bvm ls`
 - 🌐 **List remote versions** - see what's available for download with `bvm list-remote` or `bvm ls-remote`
-- 🗑️ **Clean uninstall** - remove versions you no longer need with `bvm uninstall`, `bvm remove`, or `bvm rm`
+- 🗑️ **Clean Removal** - remove versions you no longer need with `bvm remove`, or `bvm rm`
 - 🔍 **Health check** - verify your BVM installation with `bvm doctor` or `bvm health`
 - 🧹 **Cache management** - clean up downloaded files with `bvm clean`
 - 🚀 **Execute BoxLang components** - run BoxLang, MiniServer through BVM with version management
@@ -42,6 +42,8 @@ The only difference is that BVM adds version management capabilities on top.
 - ⚡ **Command aliases** - convenient short aliases for all major commands
 - 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
 - 🎯 **Smart version detection** - automatically detects actual version numbers from installations
+- 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
+- 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
 
 ## Version Detection & Management
 
@@ -66,6 +68,7 @@ When you install using aliases like "latest" or "snapshot", BVM:
 ### Example
 
 **Before** (old behavior):
+
 ```bash
 $ bvm list
 Installed BoxLang versions:
@@ -75,6 +78,7 @@ Installed BoxLang versions:
 ```
 
 **After** (new behavior):
+
 ```bash
 $ bvm list
 Installed BoxLang versions:
@@ -90,7 +94,7 @@ Installed BoxLang versions:
 
 ```bash
 # Install BVM
-curl -fsSL https://boxlang.io/install-bvm.sh | bash
+curl -fsSL https://install-bvm.boxlang.io | bash
 
 # Or download and run locally
 wget https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.sh
@@ -112,6 +116,9 @@ bvm current
 
 # List installed versions
 bvm list
+
+# Check for BVM updates
+bvm check-update
 
 # Run BoxLang
 bvm exec --version
@@ -135,8 +142,9 @@ bvm -h
 - `bvm use <version>` - Switch to a specific BoxLang version
   - Can use actual version numbers (e.g., `1.2.0`, `1.3.0-snapshot`) or `latest` symlink
 - `bvm current` - Show currently active BoxLang version
-- `bvm uninstall <version>` - Uninstall a specific BoxLang version (use actual version number)
-  - Aliases: `bvm remove <version>`, `bvm rm <version>`
+- `bvm remove <version>` - Remove a specific BoxLang version (use actual version number)
+  - Aliases: `bvm rm <version>`
+- `bvm uninstall` - Completely uninstall BVM and all BoxLang versions
 
 ### Information
 
@@ -158,6 +166,7 @@ bvm -h
 
 ### Maintenance
 
+- `bvm check-update` - Check for BVM updates and optionally upgrade
 - `bvm clean` - Clean cache and temporary files
 - `bvm doctor` - Check BVM installation health
   - Alias: `bvm health`
@@ -246,6 +255,155 @@ bvm doctor
 bvm clean
 ```
 
+## Keeping BVM Updated
+
+BVM includes a built-in update checker that helps you stay current with the latest version.
+
+### Checking for Updates
+
+```bash
+# Check if a newer version of BVM is available
+bvm check-update
+```
+
+### Update Process
+
+When you run `bvm check-update`, BVM will:
+
+1. **Check your current version** - reads from local installation
+2. **Fetch the latest version** - checks the remote repository
+3. **Compare versions** - determines if an update is available
+4. **Show status** - displays current vs. latest version information
+
+### Interactive Upgrade
+
+If a newer version is available, BVM will:
+
+- 🆙 **Display the available update** - shows current and latest version numbers
+- ❓ **Prompt for confirmation** - asks if you want to upgrade
+- 🚀 **Automatically upgrade** - downloads and installs the latest version if you confirm
+- ✅ **Preserve your installations** - keeps all your BoxLang versions intact
+
+### Example Update Session
+
+```bash
+$ bvm check-update
+
+─────────────────────────────────────────────────────────────────────────────
+🔄 BVM Update Checker
+─────────────────────────────────────────────────────────────────────────────
+
+🔍 Checking for BVM updates...
+
+Current BVM version: 1.0.0
+Latest BVM version:  1.1.0
+
+🆙 A newer version of BVM is available!
+
+Would you like to upgrade to version [1.1.0]? [Y/n]: Y
+
+🚀 Starting BVM upgrade to version [1.1.0]...
+⚡Executing upgrade using: /Users/username/.bvm/scripts/install-bvm.sh
+```
+
+### Status Messages
+
+- 🦾 **Up to date**: "You have the latest version of BVM!"
+- 🆙 **Update available**: "A newer version of BVM is available!"
+- 🧑‍💻 **Development version**: "Your BVM version is newer than the latest release"
+
+## Uninstalling BoxLang Versions and BVM
+
+BVM provides two different uninstall options depending on your needs.
+
+### Removing Individual BoxLang Versions
+
+Use `bvm remove` (or `bvm rm`) to remove specific BoxLang versions you no longer need:
+
+```bash
+# Remove a specific version
+bvm remove 1.1.0
+# or use the alias
+bvm rm 1.1.0
+
+# List installed versions first to see what's available
+bvm list
+```
+
+#### Important Notes
+
+- **Cannot remove active version**: You cannot remove the currently active BoxLang version
+- **Confirmation required**: BVM will ask for confirmation before removing a version
+- **Use actual version numbers**: Use the actual version number (e.g., `1.2.0`), not aliases like `latest`
+
+#### Example Session
+
+```bash
+$ bvm list
+Installed BoxLang versions:
+  * 1.2.0 (current)
+    latest → 1.2.0
+    1.1.0
+
+$ bvm remove 1.1.0
+Are you sure you want to uninstall BoxLang 1.1.0? [y/N]: y
+✅ BoxLang 1.1.0 uninstalled successfully
+```
+
+### Completely Uninstalling BVM
+
+Use `bvm uninstall` to completely remove BVM and all installed BoxLang versions:
+
+```bash
+bvm uninstall
+```
+
+#### What Gets Removed
+
+- 🗑️ **All BoxLang versions** - every installed version will be deleted
+- 🗑️ **BVM home directory** - `~/.bvm` and all contents
+- 🗑️ **Cache files** - all downloaded installers and temporary files
+- 🗑️ **Version symlinks** - `latest` and other version links
+
+#### Complete Uninstall Process
+
+```bash
+$ bvm uninstall
+
+⚠️  COMPLETE BVM UNINSTALL ⚠️
+
+This will completely remove BVM and ALL installed BoxLang versions from your system!
+
+Installed versions that will be DELETED:
+  • 1.2.0 (current)
+  • 1.1.0
+  • latest → 1.2.0
+
+Cache and configuration that will be DELETED:
+  • ~/.bvm/cache (downloaded files)
+  • ~/.bvm/versions (all BoxLang installations)
+  • ~/.bvm/scripts (BVM helper scripts)
+  • ~/.bvm/config (BVM configuration)
+
+Are you absolutely sure you want to completely uninstall BVM? [y/N]: y
+
+🔄 Uninstalling BVM...
+✅ Removed BVM home directory: /Users/username/.bvm
+🎉 BVM has been completely uninstalled!
+
+Manual cleanup required:
+  • Remove any BVM-related entries from your shell profile (~/.bashrc, ~/.zshrc, etc.)
+  • Remove the BVM binary from your PATH if you installed it system-wide
+```
+
+#### Manual Cleanup
+
+After running `bvm uninstall`, you may need to manually:
+
+1. **Remove shell profile entries** - delete BVM-related lines from `~/.bashrc`, `~/.zshrc`, etc.
+2. **Remove from PATH** - if you installed BVM system-wide, remove it from your PATH
+3. **Restart terminal** - open a new terminal session to ensure changes take effect
+
 ## Migrating from Single-Version Installer to BVM
 
 If you currently have BoxLang installed via `install-boxlang.sh` and want to switch to BVM for version management:
@@ -263,7 +421,7 @@ install-boxlang.sh --uninstall
 ### 2. Install BVM
 
 ```bash
-curl -fsSL https://boxlang.io/install-bvm.sh | bash
+curl -fsSL https://install-bvm.boxlang.io | bash
 ```
 
 ### 3. Install Your Preferred BoxLang Version
