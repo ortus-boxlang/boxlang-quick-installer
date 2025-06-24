@@ -794,7 +794,7 @@ main() {
 			;;
 		"version")
 			# Print the installer version
-			print_success "BoxLang Installer Version: ${INSTALLER_VERSION}"
+			printf "${GREEN}🥊 BoxLang Installer Version v%s\n" "$INSTALLER_VERSION${NORMAL}"
 			;;
 		*)
 			print_error "Unknown command: $command"

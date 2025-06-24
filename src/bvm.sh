@@ -968,7 +968,7 @@ main() {
             check_bvm_updates
             ;;
         "version"|"--version"|"-v")
-            printf "${GREEN}📦 BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION${NORMAL}"
+            printf "${GREEN}🥊 BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION${NORMAL}"
             ;;
         "help"|"--help"|"-h"|"")
             show_help
