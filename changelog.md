@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2025-06-24
+
 ### Added
 
 - If doing `bvm install snapshot`, it will now always force install the latest snapshot version of BoxLang.
@@ -189,42 +191,24 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[Unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.1...HEAD
-
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...v1.13.1
-
 [1.13.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.0...v1.13.0
-
 [1.12.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.12.0...v1.12.1
-
 [1.12.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.11.0...v1.12.0
-
 [1.11.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.10.0...v1.11.0
-
 [1.10.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.9.0...v1.10.0
-
 [1.9.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.8.0...v1.9.0
-
 [1.8.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.7.1...v1.8.0
-
 [1.7.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.7.0...v1.7.1
-
 [1.7.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.6.0...v1.7.0
-
 [1.6.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.5.0...v1.6.0
-
 [1.5.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.4.0...v1.5.0
-
 [1.4.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.4.0...v1.4.0
-
 [1.3.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.3.0...v1.3.0
-
 [1.2.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.2.0...v1.2.0
-
 [1.1.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.1.0
-
 [1.0.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.2...v1.0.2
-
 [1.0.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.0.0...v1.0.1
-
 [1.0.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/eca6d7845aca8001a5a58d405135f7267887ede3...v1.0.0
