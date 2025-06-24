@@ -28,9 +28,19 @@ SNAPSHOT_URL="$DOWNLOAD_BASE_URL/boxlang-snapshot.zip"
 LATEST_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-latest.zip"
 SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
+VERSION_CHECK_URL="$INSTALLER_BASE_URL/version.json"
 
 # Helpers
-source "${BVM_HOME}/scripts/helpers/helpers.sh"
+if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	source "$(dirname "$0")/helpers/helpers.sh"
+elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
+    source "${BVM_HOME}/scripts/helpers/helpers.sh"
+else
+	printf "${RED}Error: BVM helper scripts not found. Please ensure BVM is installed correctly.${NORMAL}\n"
+	printf "${YELLOW}You can reinstall BVM using the installer script:${NORMAL}\n"
+	printf "curl -fsSL https://install-bvm.boxlang.io | bash"
+	exit 1
+fi
 
 ###########################################################################
 # Utility Functions
@@ -64,17 +74,95 @@ resolve_version_alias() {
     esac
 }
 
+# Read version from .bvmrc file in current directory or parent directories
+read_bvmrc_version() {
+    local current_dir="$PWD"
+    local bvmrc_file=""
+
+    # Look for .bvmrc starting from current directory, going up to root
+    while [ "$current_dir" != "/" ]; do
+        if [ -f "$current_dir/.bvmrc" ]; then
+            bvmrc_file="$current_dir/.bvmrc"
+            break
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+
+    # If no .bvmrc found, return empty
+    if [ -z "$bvmrc_file" ]; then
+        return 1
+    fi
+
+    # Read the first non-empty, non-comment line from .bvmrc
+    local version
+    version=$(grep -v '^#' "$bvmrc_file" | grep -v '^[[:space:]]*$' | head -n1 | tr -d '[:space:]')
+
+    if [ -n "$version" ]; then
+        echo "$version"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Create or update .bvmrc file in current directory
+write_bvmrc_version() {
+    local version="$1"
+    local bvmrc_file=".bvmrc"
+
+    # If no version provided, show current .bvmrc
+    if [ -z "$version" ]; then
+        if local_version=$(read_bvmrc_version); then
+            print_success "Current .bvmrc version: $local_version"
+            local bvmrc_path
+            local current_dir="$PWD"
+            while [ "$current_dir" != "/" ]; do
+                if [ -f "$current_dir/.bvmrc" ]; then
+                    bvmrc_path="$current_dir/.bvmrc"
+                    break
+                fi
+                current_dir=$(dirname "$current_dir")
+            done
+            print_info "Found at: $bvmrc_path"
+        else
+            print_info "No .bvmrc file found in current directory or parent directories"
+            print_info "Usage: bvm local <version>"
+            print_info "Examples:"
+            print_info "  bvm local latest"
+            print_info "  bvm local snapshot"
+            print_info "  bvm local 1.2.0"
+        fi
+        return 0
+    fi
+
+    # Validate that the version exists (optional - could be a future version)
+    local resolved_version
+    resolved_version=$(resolve_version_alias "$version")
+    local version_dir="$BVM_VERSIONS_DIR/$resolved_version"
+
+    if [ ! -d "$version_dir" ]; then
+        print_warning "BoxLang [$version] is not currently installed"
+        print_info "You can still create .bvmrc, but install it later with: bvm install $version"
+    fi
+
+    echo "$version" > "$bvmrc_file"
+    print_success "Created .bvmrc with version: $version"
+
+    if [ -f "$bvmrc_file" ]; then
+        print_info "You can now use 'bvm use' (without version) to activate this version"
+    fi
+}
+
 ###########################################################################
 # Core Functions
 ###########################################################################
 
 # Show help
 show_help() {
-    print_header "BoxLang Version Manager (BVM) v$BVM_VERSION"
-    printf "\n"
+	printf "${GREEN}📦 BoxLang Version Manager (BVM) v${BVM_VERSION}${NORMAL}\n\n"
+    printf "${YELLOW}This script manages BoxLang versions and installations.${NORMAL}\n\n"
     printf "${BOLD}USAGE:${NORMAL}\n"
     printf "  bvm <command> [arguments]\n\n"
-
     printf "${BOLD}COMMANDS:${NORMAL}\n"
     printf "  ${GREEN}install${NORMAL} <version>     Install a specific BoxLang version\n"
     printf "                         - 'latest': Install latest stable release\n"
@@ -82,16 +170,21 @@ show_help() {
     printf "                         - '1.2.0': Install specific version\n"
     printf "                         Use --force to reinstall an existing version\n"
     printf "  ${GREEN}use${NORMAL} <version>         Switch to a specific BoxLang version\n"
+    printf "                         Use without version to read from .bvmrc\n"
+    printf "  ${GREEN}local${NORMAL} <version>       Set local BoxLang version for current directory (.bvmrc)\n"
+    printf "                         Use without version to show current .bvmrc\n"
     printf "  ${GREEN}current${NORMAL}               Show currently active BoxLang version\n"
     printf "  ${GREEN}list${NORMAL}                  List all installed BoxLang versions\n"
     printf "  ${GREEN}list-remote${NORMAL}          List available BoxLang versions for download\n"
-    printf "  ${GREEN}uninstall${NORMAL} <version>  Uninstall a specific BoxLang version\n"
+    printf "  ${GREEN}remove${NORMAL} <version>  Remove a specific BoxLang version\n"
+    printf "  ${GREEN}uninstall${NORMAL}             Completely uninstall BVM and all BoxLang versions\n"
     printf "  ${GREEN}which${NORMAL}                 Show path to current BoxLang installation\n"
     printf "  ${GREEN}exec${NORMAL} <args>          Execute BoxLang with current version\n"
     printf "  ${GREEN}run${NORMAL} <args>           Alias for exec\n"
     printf "  ${GREEN}miniserver${NORMAL} <args>    Start BoxLang MiniServer\n"
     printf "  ${GREEN}clean${NORMAL}                Clean cache and temporary files\n"
     printf "  ${GREEN}doctor${NORMAL}               Check BVM installation health\n"
+    printf "  ${GREEN}check-update${NORMAL}         Check for BVM updates\n"
     printf "  ${GREEN}version${NORMAL}              Show BVM version\n"
     printf "  ${GREEN}help${NORMAL}                 Show this help message\n\n"
 
@@ -100,6 +193,9 @@ show_help() {
     printf "  bvm install 1.2.0\n"
     printf "  bvm install latest --force\n"
     printf "  bvm use 1.2.0\n"
+    printf "  bvm use                # Read version from .bvmrc\n"
+    printf "  bvm local latest       # Set .bvmrc to 'latest'\n"
+    printf "  bvm local              # Show current .bvmrc\n"
     printf "  bvm list\n"
     printf "  bvm current\n"
     printf "  bvm exec --version\n"
@@ -107,7 +203,9 @@ show_help() {
     printf "  bvm miniserver --port 8080\n"
     printf "  bvm clean\n"
     printf "  bvm doctor\n"
-    printf "  bvm uninstall 1.1.0\n\n"
+    printf "  bvm check-update\n"
+    printf "  bvm remove 1.1.0\n"
+    printf "  bvm uninstall\n\n"
 
     printf "${BOLD}ENVIRONMENT:${NORMAL}\n"
     printf "  BVM_HOME              BVM installation directory (default: ~/.bvm)\n\n"
@@ -248,7 +346,7 @@ install_version() {
         rm -rf "$version_dir"
     fi
 
-    print_info "Installing BoxLang $version..."
+    print_info "Installing BoxLang [$version]..."
 
     # Determine download URLs
     local boxlang_url=""
@@ -274,6 +372,7 @@ install_version() {
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-snapshot.zip"
             # Use temporary directory for latest/snapshot to detect actual version
             install_dir="$BVM_CACHE_DIR/temp-$version-$$"
+			force_install="--force"  # Force install for snapshot to ensure fresh download
             ;;
         *)
             boxlang_url="$DOWNLOAD_BASE_URL/$version/boxlang-$version.zip"
@@ -422,26 +521,32 @@ install_version() {
 use_version() {
     local version="$1"
 
+    # If no version specified, try to read from .bvmrc
     if [ -z "$version" ]; then
-        print_error "Please specify a version to use"
-        print_info "Example: bvm use latest"
-        return 1
+        if version=$(read_bvmrc_version); then
+            print_info "Reading version from .bvmrc: $version"
+			if [ "$version" = "snapshot" ]; then
+				print_info "Snapshot version detected, re-downloading..."
+				install_version "snapshot" "--force"
+			fi
+        else
+            print_error "No version specified and no .bvmrc file found"
+            print_info "Usage:"
+            print_info "  bvm use <version>        # Use specific version"
+            print_info "  bvm use                  # Use version from .bvmrc"
+            print_info "  echo 'latest' > .bvmrc   # Create .bvmrc file"
+            return 1
+        fi
     fi
 
-    # Resolve version alias (latest, snapshot) to actual version
+    # Resolve version alias (latest) to actual version
     local resolved_version
     resolved_version=$(resolve_version_alias "$version")
-
     local version_dir="$BVM_VERSIONS_DIR/$resolved_version"
 
     if [ ! -d "$version_dir" ]; then
-        if [ "$version" = "latest" ] || [ "$version" = "snapshot" ]; then
-            print_error "No BoxLang $version version is installed"
-            print_info "Install it with: bvm install $version"
-        else
-            print_error "BoxLang $version is not installed"
-            print_info "Install it with: bvm install $version"
-        fi
+		print_error "BoxLang $version is not installed"
+		print_info "Install it with: bvm install $version"
         return 1
     fi
 
@@ -462,7 +567,7 @@ use_version() {
 }
 
 # Uninstall a BoxLang version
-uninstall_version() {
+remove_version() {
     local version="$1"
 
     if [ -z "$version" ]; then
@@ -510,6 +615,90 @@ uninstall_version() {
             ;;
         *)
             print_info "Uninstall cancelled"
+            ;;
+    esac
+}
+
+# Completely uninstall BVM and all BoxLang versions
+uninstall_bvm() {
+    printf "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+    printf "${BOLD}${RED}⚠️  COMPLETE BVM UNINSTALL ⚠️${NORMAL}\n"
+    printf "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+    printf "\n"
+    print_warning "This will completely remove BVM and ALL installed BoxLang versions from your system!"
+    printf "\n"
+
+    if [ -d "$BVM_HOME" ]; then
+        printf "${BOLD}The following will be permanently deleted:${NORMAL}\n\n"
+        printf "  📁 BVM home directory: %s\n" "$BVM_HOME"
+
+        # Show installed versions if any
+        if [ -d "$BVM_VERSIONS_DIR" ] && [ -n "$(ls -A "$BVM_VERSIONS_DIR" 2>/dev/null)" ]; then
+            printf "  📦 Installed BoxLang versions:\n"
+            for version_dir in "$BVM_VERSIONS_DIR"/*; do
+                if [ -d "$version_dir" ] || [ -L "$version_dir" ]; then
+                    local version=$(basename "$version_dir")
+                    if [ -L "$version_dir" ]; then
+                        local target_version=$(basename "$(readlink "$version_dir")")
+                        printf "     - %s -> %s\n" "$version" "$target_version"
+                    else
+                        printf "     - %s\n" "$version"
+                    fi
+                fi
+            done
+        else
+            printf "  📦 No BoxLang versions currently installed\n"
+        fi
+
+        # Show cache size if exists
+        if [ -d "$BVM_CACHE_DIR" ]; then
+            local cache_size=$(du -sh "$BVM_CACHE_DIR" 2>/dev/null | cut -f1 | xargs)
+            printf "  💽 Cache directory: %s (%s)\n" "$BVM_CACHE_DIR" "$cache_size"
+        fi
+
+        printf "  🗒️ Configuration and scripts\n"
+    else
+        printf "${YELLOW}BVM doesn't appear to be installed (no directory found at %s)${NORMAL}\n" "$BVM_HOME"
+        return 0
+    fi
+
+    printf "\n"
+    printf "${BOLD}${RED}This action cannot be undone!${NORMAL}\n"
+    printf "${YELLOW}Are you absolutely sure you want to completely uninstall BVM? [y/N]: ${NORMAL}"
+    read -r confirmation
+
+    case "$confirmation" in
+        [yY][eE][sS]|[yY])
+            printf "\n"
+            print_info "Uninstalling BVM..."
+
+            # Remove the entire BVM home directory
+            if [ -d "$BVM_HOME" ]; then
+                rm -rf "$BVM_HOME"
+                print_success "✅ Removed BVM home directory: $BVM_HOME"
+            fi
+
+            # Clean up any temporary files
+            rm -f /tmp/bvm_* 2>/dev/null || true
+            print_success "✅ Cleaned up temporary files"
+
+            printf "\n"
+            printf "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+            print_success "🎉 BVM has been completely uninstalled!"
+            printf "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NORMAL}\n"
+            printf "\n"
+            printf "${BOLD}Next steps:${NORMAL}\n"
+            printf "  • Remove any BVM-related entries from your shell profile (~/.bashrc, ~/.zshrc, etc.)\n"
+            printf "  • Remove the BVM binary from your PATH if you installed it system-wide\n"
+            printf "  • Close this terminal and open a new one to complete the cleanup\n"
+            printf "\n"
+            printf "${BOLD}Thank you for using BVM! 👋${NORMAL}\n"
+            printf "\n"
+            ;;
+        *)
+            printf "\n"
+            print_info "Uninstall cancelled - BVM remains installed"
+            printf "\n"
             ;;
     esac
 }
@@ -722,6 +911,92 @@ check_health() {
 }
 
 ###########################################################################
+# Check for BVM Updates
+###########################################################################
+check_bvm_updates() {
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_header "🔄 BVM Update Checker"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    printf "\n"
+
+    print_info "🔍 Checking for BVM updates...\n"
+
+    # Get current version from local version.json in scripts directory
+    local current_version=""
+    local version_file="$BVM_SCRIPTS_DIR/version.json"
+    if [ -f "$version_file" ]; then
+		current_version=$(jq -r '.INSTALLER_VERSION' "$version_file" 2>/dev/null || echo "")
+    fi
+
+    # Get latest version from remote
+    local latest_version=""
+    local temp_file="/tmp/bvm_version_check.json"
+    if curl -s "$VERSION_CHECK_URL" > "$temp_file" 2>/dev/null && [ -s "$temp_file" ]; then
+        latest_version=$(jq -r '.INSTALLER_VERSION' "$temp_file" 2>/dev/null || echo "")
+        rm -f "$temp_file"
+    fi
+
+    if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+        print_error "Failed to fetch latest version information"
+        print_warning "Please check your internet connection and try again"
+        printf "\n"
+        printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+        return 1
+    fi
+
+	# Print current and latest versions
+    printf "${GREEN}Current BVM version: %s${NORMAL}\n" "$current_version"
+    printf "${GREEN}Latest BVM version:  %s${NORMAL}\n" "$latest_version"
+    printf "\n"
+
+	# Compare versions now
+	if compare_versions "$latest_version" "$current_version"; then
+		local comparison_result=0
+	else
+		local comparison_result=$?
+	fi
+
+	case $comparison_result in
+		0)
+			print_success "🦾 You have the latest version of BVM!"
+			;;
+		1)
+			print_warning "🆙 A newer version of BVM is available!"
+			printf "\n"
+			printf "${BOLD}Would you like to upgrade to version [%s]? [Y/n]: ${NORMAL}" "$latest_version"
+			read -r upgrade_response
+
+			case "$upgrade_response" in
+				[nN][oO]|[nN])
+					print_info "Update cancelled"
+					;;
+				*)
+					print_info "🚀 Starting BVM upgrade to version [$latest_version]..."
+					local install_script="$BVM_SCRIPTS_DIR/install-bvm.sh"
+					if [ -x "$install_script" ]; then
+						print_info "⚡Executing upgrade using: $install_script"
+						exec "$install_script"
+					else
+						print_error "BVM installer script not found at: $install_script"
+						print_info "Please reinstall BVM manually using:"
+						print_info "curl -fsSL https://install-bvm.boxlang.io | bash"
+					fi
+					;;
+			esac
+			;;
+		2)
+			print_info "🧑‍💻 Your BVM version is newer than the latest release, hmm, how did that happen?"
+			;;
+		*)
+			print_error "Failed to compare versions"
+			;;
+	esac
+
+    printf "\n"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+}
+
+###########################################################################
 # Main Function
 ###########################################################################
 
@@ -751,6 +1026,9 @@ main() {
         "use")
             use_version "$1"
             ;;
+        "local")
+            write_bvmrc_version "$1"
+            ;;
         "current")
             show_current_version
             ;;
@@ -760,8 +1038,11 @@ main() {
         "list-remote"|"ls-remote")
             list_remote_versions
             ;;
-        "uninstall"|"remove"|"rm")
-            uninstall_version "$1"
+        "remove"|"rm")
+            remove_version "$1"
+            ;;
+        "uninstall")
+            uninstall_bvm
             ;;
         "which")
             show_which
@@ -778,8 +1059,11 @@ main() {
         "doctor"|"health")
             check_health
             ;;
+        "check-update")
+            check_bvm_updates
+            ;;
         "version"|"--version"|"-v")
-            printf "BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION"
+            printf "${GREEN}🥊 BVM (BoxLang Version Manager) v%s\n" "$BVM_VERSION${NORMAL}"
             ;;
         "help"|"--help"|"-h"|"")
             show_help
@@ -792,9 +1076,6 @@ main() {
             ;;
     esac
 }
-
-# Initialize BVM
-ensure_bvm_dirs
 
 # Run main function with all arguments
 main "$@"

@@ -38,7 +38,7 @@ jobs:
           echo "image_version=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Update changelog [unreleased] with latest version
-        uses: thomaseizinger/keep-a-changelog-new-release@2.0.0
+        uses: thomaseizinger/keep-a-changelog-new-release@3.1.0
         # If NOT a env.snapshot
         if: env.SNAPSHOT == 'false'
         with:
@@ -94,7 +94,7 @@ jobs:
           DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
       - name: Create Github Release
-        uses: taiki-e/create-gh-release-action@v1.8.0
+        uses: taiki-e/create-gh-release-action@v1.9.1
         if: env.SNAPSHOT == 'false'
         continue-on-error: true
         id: create_release
