@@ -511,7 +511,7 @@ install_version() {
 
     print_success "BoxLang $version installed successfully"
     print_info "Components installed:"
-    print_info "  - BoxLang runtime (boxlang, bx)"
+    print_info "  - BoxLang Runtime (boxlang, bx)"
     print_info "  - BoxLang MiniServer (boxlang-miniserver, bx-miniserver)"
     print_info "Helper scripts are managed by BVM and available globally"
     print_info "Use 'bvm use $version' to switch to this version"
