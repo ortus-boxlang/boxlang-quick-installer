@@ -16,10 +16,14 @@ set -e
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
 # Include the helper functions
+# These are installed by the installer script
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
 	source "$(dirname "$0")/helpers/helpers.sh"
-else
+elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+else
+	printf "${RED}Error: Helper scripts not found. Please verify your installation.${NORMAL}\n"
+	exit 1
 fi
 
 ###########################################################################
