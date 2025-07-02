@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed the `install-bx-module` script to use the right helpers path.
 - Build script was not updating the rigth `@build.version` so it was never updated in the bvm and installer.'
 
 ## [1.14.0] - 2025-06-24

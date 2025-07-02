@@ -21,6 +21,8 @@ if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
 	source "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
+    source "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
 	printf "${RED}Error: Helper scripts not found. Please verify your installation.${NORMAL}\n"
 	exit 1
@@ -255,11 +257,7 @@ install_module() {
 	mkdir -p "${MODULES_HOME}"
 
 	# Create secure temporary file
-	# Cleanup the temp file in case it exists
-	if [ -f "/tmp/${TARGET_MODULE}.zip" ]; then
-		rm -f "/tmp/${TARGET_MODULE}.zip"
-	fi
-	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}.zip")
+	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}.XXXXXX.zip")
 	# Add a trap to remove the temp file on exit
 	trap 'rm -f "${TEMP_FILE}"' EXIT
 
@@ -293,19 +291,7 @@ install_module() {
 	fi
 
 	# Success message
-	printf "${GREEN}\n✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed successfully!\n"
-	echo ''
-	echo '*************************************************************************'
-	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
-	echo '*************************************************************************'
-	echo "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
-	echo "You can also buy support and enhanced versions at https://boxlang.io/plans"
-	echo 'p.s. Follow us at https://x.com/tryboxlang.'
-	echo 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
-	echo 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
-	echo '*************************************************************************'
-	echo "Copyright and Registered Trademarks of Ortus Solutions, Corp"
-	printf "${NORMAL}"
+	printf "${GREEN}\n✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed successfully!${NORMAL}\n"
 }
 
 remove_module() {

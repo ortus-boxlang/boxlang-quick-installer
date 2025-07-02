@@ -180,7 +180,7 @@ main() {
 		log_info "Standard build detected, using default installer URL"
     fi
 
-	log_info "Replacing @build.version@ to  [$version]"
+	log_info "Replacing @build.version@ to [$version]"
 	if [[ "$OSTYPE" == "darwin"* ]]; then
 		# macOS requires empty string after -i
 		sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
