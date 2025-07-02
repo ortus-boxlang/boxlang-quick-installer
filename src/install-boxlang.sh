@@ -31,7 +31,7 @@ elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
-	helpers_url="https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/refs/heads/development/src/helpers/helpers.sh"
+	helpers_url="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
 	if curl -fsSL "$helpers_url" -o "$helpers_file"; then

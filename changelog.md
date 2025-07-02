@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SHA-256 checksum verification for downloads to ensure integrity.
+- New `bvm stats` command to show statistics about the BoxLang installation, including the number of installed modules, their versions, and the total size of the installation.
+- More internal docs
+- install-bx-module helper tests
+- Network connection checker for bvm to assist on disconnected systems
+- Global cleanup helper in case something goes wrong during version installations
+
+### Changed
+
+- Updated the helpers to be installed from the CDN
+
+### Fixed
+
+- Invalid usage of `mktemp` by not using `xxx` placeholders, which caused issues on some systems.
+- Fixed the `install-bx-module` script to use the right helpers path.
+- Build script was not updating the rigth `@build.version` so it was never updated in the bvm and installer.'
+
+## [1.14.0] - 2025-06-24
+
+### Added
+
 - If doing `bvm install snapshot`, it will now always force install the latest snapshot version of BoxLang.
 - New convention for BVM: `.bvmrc` file in the root of the project to specify the BoxLang version to use.
 - New `bvm use` command to switch between BoxLang versions according to the `.bvmrc` file

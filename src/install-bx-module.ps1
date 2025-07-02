@@ -295,17 +295,6 @@ function Install-Module {
         # Success message
         Write-Host ""
         Write-Host "✅ BoxLang® Module [$targetModule@$targetVersion] installed successfully!" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "*************************************************************************"
-        Write-Host "BoxLang® - Dynamic : Modular : Productive : https://boxlang.io"
-        Write-Host "*************************************************************************"
-        Write-Host "BoxLang® is FREE and Open-Source Software under the Apache 2.0 License"
-        Write-Host "You can also buy support and enhanced versions at https://boxlang.io/plans"
-        Write-Host "p.s. Follow us at https://x.com/tryboxlang."
-        Write-Host "p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang"
-        Write-Host "Please support us via Patreon at https://www.patreon.com/ortussolutions"
-        Write-Host "*************************************************************************"
-        Write-Host "Copyright and Registered Trademarks of Ortus Solutions, Corp"
 
     } catch {
         Write-Host "❌ Error: Download failed: $($_.Exception.Message)" -ForegroundColor Red
