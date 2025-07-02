@@ -183,6 +183,7 @@ show_help() {
     printf "  ${GREEN}run${NORMAL} <args>           Alias for exec\n"
     printf "  ${GREEN}miniserver${NORMAL} <args>    Start BoxLang MiniServer\n"
     printf "  ${GREEN}clean${NORMAL}                Clean cache and temporary files\n"
+    printf "  ${GREEN}stats${NORMAL}                Show performance and usage statistics\n"
     printf "  ${GREEN}doctor${NORMAL}               Check BVM installation health\n"
     printf "  ${GREEN}check-update${NORMAL}         Check for BVM updates\n"
     printf "  ${GREEN}version${NORMAL}              Show BVM version\n"
@@ -202,6 +203,7 @@ show_help() {
     printf "  bvm run --help\n"
     printf "  bvm miniserver --port 8080\n"
     printf "  bvm clean\n"
+    printf "  bvm stats\n"
     printf "  bvm doctor\n"
     printf "  bvm check-update\n"
     printf "  bvm remove 1.1.0\n"
@@ -222,7 +224,8 @@ list_remote_versions() {
 
     # Try to fetch from GitHub API
     local github_api="https://api.github.com/repos/ortus-boxlang/boxlang/releases"
-    local temp_file="/tmp/bvm_releases.json"
+    local temp_file=$(mktemp "/tmp/bvm_releases.XXXXXX.json")
+    trap 'rm -f "$temp_file"' EXIT
 
     if curl -s "$github_api" > "$temp_file" 2>/dev/null && [ -s "$temp_file" ]; then
         printf "${BOLD}Available BoxLang versions:${NORMAL}\n"
@@ -348,6 +351,9 @@ install_version() {
 
     print_info "Installing BoxLang [$version]..."
 
+    # Track installation for cleanup
+    INSTALLING_VERSION="$version"
+
     # Determine download URLs
     local boxlang_url=""
     local miniserver_url=""
@@ -385,21 +391,44 @@ install_version() {
     # Create installation directory
     mkdir -p "$install_dir"
 
+    # Check network connectivity before attempting downloads
+    if ! check_network_connectivity; then
+        print_warning "Network connectivity issues detected - downloads may fail"
+    fi
+
     # Download BoxLang runtime
-    print_info "Downloading BoxLang runtime from $boxlang_url"
-    if ! env curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
+    print_info "⬇️  Downloading BoxLang runtime... (this may take a moment)"
+    if ! curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
         rm -rf "$install_dir"
         return 1
     fi
 
+    # Verify download with SHA-256 checksum
+    if ! verify_download_with_checksum "$boxlang_cache" "$(dirname "$boxlang_url")" 5000000; then  # Expect at least 5MB
+        print_error "BoxLang runtime download verification failed"
+        rm -rf "$install_dir"
+        rm -f "$boxlang_cache"
+        return 1
+    fi
+    print_success "✅ BoxLang runtime downloaded and verified"
+
     # Download BoxLang MiniServer
-    print_info "Downloading BoxLang MiniServer from $miniserver_url"
-    if ! env curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
+    print_info "⬇️  Downloading BoxLang MiniServer... (this may take a moment)"
+    if ! curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
         rm -rf "$install_dir"
         return 1
     fi
+
+    # Verify download with SHA-256 checksum
+    if ! verify_download_with_checksum "$miniserver_cache" "$(dirname "$miniserver_url")" 8000000; then  # Expect at least 8 MB
+        print_error "BoxLang MiniServer download verification failed"
+        rm -rf "$install_dir"
+        rm -f "$miniserver_cache"
+        return 1
+    fi
+    print_success "✅ BoxLang MiniServer downloaded and verified"
 
     # Extract BoxLang runtime
     print_info "Extracting BoxLang runtime..."
@@ -510,6 +539,10 @@ install_version() {
     fi
 
     print_success "BoxLang $version installed successfully"
+
+    # Clear installation tracking
+    unset INSTALLING_VERSION
+
     print_info "Components installed:"
     print_info "  - BoxLang Runtime (boxlang, bx)"
     print_info "  - BoxLang MiniServer (boxlang-miniserver, bx-miniserver)"
@@ -753,6 +786,67 @@ clean_cache() {
     print_success "Cleanup complete"
 }
 
+# Show performance and usage statistics
+show_stats() {
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    print_header "📊 BVM Performance & Usage Statistics"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    printf "\n"
+
+    # BVM installation stats
+    if [ -d "$BVM_HOME" ]; then
+        local bvm_size=$(du -sh "$BVM_HOME" 2>/dev/null | cut -f1 | xargs)
+        print_info "BVM home directory size: $bvm_size"
+    fi
+
+    # Versions stats
+    if [ -d "$BVM_VERSIONS_DIR" ]; then
+        local version_count=$(find "$BVM_VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+        local versions_size=$(du -sh "$BVM_VERSIONS_DIR" 2>/dev/null | cut -f1 | xargs)
+        print_info "Installed versions: $version_count (total size: $versions_size)"
+
+        # Show size breakdown by version
+        printf "\n${BOLD}Version breakdown:${NORMAL}\n"
+        find "$BVM_VERSIONS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | while read -r version_dir; do
+            if [ -d "$version_dir" ]; then
+                local version=$(basename "$version_dir")
+                local size=$(du -sh "$version_dir" 2>/dev/null | cut -f1 | xargs)
+                printf "  %s: %s\n" "$version" "$size"
+            fi
+        done
+    fi
+
+    # Cache stats
+    if [ -d "$BVM_CACHE_DIR" ]; then
+        local cache_size=$(du -sh "$BVM_CACHE_DIR" 2>/dev/null | cut -f1 | xargs)
+        local cache_files=$(find "$BVM_CACHE_DIR" -type f 2>/dev/null | wc -l)
+        print_info "Cache directory: $cache_size ($cache_files files)"
+    fi
+
+    # Current version performance
+    if [ -L "$BVM_CURRENT_LINK" ] && [ -e "$BVM_CURRENT_LINK" ]; then
+        local current_version=$(basename "$(readlink "$BVM_CURRENT_LINK")")
+        printf "\n${BOLD}Current version performance:${NORMAL}\n"
+
+        local boxlang_bin="$BVM_CURRENT_LINK/bin/boxlang"
+        if [ -x "$boxlang_bin" ]; then
+            # Quick startup time test
+            print_info "Testing BoxLang startup time..."
+            local start_time=$(date +%s%3N)
+            if "$boxlang_bin" --version >/dev/null 2>&1; then
+                local end_time=$(date +%s%3N)
+                local duration=$((end_time - start_time))
+                printf "  Startup time: %sms\n" "$duration"
+            else
+                printf "  Startup test: Failed\n"
+            fi
+        fi
+    fi
+
+    printf "\n"
+    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+}
+
 ###########################################################################
 # Check BVM installation health
 ###########################################################################
@@ -930,7 +1024,9 @@ check_bvm_updates() {
 
     # Get latest version from remote
     local latest_version=""
-    local temp_file="/tmp/bvm_version_check.json"
+    local temp_file=$(mktemp "/tmp/bvm_version_check.XXXXXX.json")
+    trap 'rm -f "$temp_file"' EXIT INT
+
     if curl -s "$VERSION_CHECK_URL" > "$temp_file" 2>/dev/null && [ -s "$temp_file" ]; then
         latest_version=$(jq -r '.INSTALLER_VERSION' "$temp_file" 2>/dev/null || echo "")
         rm -f "$temp_file"
@@ -997,6 +1093,117 @@ check_bvm_updates() {
 }
 
 ###########################################################################
+# Check network connectivity
+###########################################################################
+check_network_connectivity() {
+    # Test connectivity to main download server
+    if ! curl -s --max-time 10 --head "$DOWNLOAD_BASE_URL" >/dev/null 2>&1; then
+        print_warning "Network connectivity check failed"
+        print_info "Attempting to continue anyway..."
+        return 1
+    fi
+    return 0
+}
+
+# Verify file integrity with SHA-256 checksum
+verify_download_with_checksum() {
+    local file_path="$1"
+    local base_url="$2"
+    local min_size="${3:-1000}"  # Minimum expected file size in bytes
+
+    if [ ! -f "$file_path" ]; then
+        print_error "Downloaded file does not exist: $file_path"
+        return 1
+    fi
+
+    # Basic size check
+    local file_size=$(stat -f%z "$file_path" 2>/dev/null || stat -c%s "$file_path" 2>/dev/null || echo 0)
+    if [ "$file_size" -lt "$min_size" ]; then
+        print_error "Downloaded file appears corrupted (size: $file_size bytes)"
+        return 1
+    fi
+
+    # Basic ZIP file validation
+    if [[ "$file_path" == *.zip ]]; then
+        if ! unzip -t "$file_path" >/dev/null 2>&1; then
+            print_error "Downloaded ZIP file is corrupted"
+            return 1
+        fi
+    fi
+
+    # Try to download and verify SHA-256 checksum
+    local filename=$(basename "$file_path")
+    local checksum_url="${base_url}/${filename}.sha-256"
+    local checksum_file="${file_path}.sha-256"
+
+    print_info "🔒 Attempting to verify SHA-256 checksum..."
+
+    if curl -s --fail -o "$checksum_file" "$checksum_url" 2>/dev/null; then
+        # Checksum file exists, verify it
+        if command_exists sha256sum; then
+            local actual_checksum=$(sha256sum "$file_path" | cut -d' ' -f1)
+            local expected_checksum=$(cat "$checksum_file" | cut -d' ' -f1)
+
+            if [ "$actual_checksum" = "$expected_checksum" ]; then
+                print_success "✅ SHA-256 checksum verification passed"
+                rm -f "$checksum_file"
+                return 0
+            else
+                print_error "❌ SHA-256 checksum verification failed!"
+                print_error "Expected: $expected_checksum"
+                print_error "Actual:   $actual_checksum"
+                rm -f "$checksum_file"
+                return 1
+            fi
+        elif command_exists shasum; then
+            local actual_checksum=$(shasum -a 256 "$file_path" | cut -d' ' -f1)
+            local expected_checksum=$(cat "$checksum_file" | cut -d' ' -f1)
+
+            if [ "$actual_checksum" = "$expected_checksum" ]; then
+                print_success "✅ SHA-256 checksum verification passed"
+                rm -f "$checksum_file"
+                return 0
+            else
+                print_error "❌ SHA-256 checksum verification failed!"
+                print_error "Expected: $expected_checksum"
+                print_error "Actual:   $actual_checksum"
+                rm -f "$checksum_file"
+                return 1
+            fi
+        else
+            print_warning "⚠️  No SHA-256 utility found (sha256sum or shasum), skipping checksum verification"
+            rm -f "$checksum_file"
+        fi
+    else
+        # Checksum file doesn't exist - this is expected for versions < 1.3.0
+        print_warning "⚠️  No SHA-256 checksum available for this BoxLang version"
+        print_info "SHA-256 checksums were introduced in BoxLang 1.3.0. Earlier versions do not have checksums."
+    fi
+
+    return 0
+}
+
+###########################################################################
+# Global error handler
+###########################################################################
+cleanup_on_error() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        print_error "An error occurred. Cleaning up..."
+        # Clean up any temporary files
+        rm -f /tmp/bvm_* 2>/dev/null || true
+        # Clean up any incomplete installations
+        if [ -n "${INSTALLING_VERSION:-}" ]; then
+            print_info "Cleaning up incomplete installation of $INSTALLING_VERSION..."
+            rm -rf "$BVM_VERSIONS_DIR/$INSTALLING_VERSION" 2>/dev/null || true
+        fi
+    fi
+}
+
+# Set up error trap
+trap 'cleanup_on_error' ERR
+
+###########################################################################
 # Main Function
 ###########################################################################
 
@@ -1055,6 +1262,9 @@ main() {
             ;;
         "clean")
             clean_cache
+            ;;
+        "stats"|"performance"|"usage")
+            show_stats
             ;;
         "doctor"|"health")
             check_health
