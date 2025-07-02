@@ -170,17 +170,28 @@ main() {
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
-			sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
         else
             # Linux doesn't use empty string after -i
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
-			sed -i "s|@build.version@|${version}|g" build/bvm.sh
         fi
     else
-		log_info "Standard build detected, using default installer URL..."
+		log_info "Standard build detected, using default installer URL"
     fi
+
+	log_info "Replacing @build.version@ to  [$version]"
+	if [[ "$OSTYPE" == "darwin"* ]]; then
+		# macOS requires empty string after -i
+		sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
+		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.sh
+		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.ps1
+	else
+		# Linux doesn't use empty string after -i
+		sed -i "s|@build.version@|${version}|g" build/bvm.sh
+		sed -i "s|@build.version@|${version}|g" build/install-boxlang.sh
+		sed -i "s|@build.version@|${version}|g" build/install-boxlang.ps1
+	fi
 
     # Generate checksums (excluding checksum files themselves)
     generate_checksums "build" ".tmp"

@@ -7,6 +7,7 @@
 $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
+$installerVersion = "@build.version@"
 
 # Command line flags - empty = prompt, true = install, false = skip
 $INSTALL_COMMANDBOX = ""
