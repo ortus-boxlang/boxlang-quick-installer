@@ -146,7 +146,7 @@ Here are the available options for the install command.
 | `--without-commandbox` | | Skip CommandBox installation |
 | `--yes` | `-y` | Use defaults for all prompts (installs CommandBox) |
 
-## Notes
+### Notes
 
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
