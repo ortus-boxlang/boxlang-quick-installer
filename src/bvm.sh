@@ -69,8 +69,19 @@ resolve_version_alias() {
                 echo "latest"
             fi
             ;;
+        "snapshot")
+            # Check if snapshot symlink exists
+            local snapshot_link="$BVM_VERSIONS_DIR/snapshot"
+            if [ -L "$snapshot_link" ] && [ -e "$snapshot_link" ]; then
+                # Follow the symlink to get the actual version
+                basename "$(readlink "$snapshot_link")"
+            else
+                # Fallback to literal 'snapshot' if no symlink found
+                echo "snapshot"
+            fi
+            ;;
         *)
-            # Return the version as-is for all other versions (including snapshot)
+            # Return the version as-is for all other versions
             echo "$requested_version"
             ;;
     esac
@@ -432,6 +443,7 @@ install_version() {
     fi
 
     # Extract BoxLang runtime
+	printf "\n"
     print_info "📦 Extracting BoxLang runtime..."
     if ! unzip -q "$boxlang_cache" -d "$install_dir"; then
         print_error "Failed to extract BoxLang runtime"
@@ -502,10 +514,19 @@ install_version() {
         ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
     fi
 
-    # Create version alias symlink for latest only
+    # Create version alias symlinks
     if [ "$original_version" = "latest" ]; then
         local alias_link="$BVM_VERSIONS_DIR/latest"
         print_info "Creating latest symlink to $version..."
+
+        # Remove existing symlink if it exists
+        rm -f "$alias_link"
+
+        # Create new symlink pointing to the actual version directory
+        ln -sf "$version" "$alias_link"
+    elif [ "$original_version" = "snapshot" ]; then
+        local alias_link="$BVM_VERSIONS_DIR/snapshot"
+        print_info "Creating snapshot symlink to $version..."
 
         # Remove existing symlink if it exists
         rm -f "$alias_link"
@@ -533,10 +554,6 @@ use_version() {
     if [ -z "$version" ]; then
         if version=$(read_bvmrc_version); then
             print_info "Reading version from .bvmrc: $version"
-			if [ "$version" = "snapshot" ]; then
-				print_info "Snapshot version detected, re-downloading..."
-				install_version "snapshot" "--force"
-			fi
         else
             print_error "No version specified and no .bvmrc file found"
             print_info "Usage:"
@@ -616,6 +633,16 @@ remove_version() {
                 if [ "$target_version" = "$version" ]; then
                     print_info "Removing latest symlink that pointed to $version"
                     rm -f "$latest_link"
+                fi
+            fi
+
+            # Clean up the snapshot symlink if it points to this version
+            local snapshot_link="$BVM_VERSIONS_DIR/snapshot"
+            if [ -L "$snapshot_link" ]; then
+                local target_version=$(basename "$(readlink "$snapshot_link")" 2>/dev/null || echo "")
+                if [ "$target_version" = "$version" ]; then
+                    print_info "Removing snapshot symlink that pointed to $version"
+                    rm -f "$snapshot_link"
                 fi
             fi
 

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Added
+
+- You can now use `bvm install snapshot` and `bvm use snapshot` to install and use the latest snapshot version of BoxLang.
+- The `bvm list` command now shows both the symlinked version and the actual version of BoxLang installed.
+
 ### Fixed
 
 - Fixed progress bars for downloads in the `bvm` command to use the correct `curl` flags.
