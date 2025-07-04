@@ -80,9 +80,22 @@ preflight_check() {
 	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
 	local missing_deps=()
 
-	command_exists curl || missing_deps+=("curl")
-	command_exists unzip || missing_deps+=("unzip")
-	command_exists jq || missing_deps+=("jq")
+	# Check required commands dependencies
+	if [ "$(uname)" = "Darwin" ]; then
+		# If brew is not installed, then quit, but only if we are on macOS
+		if ! command_exists brew; then
+			printf "${RED}❌ Homebrew is not installed. Please install Homebrew first.${NORMAL}\n"
+			printf "${BLUE}💡 You can install Homebrew with:${NORMAL}\n"
+			printf "${GREEN}   /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'\n"
+			return 1
+		fi
+		command_exists shasum || missing_deps+=( "shasum" )
+	elif [ "$(uname)" = "Linux" ]; then
+		command_exists sha256sum || missing_deps+=( "sha256sum" )
+	fi
+	command_exists curl || missing_deps+=( "curl" )
+	command_exists unzip || missing_deps+=( "unzip" )
+	command_exists jq || missing_deps+=( "jq" )
 
 	if [ ${#missing_deps[@]} -ne 0 ]; then
 		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"

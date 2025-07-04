@@ -863,9 +863,16 @@ check_health() {
 	# Check prerequisites
     print_info "Checking prerequisites..."
     local missing_deps=()
-    command_exists curl || missing_deps+=("curl")
-    command_exists unzip || missing_deps+=("unzip")
-    command_exists jq || missing_deps+=("jq")
+
+	if [ "$(uname)" = "Darwin" ]; then
+		command_exists shasum || missing_deps+=( "shasum" )
+	elif [ "$(uname)" = "Linux" ]; then
+		command_exists sha256sum || missing_deps+=( "sha256sum" )
+	fi
+
+    command_exists curl || missing_deps+=( "curl" )
+    command_exists unzip || missing_deps+=( "unzip" )
+    command_exists jq || missing_deps+=( "jq" )
 
     if [ ${#missing_deps[@]} -eq 0 ]; then
         print_success "All prerequisites satisfied"
