@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed progress bars for downloads in the `bvm` command to use the correct `curl` flags.
 - `snapshot` and `latest` version detection now uses the `version-latest.properties` and `version-snapshot.properties` files to determine the latest version.  This also fixes the issue where the miniserver text appeared in the version number.
 
+* * *
+
 ## [1.15.0] - 2025-07-02
 
 ### Added
