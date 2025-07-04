@@ -80,38 +80,66 @@ preflight_check() {
 	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
 	local missing_deps=()
 
-	command_exists curl || missing_deps+=("curl")
-	command_exists unzip || missing_deps+=("unzip")
-	command_exists jq || missing_deps+=("jq")
+	# Check required commands dependencies
+	if [ "$(uname)" = "Darwin" ]; then
+		# If brew is not installed, then quit, but only if we are on macOS
+		if ! command_exists brew; then
+			printf "${RED}❌ Homebrew is not installed. Please install Homebrew first.${NORMAL}\n"
+			printf "${BLUE}💡 You can install Homebrew with:${NORMAL}\n"
+			printf "${GREEN}   /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'\n"
+			return 1
+		fi
+	fi
+	command_exists curl || missing_deps+=( "curl" )
+	command_exists unzip || missing_deps+=( "unzip" )
+	command_exists jq || missing_deps+=( "jq" )
 
 	if [ ${#missing_deps[@]} -ne 0 ]; then
 		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"
 
 		if [ "$(uname)" = "Darwin" ]; then
-			printf "${BLUE}💡 On macOS, you can install missing dependencies using:${NORMAL}\n"
+			# Install the dependencies using Homebrew
+			printf "${BLUE}💡 Installing missing dependencies using Homebrew...${NORMAL}\n"
 			for dep in "${missing_deps[@]}"; do
-				if [ "$dep" = "curl" ]; then
-					printf "   curl is usually pre-installed, try: xcode-select --install\n"
-				elif [ "$dep" = "unzip" ]; then
-					printf "   unzip is usually pre-installed, try: xcode-select --install\n"
+				printf "${BLUE}   Installing ${dep}...${NORMAL}\n"
+				if ! brew install "$dep"; then
+					printf "${RED}❌ Failed to install ${dep}. Please install it manually.${NORMAL}\n"
+					return 1
 				fi
 			done
+			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
 		elif [ "$(uname)" = "Linux" ]; then
+			printf "${BLUE}💡 Installing missing dependencies using system package manager...${NORMAL}\n"
 			if command_exists apt-get; then
-				printf "${BLUE}💡 On Ubuntu/Debian, install with:${NORMAL}\n"
-				printf "   sudo apt update && sudo apt install ${missing_deps[*]}\n"
+				printf "${BLUE}   Updating package list and installing dependencies...${NORMAL}\n"
+				if ! sudo apt update && sudo apt install -y ${missing_deps[*]}; then
+					printf "${RED}❌ Failed to install dependencies with apt. Please install them manually.${NORMAL}\n"
+					return 1
+				fi
 			elif command_exists yum; then
-				printf "${BLUE}💡 On RHEL/CentOS, install with:${NORMAL}\n"
-				printf "   sudo yum install ${missing_deps[*]}\n"
+				printf "${BLUE}   Installing dependencies with yum...${NORMAL}\n"
+				if ! sudo yum install -y ${missing_deps[*]}; then
+					printf "${RED}❌ Failed to install dependencies with yum. Please install them manually.${NORMAL}\n"
+					return 1
+				fi
 			elif command_exists dnf; then
-				printf "${BLUE}💡 On Fedora, install with:${NORMAL}\n"
-				printf "   sudo dnf install ${missing_deps[*]}\n"
+				printf "${BLUE}   Installing dependencies with dnf...${NORMAL}\n"
+				if ! sudo dnf install -y ${missing_deps[*]}; then
+					printf "${RED}❌ Failed to install dependencies with dnf. Please install them manually.${NORMAL}\n"
+					return 1
+				fi
 			elif command_exists pacman; then
-				printf "${BLUE}💡 On Arch Linux, install with:${NORMAL}\n"
-				printf "   sudo pacman -S ${missing_deps[*]}\n"
+				printf "${BLUE}   Installing dependencies with pacman...${NORMAL}\n"
+				if ! sudo pacman -S --noconfirm ${missing_deps[*]}; then
+					printf "${RED}❌ Failed to install dependencies with pacman. Please install them manually.${NORMAL}\n"
+					return 1
+				fi
+			else
+				printf "${RED}❌ No supported package manager found. Please install dependencies manually: ${missing_deps[*]}${NORMAL}\n"
+				return 1
 			fi
+			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
 		fi
-		return 1
 	fi
 
 	###########################################################################

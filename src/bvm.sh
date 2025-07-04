@@ -24,7 +24,9 @@ DOWNLOAD_BASE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang"
 MINISERVER_BASE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver"
 INSTALLER_BASE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
 LATEST_URL="$DOWNLOAD_BASE_URL/boxlang-latest.zip"
+LATEST_VERSION_URL="$DOWNLOAD_BASE_URL/version-latest.properties"
 SNAPSHOT_URL="$DOWNLOAD_BASE_URL/boxlang-snapshot.zip"
+SNAPSHOT_VERSION_URL="$DOWNLOAD_BASE_URL/version-snapshot.properties"
 LATEST_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-latest.zip"
 SNAPSHOT_MINISERVER_URL="$MINISERVER_BASE_URL/boxlang-miniserver-snapshot.zip"
 INSTALLER_URL="$INSTALLER_BASE_URL/boxlang-installer.zip"
@@ -67,8 +69,19 @@ resolve_version_alias() {
                 echo "latest"
             fi
             ;;
+        "snapshot")
+            # Check if snapshot symlink exists
+            local snapshot_link="$BVM_VERSIONS_DIR/snapshot"
+            if [ -L "$snapshot_link" ] && [ -e "$snapshot_link" ]; then
+                # Follow the symlink to get the actual version
+                basename "$(readlink "$snapshot_link")"
+            else
+                # Fallback to literal 'snapshot' if no symlink found
+                echo "snapshot"
+            fi
+            ;;
         *)
-            # Return the version as-is for all other versions (including snapshot)
+            # Return the version as-is for all other versions
             echo "$requested_version"
             ;;
     esac
@@ -398,7 +411,7 @@ install_version() {
 
     # Download BoxLang runtime
     print_info "⬇️  Downloading BoxLang runtime... (this may take a moment)"
-    if ! curl -fsSL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
+    if ! curl -fL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
         rm -rf "$install_dir"
         return 1
@@ -411,11 +424,11 @@ install_version() {
         rm -f "$boxlang_cache"
         return 1
     fi
-    print_success "✅ BoxLang runtime downloaded and verified"
 
     # Download BoxLang MiniServer
+	printf "\n"
     print_info "⬇️  Downloading BoxLang MiniServer... (this may take a moment)"
-    if ! curl -fsSL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
+    if ! curl -fL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
         rm -rf "$install_dir"
         return 1
@@ -428,10 +441,10 @@ install_version() {
         rm -f "$miniserver_cache"
         return 1
     fi
-    print_success "✅ BoxLang MiniServer downloaded and verified"
 
     # Extract BoxLang runtime
-    print_info "Extracting BoxLang runtime..."
+	printf "\n"
+    print_info "📦 Extracting BoxLang runtime..."
     if ! unzip -q "$boxlang_cache" -d "$install_dir"; then
         print_error "Failed to extract BoxLang runtime"
         rm -rf "$install_dir"
@@ -439,7 +452,7 @@ install_version() {
     fi
 
     # Extract BoxLang MiniServer
-    print_info "Extracting BoxLang MiniServer..."
+    print_info "📦 Extracting BoxLang MiniServer..."
     if ! unzip -q "$miniserver_cache" -d "$install_dir"; then
         print_error "Failed to extract BoxLang MiniServer"
         rm -rf "$install_dir"
@@ -454,62 +467,42 @@ install_version() {
     # Detect actual version for latest/snapshot installations
     local actual_version="$version"
     if [ "$original_version" = "latest" ] || [ "$original_version" = "snapshot" ]; then
-        print_info "🔎 Version alias requested, detecting actual version number..."
+        print_info "🔎 Version alias requested, fetching actual version from remote..."
 
-        # Look for boxlang JAR file in lib directory to detect version
-        local lib_dir="$install_dir/lib"
-		# Find boxlang-*.jar files matching the pattern boxlang-{version}.jar or boxlang-{version}-snapshot.jar
-		local jar_file=$(find "$lib_dir" -name "boxlang-*.jar" -type f | head -1)
+        # Fetch version from remote property file
+        if actual_version=$(fetch_remote_version "$original_version"); then
+            # Clean up version string - remove any build metadata after +
+            actual_version=$(echo "$actual_version" | sed 's/+.*//')
+            print_info "Detected version: $actual_version"
 
-		if [ -n "$jar_file" ]; then
-			# Extract filename and get version from it
-			local jar_filename=$(basename "$jar_file")
-			# Remove boxlang- prefix and .jar suffix to get version
-			local detected_version=$(echo "$jar_filename" | sed 's/^boxlang-//' | sed 's/\.jar$//')
+            # Check if this version already exists
+            local actual_version_dir="$BVM_VERSIONS_DIR/$actual_version"
+            if [ -d "$actual_version_dir" ] && [ "$force_install" != "--force" ]; then
+                print_warning "BoxLang $actual_version is already installed"
+                print_info "Use 'bvm use $actual_version' to switch to this version"
+                print_info "Use 'bvm install $original_version --force' to reinstall"
+                rm -rf "$install_dir"
+                return 0
+            fi
 
-			# Use extract_semantic_version helper to get clean semantic version
-			actual_version=$(extract_semantic_version "$detected_version")
+            # If force install and version exists, remove it first
+            if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
+                print_warning "Force reinstalling - removing existing $actual_version..."
+                rm -rf "$actual_version_dir"
+            fi
 
-			# For snapshot versions, append the snapshot suffix if it's not already there
-			if [ "$original_version" = "snapshot" ] && ! isSnapshotVersion "$actual_version"; then
-				# Check if the original detected version had snapshot info
-				if isSnapshotVersion "$detected_version"; then
-					actual_version="$detected_version"
-				else
-					actual_version="${actual_version}-snapshot"
-				fi
-			fi
-
-			print_info "Detected version: $actual_version (from $jar_filename)"
-
-			# Check if this version already exists
-			local actual_version_dir="$BVM_VERSIONS_DIR/$actual_version"
-			if [ -d "$actual_version_dir" ] && [ "$force_install" != "--force" ]; then
-				print_warning "BoxLang $actual_version is already installed"
-				print_info "Use 'bvm use $actual_version' to switch to this version"
-				print_info "Use 'bvm install $original_version --force' to reinstall"
-				rm -rf "$install_dir"
-				return 0
-			fi
-
-			# If force install and version exists, remove it first
-			if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
-				print_info "Force reinstalling - removing existing $actual_version..."
-				rm -rf "$actual_version_dir"
-			fi
-
-			# Move from temporary to actual version directory
-			version_dir="$actual_version_dir"
-			mkdir -p "$(dirname "$version_dir")"
-			mv "$install_dir" "$version_dir"
-			version="$actual_version"
-		else
-			print_error "Could not find BoxLang JAR file in lib directory, using '$original_version'"
-			# cleanup and exit, this is a failure
-			rm -rf "$install_dir"
-			return 1
-		fi
-
+            # Move from temporary to actual version directory
+            version_dir="$actual_version_dir"
+            mkdir -p "$(dirname "$version_dir")"
+            mv "$install_dir" "$version_dir"
+            version="$actual_version"
+        else
+            print_error "Failed to fetch version info from remote"
+            print_info "This is required for $original_version installations to determine the actual version number"
+            print_info "Please check your internet connection and try again"
+            rm -rf "$install_dir"
+            return 1
+        fi
     fi
 
     # Create internal symlinks (bx -> boxlang, bx-miniserver -> boxlang-miniserver)
@@ -521,10 +514,19 @@ install_version() {
         ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
     fi
 
-    # Create version alias symlink for latest only
+    # Create version alias symlinks
     if [ "$original_version" = "latest" ]; then
         local alias_link="$BVM_VERSIONS_DIR/latest"
         print_info "Creating latest symlink to $version..."
+
+        # Remove existing symlink if it exists
+        rm -f "$alias_link"
+
+        # Create new symlink pointing to the actual version directory
+        ln -sf "$version" "$alias_link"
+    elif [ "$original_version" = "snapshot" ]; then
+        local alias_link="$BVM_VERSIONS_DIR/snapshot"
+        print_info "Creating snapshot symlink to $version..."
 
         # Remove existing symlink if it exists
         rm -f "$alias_link"
@@ -538,15 +540,9 @@ install_version() {
         rm -f "$boxlang_cache" "$miniserver_cache"
     fi
 
-    print_success "BoxLang $version installed successfully"
-
     # Clear installation tracking
+    print_success "BoxLang $version installed successfully"
     unset INSTALLING_VERSION
-
-    print_info "Components installed:"
-    print_info "  - BoxLang Runtime (boxlang, bx)"
-    print_info "  - BoxLang MiniServer (boxlang-miniserver, bx-miniserver)"
-    print_info "Helper scripts are managed by BVM and available globally"
     print_info "Use 'bvm use $version' to switch to this version"
 }
 
@@ -558,10 +554,6 @@ use_version() {
     if [ -z "$version" ]; then
         if version=$(read_bvmrc_version); then
             print_info "Reading version from .bvmrc: $version"
-			if [ "$version" = "snapshot" ]; then
-				print_info "Snapshot version detected, re-downloading..."
-				install_version "snapshot" "--force"
-			fi
         else
             print_error "No version specified and no .bvmrc file found"
             print_info "Usage:"
@@ -641,6 +633,16 @@ remove_version() {
                 if [ "$target_version" = "$version" ]; then
                     print_info "Removing latest symlink that pointed to $version"
                     rm -f "$latest_link"
+                fi
+            fi
+
+            # Clean up the snapshot symlink if it points to this version
+            local snapshot_link="$BVM_VERSIONS_DIR/snapshot"
+            if [ -L "$snapshot_link" ]; then
+                local target_version=$(basename "$(readlink "$snapshot_link")" 2>/dev/null || echo "")
+                if [ "$target_version" = "$version" ]; then
+                    print_info "Removing snapshot symlink that pointed to $version"
+                    rm -f "$snapshot_link"
                 fi
             fi
 
@@ -861,9 +863,16 @@ check_health() {
 	# Check prerequisites
     print_info "Checking prerequisites..."
     local missing_deps=()
-    command_exists curl || missing_deps+=("curl")
-    command_exists unzip || missing_deps+=("unzip")
-    command_exists jq || missing_deps+=("jq")
+
+	if [ "$(uname)" = "Darwin" ]; then
+		command_exists shasum || missing_deps+=( "shasum" )
+	elif [ "$(uname)" = "Linux" ]; then
+		command_exists sha256sum || missing_deps+=( "sha256sum" )
+	fi
+
+    command_exists curl || missing_deps+=( "curl" )
+    command_exists unzip || missing_deps+=( "unzip" )
+    command_exists jq || missing_deps+=( "jq" )
 
     if [ ${#missing_deps[@]} -eq 0 ]; then
         print_success "All prerequisites satisfied"
@@ -1105,7 +1114,9 @@ check_network_connectivity() {
     return 0
 }
 
+###########################################################################
 # Verify file integrity with SHA-256 checksum
+###########################################################################
 verify_download_with_checksum() {
     local file_path="$1"
     local base_url="$2"
@@ -1145,11 +1156,11 @@ verify_download_with_checksum() {
             local expected_checksum=$(cat "$checksum_file" | cut -d' ' -f1)
 
             if [ "$actual_checksum" = "$expected_checksum" ]; then
-                print_success "✅ SHA-256 checksum verification passed"
+                print_success "SHA-256 checksum verification passed"
                 rm -f "$checksum_file"
                 return 0
             else
-                print_error "❌ SHA-256 checksum verification failed!"
+                print_error "SHA-256 checksum verification failed!"
                 print_error "Expected: $expected_checksum"
                 print_error "Actual:   $actual_checksum"
                 rm -f "$checksum_file"
@@ -1160,11 +1171,11 @@ verify_download_with_checksum() {
             local expected_checksum=$(cat "$checksum_file" | cut -d' ' -f1)
 
             if [ "$actual_checksum" = "$expected_checksum" ]; then
-                print_success "✅ SHA-256 checksum verification passed"
+                print_success "SHA-256 checksum verification passed"
                 rm -f "$checksum_file"
                 return 0
             else
-                print_error "❌ SHA-256 checksum verification failed!"
+                print_error "SHA-256 checksum verification failed!"
                 print_error "Expected: $expected_checksum"
                 print_error "Actual:   $actual_checksum"
                 rm -f "$checksum_file"
@@ -1181,6 +1192,59 @@ verify_download_with_checksum() {
     fi
 
     return 0
+}
+
+###########################################################################
+# Fetch version from remote property file
+###########################################################################
+fetch_remote_version() {
+    local version_type="$1"  # "latest" or "snapshot"
+    local version_url=""
+
+    case "$version_type" in
+        "latest")
+            version_url="$LATEST_VERSION_URL"
+            ;;
+        "snapshot")
+            version_url="$SNAPSHOT_VERSION_URL"
+            ;;
+        *)
+            print_error "Invalid version type: $version_type"
+            return 1
+            ;;
+    esac
+
+    # Create temporary file for version properties
+    local temp_version_file=$(mktemp "/tmp/bvm_version.XXXXXX.properties")
+    trap 'rm -f "$temp_version_file"' EXIT
+
+    # Download version properties file with shorter timeout for responsiveness
+    if curl -fsSL --connect-timeout 5 --max-time 15 "$version_url" -o "$temp_version_file" 2>/dev/null; then
+        # Parse version from properties file
+        local remote_version=""
+        if [ -f "$temp_version_file" ] && [ -s "$temp_version_file" ]; then
+            # Extract version line and get the value after the equals sign
+            remote_version=$(grep "^version=" "$temp_version_file" | cut -d'=' -f2 | tr -d '[:space:]')
+
+            if [ -n "$remote_version" ]; then
+                echo "$remote_version"
+                rm -f "$temp_version_file"
+                return 0
+            else
+                print_warning "Could not parse version from properties file"
+            fi
+        else
+            print_warning "Properties file is empty or corrupted"
+        fi
+    else
+        print_warning "Failed to download version properties from $version_url"
+    fi
+
+    # If we get here, the remote fetch failed
+    print_warning "Failed to fetch $version_type version info from remote"
+    print_info "This could be due to network issues or server unavailability"
+    rm -f "$temp_version_file"
+    return 1
 }
 
 ###########################################################################
