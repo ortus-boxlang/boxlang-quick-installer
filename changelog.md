@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- More requirements check for checksum verification.
+- Requirements check now installs all requirements: `curl`, `jq`, `unzip`, `brew`
 - You can now use `bvm install snapshot` and `bvm use snapshot` to install and use the latest snapshot version of BoxLang.
 - The `bvm list` command now shows both the symlinked version and the actual version of BoxLang installed.
 
