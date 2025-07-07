@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Check paths and install home had old code that was exiting out before upgrading the path.
+
+* * *
+
 ## [1.16.2] - 2025-07-07
 
 ### Fixed
