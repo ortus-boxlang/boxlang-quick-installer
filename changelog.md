@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CI $TERM variable to be set to `xterm-256color` if not set, or if it is set to `unknown` or `dumb`.
+
+* * *
+
 ## [1.16.0] - 2025-07-04
 
 ### Added
