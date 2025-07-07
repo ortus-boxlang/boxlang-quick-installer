@@ -244,13 +244,14 @@ check_or_set_path() {
 				echo "export BOXLANG_INSTALL_HOME=\"$install_home\""
 			fi
 		} >> "$profile_file"
-		print_success "Successfully added BOXLANG_INSTALL_HOME to $profile_file"
+		print_success "Successfully added BOXLANG_INSTALL_HOME to [$profile_file]"
 		export BOXLANG_INSTALL_HOME="$install_home"
 		return 0
 	fi
 
 	# Add PATH to the profile file
-	print_info "➕ Adding $bin_dir to PATH in $profile_file..."
+	print_info "➕ Adding [$bin_dir] to PATH in [$profile_file]..."
+	print_info "➕ Adding BOXLANG_INSTALL_HOME [$install_home] in [$profile_file]..."
 
 	{
 		echo ""
@@ -269,7 +270,7 @@ check_or_set_path() {
 		fi
 	} >> "$profile_file"
 
-	print_success "Successfully added [$bin_dir] to PATH in $profile_file"
+	print_success "Successfully added [$bin_dir] to PATH in [$profile_file]"
 	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
 	# Special handling for WSL
