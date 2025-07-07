@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * * *
 
+### Fixed
+
+- More path fixes on install bx module command.
+
+* * *
+
+## [1.16.4] - 2025-07-07
+
+### Fixed
+
+- More path fixes on install bx module command.
+
+* * *
+
 ## [1.16.3] - 2025-07-07
 
 ### Fixed
