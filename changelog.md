@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.2] - 2025-07-07
+
 ### Fixed
 
 - installer for boxlang now sets the `BOXLANG_INSTALL_HOME` environment variable to the installation home directory.
 - `install-bx-module` now uses the `BOXLANG_INSTALL_HOME` environment variable to determine the installation directory as it is failing on standard installations.
+
+* * *
 
 ## [1.16.1] - 2025-07-07
 
@@ -280,7 +284,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.1...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.2...HEAD
+[1.16.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.1...v1.16.2
 [1.16.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.14.0...v1.15.0
