@@ -165,17 +165,9 @@ check_for_updates() {
 # PATH Check and Auto-Update Function
 ###########################################################################
 check_or_set_path() {
+	# Incoming args
 	local bin_dir="$1"
 	local install_home="$2"
-
-	# Check if path is already in PATH
-	if echo "$PATH" | grep -q "$bin_dir"; then
-		print_success "[$bin_dir] is already in your PATH"
-		return 0
-	fi
-
-	print_warning "[$bin_dir] is not in your PATH"
-
 	# Detect the appropriate shell profile file
 	local profile_file=""
 	local current_shell="${SHELL##*/}"
