@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- installer for boxlang now sets the `BOXLANG_INSTALL_HOME` environment variable to the installation home directory.
+- `install-bx-module` now uses the `BOXLANG_INSTALL_HOME` environment variable to determine the installation directory as it is failing on standard installations.
+
 ## [1.16.1] - 2025-07-07
 
 ### Fixed

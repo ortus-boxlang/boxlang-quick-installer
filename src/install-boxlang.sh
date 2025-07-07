@@ -166,6 +166,7 @@ check_for_updates() {
 ###########################################################################
 check_or_set_path() {
 	local bin_dir="$1"
+	local install_home="$2"
 
 	# Check if path is already in PATH
 	if echo "$PATH" | grep -q "$bin_dir"; then
@@ -221,8 +222,38 @@ check_or_set_path() {
 
 	# Check if the PATH export already exists in the profile
 	local path_export="export PATH=\"$bin_dir:\$PATH\""
+	local path_exists=false
+	local install_home_exists=false
+
 	if [ -f "$profile_file" ] && grep -Fq "$bin_dir" "$profile_file"; then
-		print_success "PATH entry already exists in $profile_file"
+		path_exists=true
+	fi
+
+	# Check if BOXLANG_INSTALL_HOME is already set in the profile
+	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file"; then
+		install_home_exists=true
+	fi
+
+	# If both PATH and BOXLANG_INSTALL_HOME exist, we're done
+	if [ "$path_exists" = true ] && [ "$install_home_exists" = true ]; then
+		print_success "PATH entry and BOXLANG_INSTALL_HOME already exist in $profile_file"
+		return 0
+	fi
+
+	# If PATH exists but BOXLANG_INSTALL_HOME doesn't, add only the install home
+	if [ "$path_exists" = true ] && [ "$install_home_exists" = false ]; then
+		print_info "➕ Adding BOXLANG_INSTALL_HOME to $profile_file (upgrade from older installation)..."
+		{
+			echo ""
+			echo "# BoxLang installation environment setup - added on $(date)"
+			if [ "$current_shell" = "fish" ]; then
+				echo "set -gx BOXLANG_INSTALL_HOME \"$install_home\""
+			else
+				echo "export BOXLANG_INSTALL_HOME=\"$install_home\""
+			fi
+		} >> "$profile_file"
+		print_success "Successfully added BOXLANG_INSTALL_HOME to $profile_file"
+		export BOXLANG_INSTALL_HOME="$install_home"
 		return 0
 	fi
 
@@ -236,6 +267,13 @@ check_or_set_path() {
 			echo "set -gx PATH $bin_dir \$PATH"
 		else
 			echo "$path_export"
+		fi
+		echo ""
+		echo "# BoxLang installation environment setup"
+		if [ "$current_shell" = "fish" ]; then
+			echo "set -gx BOXLANG_INSTALL_HOME \"$install_home\""
+		else
+			echo "export BOXLANG_INSTALL_HOME=\"$install_home\""
 		fi
 	} >> "$profile_file"
 
@@ -263,6 +301,7 @@ check_or_set_path() {
 
 	# Update current session PATH
 	export PATH="$bin_dir:$PATH"
+	export BOXLANG_INSTALL_HOME="$install_home"
 }
 
 ###########################################################################
@@ -707,7 +746,7 @@ install_boxlang() {
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
 	# Check PATH for local user execution mostly.
-	check_or_set_path "$SYSTEM_BIN"
+	check_or_set_path "$SYSTEM_BIN" "$SYSTEM_HOME"
 
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
