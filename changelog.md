@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.1] - 2025-07-07
+
 ### Fixed
 
 - CI $TERM variable to be set to `xterm-256color` if not set, or if it is set to `unknown` or `dumb`.
@@ -273,7 +275,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.1...HEAD
+[1.16.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.13.1...v1.14.0
