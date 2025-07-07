@@ -21,8 +21,8 @@ if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
 	source "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
-elif [ -f "${BOXLANG_INSTALL_HOME%/*}/helpers/helpers.sh" ]; then
-	source "${BOXLANG_INSTALL_HOME%/*}/helpers/helpers.sh"
+elif [ -f "${BOXLANG_INSTALL_HOME}/helpers/helpers.sh" ]; then
+	source "${BOXLANG_INSTALL_HOME}/helpers/helpers.sh"
 elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
     source "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
