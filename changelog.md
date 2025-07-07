@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- installer for boxlang now sets the `BOXLANG_INSTALL_HOME` environment variable to the installation home directory.
+- `install-bx-module` now uses the `BOXLANG_INSTALL_HOME` environment variable to determine the installation directory as it is failing on standard installations.
+
+## [1.16.1] - 2025-07-07
+
+### Fixed
+
 - CI $TERM variable to be set to `xterm-256color` if not set, or if it is set to `unknown` or `dumb`.
 
 * * *
