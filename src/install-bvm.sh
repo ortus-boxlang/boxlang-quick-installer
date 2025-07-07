@@ -11,7 +11,10 @@
 set -e
 
 # We need this in case the target OS we are installing in does not have a `TERM` implementation declared
-export TERM=${TERM:-xterm-256color}
+# or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions)
+if [ -z "$TERM" ] || [ "$TERM" = "unknown" ] || [ "$TERM" = "dumb" ]; then
+	export TERM="xterm-256color"
+fi
 
 ###########################################################################
 # Global Variables + Helpers
