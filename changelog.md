@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.4] - 2025-07-07
+
 ### Fixed
 
 - More path fixes on install bx module command.
@@ -298,7 +300,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.3...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.4...HEAD
+[1.16.4]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.3...v1.16.4
 [1.16.3]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.2...v1.16.3
 [1.16.2]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.1...v1.16.2
 [1.16.1]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.0...v1.16.1
