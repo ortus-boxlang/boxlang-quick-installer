@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Change the encoding from utf-8 to utf-16LE #25 for windows
+
+* * *
+
 ## [1.16.5] - 2025-07-07
 
 ### Fixed
