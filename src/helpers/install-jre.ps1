@@ -1,4 +1,4 @@
-if ($PSVersionTable.PSVersion.Major -le 5) {
+﻿if ($PSVersionTable.PSVersion.Major -le 5) {
     # Suppress progress bar for Invoke-WebRequest
     $ProgressPreference = 'SilentlyContinue'
 }

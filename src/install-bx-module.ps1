@@ -1,4 +1,4 @@
-# BoxLang Module Script
+﻿# BoxLang Module Script
 # Description: This script installs, removes, and lists BoxLang modules from FORGEBOX.
 # Author: BoxLang Team
 # Version: @build.version@
