@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Change the encoding of ps1 files for windows
+
+* * *
+
+## [1.16.5] - 2025-07-07
+
+### Fixed
+
 - More path fixes on install bx module command.
 
 * * *

@@ -1,4 +1,4 @@
-# BoxLang Installation Script
+﻿# BoxLang Installation Script
 # Description: This script installs the BoxLang miniserver web application on a Windows system.
 # Author: BoxLang Team
 # Version: @build.version@
