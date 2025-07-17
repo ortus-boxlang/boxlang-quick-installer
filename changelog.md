@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Change the encoding from utf-8 to utf-16LE #25 for windows
+- Change the encoding of ps1 files for windows
 
 * * *
 
