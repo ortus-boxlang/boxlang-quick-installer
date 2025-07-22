@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed the `install-bx-module` script to correctly handle module installations with temp files
+
+* * *
+
+## [1.16.6] - 2025-07-17
+
+### Fixed
+
 - Change the encoding of ps1 files for windows
 
 * * *
