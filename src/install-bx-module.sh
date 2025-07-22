@@ -259,7 +259,8 @@ install_module() {
 	mkdir -p "${MODULES_HOME}"
 
 	# Create secure temporary file
-	local TEMP_FILE=$(mktemp "/tmp/${TARGET_MODULE}.XXXXXX.zip")
+	local TEMP_FILE="$(mktemp -t "${TARGET_MODULE}.XXXXXX")"
+	TEMP_FILE="${TEMP_FILE}.zip"
 	# Add a trap to remove the temp file on exit
 	trap 'rm -f "${TEMP_FILE}"' EXIT
 
