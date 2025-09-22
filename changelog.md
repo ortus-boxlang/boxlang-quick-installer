@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.17.0] - 2025-07-22
 
+- Several fixes to the `install-bx-module` command to make sure it works on all systems.
+
 ## [1.16.6] - 2025-07-17
 
 ### Fixed
