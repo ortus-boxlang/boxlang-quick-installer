@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2025-09-22
+
 ### Added
 
 - Updated spacing on UI for CLI helper commands
@@ -338,7 +340,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.17.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.6...v1.17.0
 [1.16.6]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.5...v1.16.6
 [1.16.5]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.16.4...v1.16.5
