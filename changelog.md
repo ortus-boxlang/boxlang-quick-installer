@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Updated spacing on UI for CLI helper commands
+
 ## [1.17.0] - 2025-07-22
 
 ## [1.16.6] - 2025-07-17

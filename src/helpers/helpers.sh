@@ -11,11 +11,11 @@
 ###########################################################################
 
 print_info() {
-    printf "${BLUE}ℹ️ $1${NORMAL}\n"
+    printf "${BLUE}ℹ️  $1${NORMAL}\n"
 }
 
 print_success() {
-    printf "${GREEN}✅ $1${NORMAL}\n"
+    printf "${GREEN}✅  $1${NORMAL}\n"
 }
 
 print_warning() {
@@ -23,7 +23,7 @@ print_warning() {
 }
 
 print_error() {
-    printf "${RED}🔴 $1${NORMAL}\n"
+    printf "${RED}🔴  $1${NORMAL}\n"
 }
 
 print_header() {
