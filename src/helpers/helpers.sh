@@ -261,6 +261,187 @@ check_java_version() {
 }
 
 ###########################################################################
+# Java Installation Function
+###########################################################################
+install_java() {
+
+	# Detect OS and architecture
+	local OS=$(uname -s)
+	local ARCH=$(uname -m)
+	local JRE_VERSION="21.0.8+9 "
+	local INSTALL_BASE=""
+	local JRE_URL=""
+	local JRE_FILENAME=""
+	local JAVA_INSTALL_DIR=""
+
+	printf "${BLUE}☕ Installing Java ${JRE_VERSION} ...${NORMAL}\n"
+
+	# Normalize architecture names
+	case "$ARCH" in
+		x86_64|amd64) ARCH="x64" ;;
+		aarch64|arm64) ARCH="aarch64" ;;
+		*)
+			print_error "Unsupported architecture: $ARCH"
+			return 1
+			;;
+	esac
+
+	# Convert JRE_VERSION to URL format (replace . with %)
+	local JRE_URL_VERSION=$(echo "$JRE_VERSION" | sed 's/\./%2B/g')
+
+	# Set URLs and paths based on OS
+	case "$OS" in
+		Darwin)
+			INSTALL_BASE="/Library/Java/JavaVirtualMachines"
+			if [ "$ARCH" = "aarch64" ]; then
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_VERSION}.tar.gz"
+			else
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_mac_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_x64_mac_hotspot_${JRE_VERSION}.tar.gz"
+			fi
+			JAVA_INSTALL_DIR="$INSTALL_BASE/openjdk-21-jre"
+			;;
+		Linux)
+			INSTALL_BASE="/opt/java"
+			if [ "$ARCH" = "aarch64" ]; then
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_VERSION}.tar.gz"
+			else
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_linux_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_x64_linux_hotspot_${JRE_VERSION}.tar.gz"
+			fi
+			JAVA_INSTALL_DIR="$INSTALL_BASE/openjdk-21-jre"
+			;;
+		*)
+			print_error "Unsupported operating system: $OS"
+			return 1
+			;;
+	esac
+
+	printf "${BLUE}📍 Detected: $OS ($ARCH)${NORMAL}\n"
+	printf "${BLUE}📥 Downloading JRE from: $JRE_URL${NORMAL}\n"
+	printf "${BLUE}📂 Installing to: $JAVA_INSTALL_DIR${NORMAL}\n"
+
+	# Create temporary directory
+	local TEMP_DIR=$(mktemp -d)
+	local DOWNLOAD_PATH="$TEMP_DIR/$JRE_FILENAME"
+
+	# Download JRE
+	if ! curl -fsSL "$JRE_URL" -o "$DOWNLOAD_PATH"; then
+		print_error "Failed to download JRE"
+		rm -rf "$TEMP_DIR"
+		return 1
+	fi
+
+	printf "${GREEN}✅ Downloaded JRE successfully${NORMAL}\n"
+
+	# Create installation directory (requires sudo on most systems)
+	printf "${BLUE}📁 Creating installation directory: $JAVA_INSTALL_DIR${NORMAL}\n"
+	if [ "$OS" = "Darwin" ] || [ "$OS" = "Linux" ]; then
+		if ! sudo mkdir -p "$JAVA_INSTALL_DIR"; then
+			print_error "Failed to create installation directory"
+			rm -rf "$TEMP_DIR"
+			return 1
+		fi
+	fi
+
+	# Extract JRE
+	printf "${BLUE}📦 Extracting JRE...${NORMAL}\n"
+	if ! tar -xzf "$DOWNLOAD_PATH" -C "$TEMP_DIR"; then
+		print_error "Failed to extract JRE archive"
+		rm -rf "$TEMP_DIR"
+		return 1
+	fi
+
+	# Find the extracted directory (it should contain the JRE)
+	local EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+	if [ -z "$EXTRACTED_DIR" ]; then
+		print_error "Could not find extracted JRE directory"
+		rm -rf "$TEMP_DIR"
+		return 1
+	fi
+
+	# Remove existing installation if it exists
+	if [ -d "$JAVA_INSTALL_DIR" ]; then
+		printf "${BLUE}🧹 Removing existing Java installation...${NORMAL}\n"
+		sudo rm -rf "$JAVA_INSTALL_DIR"
+	fi
+
+	# Move extracted content to final location
+	printf "${BLUE}📋 Installing JRE to $JAVA_INSTALL_DIR...${NORMAL}\n"
+	if ! sudo mv "$EXTRACTED_DIR" "$JAVA_INSTALL_DIR"; then
+		print_error "Failed to move JRE to installation directory"
+		rm -rf "$TEMP_DIR"
+		return 1
+	fi
+
+	# Set permissions
+	sudo chmod -R 755 "$JAVA_INSTALL_DIR"
+
+	# Clean up temporary files
+	rm -rf "$TEMP_DIR"
+
+	# Set up environment variables
+	local JAVA_BIN="$JAVA_INSTALL_DIR/bin"
+	local PROFILE_FILE=""
+
+	# Determine shell profile file
+	if [ -n "$ZSH_VERSION" ] && [ -f "$HOME/.zshrc" ]; then
+		PROFILE_FILE="$HOME/.zshrc"
+	elif [ -f "$HOME/.bashrc" ]; then
+		PROFILE_FILE="$HOME/.bashrc"
+	elif [ -f "$HOME/.bash_profile" ]; then
+		PROFILE_FILE="$HOME/.bash_profile"
+	elif [ -f "$HOME/.profile" ]; then
+		PROFILE_FILE="$HOME/.profile"
+	fi
+
+	if [ -n "$PROFILE_FILE" ]; then
+		printf "${BLUE}⚙️  Updating shell profile: $PROFILE_FILE${NORMAL}\n"
+
+		# Remove any existing JAVA_HOME exports for our installation
+		if [ "$OS" = "Darwin" ]; then
+			sed -i '' '/export JAVA_HOME.*\/Library\/Java\/JavaVirtualMachines\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
+			sed -i '' '/export PATH.*\/Library\/Java\/JavaVirtualMachines\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
+		else
+			sed -i '/export JAVA_HOME.*\/opt\/java\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
+			sed -i '/export PATH.*\/opt\/java\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
+		fi
+
+		# Add new environment variables
+		echo "" >> "$PROFILE_FILE"
+		echo "# Java JRE installed by BoxLang installer" >> "$PROFILE_FILE"
+		echo "export JAVA_HOME=\"$JAVA_INSTALL_DIR\"" >> "$PROFILE_FILE"
+		echo "export PATH=\"\$JAVA_HOME/bin:\$PATH\"" >> "$PROFILE_FILE"
+
+		printf "${GREEN}✅ Updated shell profile${NORMAL}\n"
+		printf "${YELLOW}⚠️  Please run 'source $PROFILE_FILE' or restart your terminal to use the new Java installation${NORMAL}\n"
+	else
+		printf "${YELLOW}⚠️  Could not determine shell profile file. Please manually add:${NORMAL}\n"
+		printf "   export JAVA_HOME=\"$JAVA_INSTALL_DIR\"\n"
+		printf "   export PATH=\"\$JAVA_HOME/bin:\$PATH\"\n"
+	fi
+
+	# Set for current session
+	export JAVA_HOME="$JAVA_INSTALL_DIR"
+	export PATH="$JAVA_HOME/bin:$PATH"
+
+	# Verify installation
+	printf "${BLUE}🔍 Verifying Java installation...${NORMAL}\n"
+	if "$JAVA_BIN/java" -version >/dev/null 2>&1; then
+		local java_version_output=$("$JAVA_BIN/java" -version 2>&1)
+		printf "${GREEN}✅ Java JRE installed successfully!${NORMAL}\n"
+		printf "${BLUE}📋 Version info:${NORMAL}\n"
+		echo "$java_version_output" | head -3
+		return 0
+	else
+		print_error "Java installation verification failed"
+		return 1
+	fi
+}
+
+###########################################################################
 # Version Comparison Functions
 ###########################################################################
 # Extract semantic version (Major.Minor.Patch) from version string
