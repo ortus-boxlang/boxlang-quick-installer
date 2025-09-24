@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Automatic and User requested Java 21 installation via the `--with-jre` or `--yes` flags.
+- `--without-jre` flag to skip Java installation if you want to manage it yourself
+- Updated the `preflight_check` to accept a parameter to install Java if needed.
+- Updated the help text to include the new flags and examples.
 - A better way to detect helpers when using symlinks on mac/unix systems.
 
 ## [1.19.0] - 2025-09-24

@@ -77,6 +77,7 @@ setup_colors() {
 ###########################################################################
 # Verifies required dependencies are installed: curl, unzip and jq
 preflight_check() {
+	local auto_install="${1:-false}"
 	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
 	local missing_deps=()
 
@@ -145,37 +146,48 @@ preflight_check() {
 	###########################################################################
 	# Java Version Check
 	###########################################################################
-	if ! check_java_version; then
+	if ! check_java_version "$auto_install"; then
 		printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
-		printf "${YELLOW}Please install Java 21+ and ensure it's in your PATH.${NORMAL}\n"
-		printf "${YELLOW}Recommended: OpenJDK 21+ or Oracle JRE 21+${NORMAL}\n"
 
-		if [ "$(uname)" = "Darwin" ]; then
-			printf "${BLUE}💡 On macOS, you can install Java using:${NORMAL}\n"
-			printf "   brew install openjdk@21\n"
-			printf "   or download from: https://adoptium.net/\n"
-			if command_exists sdk; then
-				printf "   or with SDKMAN: sdk install java 21-tem\n"
-			fi
-		elif [ "$(uname)" = "Linux" ]; then
-			if command_exists apt-get; then
-				printf "${BLUE}💡 On Ubuntu/Debian, you can install Java using:${NORMAL}\n"
-				printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
-			elif command_exists yum; then
-				printf "${BLUE}💡 On RHEL/CentOS/Fedora, you can install Java using:${NORMAL}\n"
-				printf "   sudo yum install java-21-openjdk\n"
-			elif command_exists dnf; then
-				printf "${BLUE}💡 On Fedora, you can install Java using:${NORMAL}\n"
-				printf "   sudo dnf install java-21-openjdk\n"
-			else
-				printf "${BLUE}💡 On Linux, you can install Java using your package manager or:${NORMAL}\n"
-				printf "   Download from: https://adoptium.net/\n"
-			fi
-			if command_exists sdk; then
-				printf "   or with SDKMAN: sdk install java 21-tem\n"
-			fi
-		fi
-		return 1
+		# Otherwise, prompt user for manual installation choice
+		printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
+		read -r response
+		case "$response" in
+			[yY][eE][sS]|[yY])
+				printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
+				if install_java; then
+					printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+					return 0
+				else
+					printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+					return 1
+				fi
+				;;
+			*)
+				printf "${YELLOW}💡 You can install Java manually using:${NORMAL}\n"
+				if [ "$(uname)" = "Darwin" ]; then
+					printf "   brew install openjdk@21\n"
+					printf "   or download from: https://adoptium.net/\n"
+					if command_exists sdk; then
+						printf "   or with SDKMAN: sdk install java 21-tem\n"
+					fi
+				elif [ "$(uname)" = "Linux" ]; then
+					if command_exists apt-get; then
+						printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
+					elif command_exists yum; then
+						printf "   sudo yum install java-21-openjdk\n"
+					elif command_exists dnf; then
+						printf "   sudo dnf install java-21-openjdk\n"
+					else
+						printf "   Download from: https://adoptium.net/\n"
+					fi
+					if command_exists sdk; then
+						printf "   or with SDKMAN: sdk install java 21-tem\n"
+					fi
+				fi
+				exit 1
+				;;
+		esac
 	fi
 
 	return 0
@@ -185,6 +197,7 @@ preflight_check() {
 # Java Version Check Function (Enhanced for sudo compatibility)
 ###########################################################################
 check_java_version() {
+	local auto_install="${1:-false}"
 	printf "${BLUE}🔍 Checking Java 21 installation...${NORMAL}\n"
 	local JAVA_CMD=""
 	local JAVA_VERSION=""
@@ -256,6 +269,18 @@ check_java_version() {
 			fi
 		fi
 	done
+
+	# If auto_install is true, attempt automatic installation
+	if [ "$auto_install" = "true" ]; then
+		printf "${YELLOW}Java 21+ not found. Attempting automatic installation...${NORMAL}\n"
+		if install_java; then
+			printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+			return 0
+		else
+			printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+			return 1
+		fi
+	fi
 
 	return 1
 }

@@ -25,6 +25,7 @@ INSTALLER_VERSION="@build.version@"
 TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
+INSTALL_JRE=""
 
 
 ###########################################################################
@@ -529,7 +530,9 @@ show_help() {
 	printf "  --force           	Force reinstallation even if already installed\n"
 	printf "  --with-commandbox 	Install CommandBox without prompting\n"
 	printf "  --without-commandbox 	Skip CommandBox installation\n"
-	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox)\n\n"
+	printf "  --with-jre        	Automatically install Java 21 JRE if not found\n"
+	printf "  --without-jre     	Skip Java installation (manual installation required)\n"
+	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n\n"
 	printf "${BOLD}EXAMPLES:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang latest\n"
@@ -538,6 +541,9 @@ show_help() {
 	printf "  install-boxlang --force\n"
 	printf "  install-boxlang --with-commandbox\n"
 	printf "  install-boxlang --without-commandbox\n"
+	printf "  install-boxlang --with-jre\n"
+	printf "  install-boxlang --without-jre\n"
+	printf "  install-boxlang --with-commandbox --with-jre\n"
 	printf "  install-boxlang --yes\n"
 	printf "  install-boxlang --uninstall\n"
 	printf "  install-boxlang --check-update\n"
@@ -545,6 +551,8 @@ show_help() {
 	printf "${BOLD}NON-INTERACTIVE USAGE:${NORMAL}\n"
 	printf "  🌐 Install with CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox${NORMAL}\n"
 	printf "  🌐 Install without CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox${NORMAL}\n"
+	printf "  🌐 Install with Java auto-install: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre${NORMAL}\n"
+	printf "  🌐 Full auto-install (Java + CommandBox): ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes${NORMAL}\n"
 	printf "  🌐 Install with defaults: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes${NORMAL}\n\n"
 	# ... rest of help text remains the same
 }
@@ -599,7 +607,7 @@ install_boxlang() {
 	# Pre-flight Checks
 	# This function checks for necessary tools and environment
 	###########################################################################
-	if ! preflight_check; then
+	if ! preflight_check "$INSTALL_JRE"; then
 		exit 1
 	fi
 
@@ -820,9 +828,16 @@ main() {
 			"--without-commandbox")
 				INSTALL_COMMANDBOX=false
 				;;
+			"--with-jre")
+				INSTALL_JRE=true
+				;;
+			"--without-jre")
+				INSTALL_JRE=false
+				;;
 			"--yes"|"-y")
 				# Setup all defaults here.
 				INSTALL_COMMANDBOX=true
+				INSTALL_JRE=true
 				;;
 			*)
 				args+=("$1")
