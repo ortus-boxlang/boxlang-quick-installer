@@ -32,9 +32,6 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 ```bash
 # Single version (simple)
 /bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
-
-# Version manager (advanced)
-/bin/bash -c "$(curl -fsSL https://install-bvm.boxlang.io)"
 ```
 
 **Windows:**
@@ -62,6 +59,8 @@ boxlang-miniserver --port 8080
 ### All Platforms
 
 - **Java 21+** - Required to run BoxLang
+  - ✨ Can be automatically installed with `--with-jre` option
+  - Or install manually (see instructions below)
 
 ### Mac/Linux Additional Requirements
 
@@ -144,14 +143,19 @@ Here are the available options for the install command.
 | `--force` | | Force reinstallation even if already installed |
 | `--with-commandbox` | | Install CommandBox without prompting |
 | `--without-commandbox` | | Skip CommandBox installation |
-| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox) |
+| `--with-jre` | | ✨ Automatically install Java 21 JRE if not found |
+| `--without-jre` | | ✨ Skip Java installation (manual installation required) |
+| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox and Java) |
 
 ### Notes
 
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
-- `--yes` automatically accepts all defaults, including installing CommandBox
+- `--yes` automatically accepts all defaults, including installing CommandBox and Java
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
+- ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
+- ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
+- ✨ The installer can detect your OS (macOS/Linux) and architecture (x64/ARM64) for Java installation
 
 ## 🛠️ What Gets Installed
 
@@ -207,7 +211,9 @@ Options:
   --force               Force reinstallation even if already installed
   --with-commandbox     Install CommandBox without prompting
   --without-commandbox  Skip CommandBox installation
-  --yes, -y             Use defaults for all prompts (installs CommandBox)
+  --with-jre            ✨ Automatically install Java 21 JRE if not found
+  --without-jre         ✨ Skip Java installation (manual installation required)
+  --yes, -y             Use defaults for all prompts (installs CommandBox and Java)
 
 Examples:
   install-boxlang
@@ -217,6 +223,9 @@ Examples:
   install-boxlang --force
   install-boxlang --with-commandbox
   install-boxlang --without-commandbox
+  install-boxlang --with-jre
+  install-boxlang --without-jre
+  install-boxlang --with-commandbox --with-jre
   install-boxlang --yes
   install-boxlang --uninstall
   install-boxlang --check-update
@@ -225,6 +234,8 @@ Examples:
 Non-Interactive Usage:
   🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox
   🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox
+  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre
+  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
   🌐 Install with defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
 ```
 
@@ -241,6 +252,18 @@ install-boxlang --version 1.2.0
 
 # Install snapshot version
 install-boxlang --snapshot
+
+# ✨ NEW: Auto-install with Java (if not found)
+install-boxlang --with-jre
+
+# ✨ NEW: Skip Java installation entirely
+install-boxlang --without-jre
+
+# ✨ NEW: Full automation (Java + CommandBox)
+install-boxlang --yes
+
+# ✨ NEW: Combine options for specific setup
+install-boxlang --with-commandbox --with-jre
 
 # System-wide installation (requires sudo)
 sudo install-boxlang --system
@@ -346,14 +369,21 @@ echo $PATH | grep boxlang
 **Java not found:**
 
 ```bash
-# Check Java installation
+# ✨ NEW: Let BoxLang installer handle Java automatically
+install-boxlang --with-jre
+
+# Or check Java installation manually
 java -version
 
+# Manual Java installation options:
 # Install Java 21 (Ubuntu/Debian)
 sudo apt install default-jdk
 
 # Install Java 21 (macOS)
 brew install openjdk@21
+
+# Download from Adoptium (cross-platform)
+# https://adoptium.net/temurin/releases/
 ```
 
 **Permission denied errors:**
