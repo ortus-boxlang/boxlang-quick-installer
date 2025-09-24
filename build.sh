@@ -163,6 +163,7 @@ main() {
 	# build/install-boxlang.sh
 	# build/install-boxlang.ps1
 	# build/install-bvm.sh
+	# build/install-bvm.ps1
     if [[ "${1:-}" == "--snapshot" ]]; then
         log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
         if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -170,11 +171,13 @@ main() {
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
             sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.ps1
         else
             # Linux doesn't use empty string after -i
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
             sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.ps1
         fi
     else
 		log_info "Standard build detected, using default installer URL"
@@ -184,13 +187,19 @@ main() {
 	if [[ "$OSTYPE" == "darwin"* ]]; then
 		# macOS requires empty string after -i
 		sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
+		sed -i "" "s|@build.version@|${version}|g" build/bvm.ps1
 		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.sh
 		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.ps1
+		sed -i "" "s|@build.version@|${version}|g" build/install-bvm.sh
+		sed -i "" "s|@build.version@|${version}|g" build/install-bvm.ps1
 	else
 		# Linux doesn't use empty string after -i
 		sed -i "s|@build.version@|${version}|g" build/bvm.sh
+		sed -i "s|@build.version@|${version}|g" build/bvm.ps1
 		sed -i "s|@build.version@|${version}|g" build/install-boxlang.sh
 		sed -i "s|@build.version@|${version}|g" build/install-boxlang.ps1
+		sed -i "s|@build.version@|${version}|g" build/install-bvm.sh
+		sed -i "s|@build.version@|${version}|g" build/install-bvm.ps1
 	fi
 
     # Generate checksums (excluding checksum files themselves)

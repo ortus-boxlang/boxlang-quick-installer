@@ -271,6 +271,8 @@ BVM searches for `.bvmrc` files starting from the current directory and walking 
 
 ### Installation
 
+**Unix/Linux/macOS:**
+
 ```bash
 # Install BVM
 curl -fsSL https://install-bvm.boxlang.io | bash
@@ -279,6 +281,25 @@ curl -fsSL https://install-bvm.boxlang.io | bash
 wget https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.sh
 chmod +x install-bvm.sh
 ./install-bvm.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Install BVM
+iwr -useb https://install-bvm.boxlang.io/install.ps1 | iex
+
+# Or download and run locally
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.ps1" -OutFile "install-bvm.ps1"
+.\install-bvm.ps1
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+:: Download and run the batch installer
+curl -o install-bvm.bat "https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.bat"
+install-bvm.bat
 ```
 
 ### Basic Usage
@@ -695,12 +716,31 @@ sudo apt update && sudo apt install curl unzip jq
 sudo dnf install curl unzip jq
 ```
 
+**Windows:**
+
+Prerequisites are typically pre-installed or available:
+- PowerShell 5.1+ (built into Windows 10/11)
+- Internet connectivity
+- Windows PowerShell or PowerShell Core
+- Administrative privileges (recommended for installation)
+
 ## Integration with Shell
 
-BVM automatically adds itself and the current BoxLang version to your PATH. After installation, restart your terminal or run:
+BVM automatically adds itself and the current BoxLang version to your PATH. 
+
+**Unix/Linux/macOS:**
+After installation, restart your terminal or run:
 
 ```bash
 source ~/.bashrc  # or ~/.zshrc, ~/.profile, etc.
+```
+
+**Windows:**
+After installation, restart your command prompt/PowerShell or run:
+
+```powershell
+# Refresh PATH in current session
+$env:PATH = [Environment]::GetEnvironmentVariable("PATH", "User")
 ```
 
 ## Troubleshooting
