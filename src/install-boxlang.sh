@@ -42,7 +42,7 @@ else
 		source "$helpers_file"
 		print_success "Helper functions downloaded successfully"
 	else
-		printf "${RED}🔴 Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
+		printf "${RED}🔴 Error: Failed to download helper functions from [$helpers_url] to [${TEMP_DIR}]${NORMAL}\n"
 		exit 1
 	fi
 fi

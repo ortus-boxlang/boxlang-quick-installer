@@ -15,7 +15,7 @@ print_info() {
 }
 
 print_success() {
-    printf "${GREEN}✅  $1${NORMAL}\n"
+    printf "${GREEN}✅ $1${NORMAL}\n"
 }
 
 print_warning() {

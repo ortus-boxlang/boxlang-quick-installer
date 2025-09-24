@@ -521,9 +521,9 @@ function Test-JavaVersion {
 
             if (Get-Command $candidate -ErrorAction SilentlyContinue) {
                 $versionOutput = & $candidate --version 2>&1 | Out-String
-                if ($versionOutput -match '"(\d+)\.') {
+                if ($versionOutput -match '(\d+)\.') {
                     $majorVersion = [int]$matches[1]
-                } elseif ($versionOutput -match '"1\.(\d+)\.') {
+                } elseif ($versionOutput -match '1\.(\d+)\.') {
                     $majorVersion = [int]$matches[1]  # Handle legacy 1.8 format
                 } elseif ($versionOutput -match 'version (\d+)\.') {
                     $majorVersion = [int]$matches[1] # Handle Adoptium version format
