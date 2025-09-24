@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows powershell install issues with regex for Java 21 version detection
+
+### Added
+
+- More debugging info on exceptions on `install-boxlang.sh`
+- Some UI improvements
+
 ## [1.18.0] - 2025-09-22
 
 ### Added
