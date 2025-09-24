@@ -31,6 +31,8 @@ if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
 	source "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+elif [ -f "${BVM_HOME}/scripts/helpers.sh" ]; then
+	source "${BVM_HOME}/scripts/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"

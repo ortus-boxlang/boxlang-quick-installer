@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A better way to detect helpers when using symlinks on mac/unix systems.
+
 ## [1.19.0] - 2025-09-24
 
 ### Fixed

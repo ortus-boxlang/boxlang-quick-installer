@@ -26,11 +26,33 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
 
-# Helpers
-if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
-	source "$(dirname "$0")/helpers/helpers.sh"
-elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
-	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+
+###########################################################################
+# Get current BoxLang install home
+###########################################################################
+get_boxlang_install_home(){
+	# Check common installation locations
+	local possible_locations=(
+		"/usr/local/boxlang"
+		"$HOME/.local/boxlang"
+	)
+
+	for location in "${possible_locations[@]}"; do
+		if [ -d "$location" ]; then
+			echo "$location"
+			return 0
+		fi
+	done
+
+	# If not found, return empty
+	echo ""
+	return 1
+}
+
+# Check if helpers exist in BoxLang installation directory
+boxlang_home=$(get_boxlang_install_home)
+if [ -n "$boxlang_home" ] && [ -f "$boxlang_home/scripts/helpers/helpers.sh" ]; then
+	source "$boxlang_home/scripts/helpers/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
@@ -46,6 +68,7 @@ else
 		exit 1
 	fi
 fi
+
 
 ###########################################################################
 # Get current installed BoxLang version
