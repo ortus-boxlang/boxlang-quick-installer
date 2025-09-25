@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Alpine Linux & Container Support**: Full compatibility with Alpine Linux containers including musl libc JRE detection
+- **Container-friendly environment setup**: Multiple activation methods for minimal container environments
+- **Centralized shell profile detection**: `get_shell_profile_file()` helper function for consistent behavior across all installers
+- **Automatic bash dependency**: Auto-installation of bash on Alpine Linux systems
+- **Cross-platform Java installation**: Auto-detects musl vs glibc and installs appropriate JRE variant
+- Encapsulation of a way to determine profile files in all environments in `get_profile_file` function.
+- Improved the download progress bar to be more consistent across platforms.
+- Sudo detection for Linux systems to install dependencies if needed.
+- Automatic/Manual JRE installation for the quick installer
+- Automatic and User requested Java 21 installation via the `--with-jre` or `--yes` flags.
+- `--without-jre` flag to skip Java installation if you want to manage it yourself
+- Updated the `preflight_check` to accept a parameter to install Java if needed.
+- Updated the help text to include the new flags and examples.
+- A better way to detect helpers when using symlinks on mac/unix systems.
+
 ## [1.19.0] - 2025-09-24
 
 ### Fixed

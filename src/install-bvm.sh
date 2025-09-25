@@ -31,6 +31,8 @@ if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
 	source "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+elif [ -f "${BVM_HOME}/scripts/helpers.sh" ]; then
+	source "${BVM_HOME}/scripts/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
@@ -129,37 +131,12 @@ EOF
 ###########################################################################
 setup_path() {
     local bvm_bin="$BVM_HOME/bin"
-    local profile_file=""
     local shell_name="${SHELL##*/}"
 
     print_info "Setting up PATH for BVM..."
 
-    # Detect shell profile file
-    case "$shell_name" in
-        "bash")
-            if [ -f "$HOME/.bash_profile" ]; then
-                profile_file="$HOME/.bash_profile"
-            elif [ -f "$HOME/.bashrc" ]; then
-                profile_file="$HOME/.bashrc"
-            else
-                profile_file="$HOME/.bash_profile"
-                touch "$profile_file"
-            fi
-            ;;
-        "zsh")
-            profile_file="$HOME/.zshrc"
-            [ ! -f "$profile_file" ] && touch "$profile_file"
-            ;;
-        "fish")
-            profile_file="$HOME/.config/fish/config.fish"
-            mkdir -p "$(dirname "$profile_file")"
-            [ ! -f "$profile_file" ] && touch "$profile_file"
-            ;;
-        *)
-            profile_file="$HOME/.profile"
-            [ ! -f "$profile_file" ] && touch "$profile_file"
-            ;;
-    esac
+    # Use helper function to detect shell profile file
+    local profile_file=$(get_shell_profile_file)
 
     # Check if BVM is already in PATH
     if echo "$PATH" | grep -q "$bvm_bin"; then

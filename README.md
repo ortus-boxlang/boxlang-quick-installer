@@ -30,11 +30,10 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 **Mac and Linux:**
 
 ```bash
-# Single version (simple)
 /bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
 
-# Version manager (advanced)
-/bin/bash -c "$(curl -fsSL https://install-bvm.boxlang.io)"
+# With automatic Java 21  installation
+curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
 ```
 
 **Windows:**
@@ -59,22 +58,34 @@ boxlang-miniserver --port 8080
 
 ## 📋 Prerequisites
 
-### All Platforms
+The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
 
-- **Java 21+** - Required to run BoxLang
-
-### Mac/Linux Additional Requirements
-
+- **bash** - Required shell execution environment, especially on Alpine Linux
 - **curl** - For downloading releases
-- **unzip** - For extracting archives
-- **jq** - For JSON parsing (optional, fallback available)
+- **PowerShell 6+** - Required for Windows installations
 
-### Installing Prerequisites
+**Alpine Linux** : You will need to install bash manually as it is not included by default.
+
+```bash
+apk add --no-cache bash curl
+```
+
+### Requirements
+
+The following are automatically installed for you, but you can install them manually if you prefer.
+
+- **Java 21+** - JRE or JDK
+- **unzip** - For extracting downloaded files
+- **jq** - For parsing JSON (BVM only)
+
+### Manual Installation
+
+Remember, we do this automatically for you, but if you want to do it manually, here are the commands:
 
 **macOS (with Homebrew):**
 
 ```bash
-brew install curl unzip jq
+brew install curl unzip jq openjdk@21
 ```
 
 **Ubuntu/Debian:**
@@ -89,10 +100,13 @@ sudo apt update && sudo apt install curl unzip jq default-jdk
 sudo dnf install curl unzip jq java-21-openjdk
 ```
 
-**Windows:**
+**Alpine Linux:**
 
-- Java 21+ from [Oracle](https://www.oracle.com/java/technologies/downloads/) or [OpenJDK](https://openjdk.org/)
-- PowerShell 5.1+ (included with Windows 10+)
+```bash
+# Prerequisites automatically installed by installer
+apk add --no-cache bash curl unzip jq openjdk21
+# Java 21 automatically installed with --with-jre option
+```
 
 ## 📦 Installation Options
 
@@ -144,14 +158,20 @@ Here are the available options for the install command.
 | `--force` | | Force reinstallation even if already installed |
 | `--with-commandbox` | | Install CommandBox without prompting |
 | `--without-commandbox` | | Skip CommandBox installation |
-| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox) |
+| `--with-jre` | | ✨ Automatically install Java 21 JRE if not found |
+| `--without-jre` | | ✨ Skip Java installation (manual installation required) |
+| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox and Java) |
 
 ### Notes
 
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
-- `--yes` automatically accepts all defaults, including installing CommandBox
+- `--yes` automatically accepts all defaults, including installing CommandBox and Java
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
+- ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
+- ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
+- ✨ The installer can detect your OS (macOS/Linux/Alpine) and architecture (x64/ARM64) for Java installation
+- 🐋 **Container-friendly** - Works in Docker containers with minimal base images
 
 ## 🛠️ What Gets Installed
 
@@ -162,13 +182,13 @@ Here are the available options for the install command.
 
 ### Helper Scripts
 
-- **install-bx-module** - Install modules from ForgeBox
-- **install-jre** (Windows) - Install Java Runtime Environment
+- **install-bx-module** - Install modules from ForgeBox.
+- **install-boxlang** - Single-version BoxLang installer, so you can reinstall, install specific versions, uninstall and more.
 
 ### Directory Structure
 
 ```
-~/.boxlang/           # BoxLang home directory
+~/.local/boxlang/           # BoxLang home directory
 ├── bin/              # Executable binaries
 ├── lib/              # Core libraries
 ├── scripts/          # Installed scripts
@@ -207,7 +227,9 @@ Options:
   --force               Force reinstallation even if already installed
   --with-commandbox     Install CommandBox without prompting
   --without-commandbox  Skip CommandBox installation
-  --yes, -y             Use defaults for all prompts (installs CommandBox)
+  --with-jre            ✨ Automatically install Java 21 JRE if not found
+  --without-jre         ✨ Skip Java installation (manual installation required)
+  --yes, -y             Use defaults for all prompts (installs CommandBox and Java)
 
 Examples:
   install-boxlang
@@ -217,6 +239,9 @@ Examples:
   install-boxlang --force
   install-boxlang --with-commandbox
   install-boxlang --without-commandbox
+  install-boxlang --with-jre
+  install-boxlang --without-jre
+  install-boxlang --with-commandbox --with-jre
   install-boxlang --yes
   install-boxlang --uninstall
   install-boxlang --check-update
@@ -225,6 +250,8 @@ Examples:
 Non-Interactive Usage:
   🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox
   🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox
+  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre
+  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
   🌐 Install with defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
 ```
 
@@ -241,6 +268,18 @@ install-boxlang --version 1.2.0
 
 # Install snapshot version
 install-boxlang --snapshot
+
+# ✨ NEW: Auto-install with Java (if not found)
+install-boxlang --with-jre
+
+# ✨ NEW: Skip Java installation entirely
+install-boxlang --without-jre
+
+# ✨ NEW: Full automation (Java + CommandBox)
+install-boxlang --yes
+
+# ✨ NEW: Combine options for specific setup
+install-boxlang --with-commandbox --with-jre
 
 # System-wide installation (requires sudo)
 sudo install-boxlang --system
@@ -346,14 +385,21 @@ echo $PATH | grep boxlang
 **Java not found:**
 
 ```bash
-# Check Java installation
+# ✨ NEW: Let BoxLang installer handle Java automatically
+install-boxlang --with-jre
+
+# Or check Java installation manually
 java -version
 
+# Manual Java installation options:
 # Install Java 21 (Ubuntu/Debian)
 sudo apt install default-jdk
 
 # Install Java 21 (macOS)
 brew install openjdk@21
+
+# Download from Adoptium (cross-platform)
+# https://adoptium.net/temurin/releases/
 ```
 
 **Permission denied errors:**
@@ -416,28 +462,6 @@ install-bx-module --verbose
 - 🧑‍💻 [Interactive Playground](https://try.boxlang.io)
 - 📁 [Sample Applications](https://github.com/ortus-boxlang/bx-demos)
 - 🎓 [Tutorials](https://learn.boxlang.io)
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-### Reporting Issues
-
-1. Check existing [issues](https://ortussolutions.atlassian.net/browse/BLINSTALL)
-2. Create a detailed bug report with:
-   - Operating system and version
-   - BoxLang version
-   - Steps to reproduce
-   - Expected vs actual behavior
-
-### Contributing Code
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Add tests if applicable
-5. Update documentation
-6. Submit a pull request
 
 ### Testing
 

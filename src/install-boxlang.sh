@@ -25,11 +25,39 @@ INSTALLER_VERSION="@build.version@"
 TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
+INSTALL_JRE=""
 
-# Helpers
-if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+###########################################################################
+# Get current BoxLang install home
+###########################################################################
+get_boxlang_install_home(){
+	# Check common installation locations
+	local possible_locations=(
+		"/usr/local/boxlang"
+		"$HOME/.local/boxlang"
+	)
+
+	for location in "${possible_locations[@]}"; do
+		if [ -d "$location" ]; then
+			echo "$location"
+			return 0
+		fi
+	done
+
+	# If not found, return empty
+	echo ""
+	return 0
+}
+
+# Check if helpers exist in BoxLang installation directory
+boxlang_home=$(get_boxlang_install_home)
+if [ -n "$boxlang_home" ] && [ -f "$boxlang_home/scripts/helpers/helpers.sh" ]; then
+	source "$boxlang_home/scripts/helpers/helpers.sh"
+elif [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	# Source helpers from relative path (development/local setup)
 	source "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
+	# Source helpers from script directory (when run via symlink)
 	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
@@ -46,6 +74,7 @@ else
 		exit 1
 	fi
 fi
+
 
 ###########################################################################
 # Get current installed BoxLang version
@@ -168,49 +197,8 @@ check_or_set_path() {
 	# Incoming args
 	local bin_dir="$1"
 	local install_home="$2"
-	# Detect the appropriate shell profile file
-	local profile_file=""
-	local current_shell="${SHELL##*/}"
-
-	# Detect if running in WSL
-	local is_wsl=false
-	if [ -f /proc/version ] && grep -q Microsoft /proc/version; then
-		is_wsl=true
-		print_info "💡 WSL environment detected"
-	fi
-
-	# Determine the profile file based on shell and system
-	if [ "$current_shell" = "zsh" ]; then
-		if [ -f "$HOME/.zshrc" ]; then
-			profile_file="$HOME/.zshrc"
-		else
-			profile_file="$HOME/.zshrc"
-			touch "$profile_file"
-		fi
-	elif [ "$current_shell" = "bash" ]; then
-		if [ -f "$HOME/.bash_profile" ]; then
-			profile_file="$HOME/.bash_profile"
-		elif [ -f "$HOME/.bashrc" ]; then
-			profile_file="$HOME/.bashrc"
-		else
-			# Create .bashrc for new installations
-			profile_file="$HOME/.bashrc"
-			touch "$profile_file"
-			# On macOS, also ensure .bash_profile sources .bashrc
-			if [ "$(uname)" = "Darwin" ] && [ ! -f "$HOME/.bash_profile" ]; then
-				echo '# Source .bashrc if it exists' > "$HOME/.bash_profile"
-				echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> "$HOME/.bash_profile"
-			fi
-		fi
-	elif [ "$current_shell" = "fish" ]; then
-		profile_file="$HOME/.config/fish/config.fish"
-		mkdir -p "$HOME/.config/fish"
-		touch "$profile_file"
-	else
-		# Fallback to .profile for other shells
-		profile_file="$HOME/.profile"
-		touch "$profile_file"
-	fi
+	# Detect the appropriate shell profile file using helper function
+	local profile_file=$(get_shell_profile_file)
 
 	# Check if the PATH export already exists in the profile
 	local path_export="export PATH=\"$bin_dir:\$PATH\""
@@ -326,7 +314,7 @@ check_and_install_commandbox() {
 		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
-		print_info "❓ Would you like to install CommandBox? [Y/n"
+		print_info "❓ Would you like to install CommandBox? [Y/n]"
 		read -r response < /dev/tty
 		case "$response" in
 			[nN][oO]|[nN])
@@ -506,7 +494,9 @@ show_help() {
 	printf "  --force           	Force reinstallation even if already installed\n"
 	printf "  --with-commandbox 	Install CommandBox without prompting\n"
 	printf "  --without-commandbox 	Skip CommandBox installation\n"
-	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox)\n\n"
+	printf "  --with-jre        	Automatically install Java 21 JRE if not found\n"
+	printf "  --without-jre     	Skip Java installation (manual installation required)\n"
+	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n\n"
 	printf "${BOLD}EXAMPLES:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang latest\n"
@@ -515,6 +505,9 @@ show_help() {
 	printf "  install-boxlang --force\n"
 	printf "  install-boxlang --with-commandbox\n"
 	printf "  install-boxlang --without-commandbox\n"
+	printf "  install-boxlang --with-jre\n"
+	printf "  install-boxlang --without-jre\n"
+	printf "  install-boxlang --with-commandbox --with-jre\n"
 	printf "  install-boxlang --yes\n"
 	printf "  install-boxlang --uninstall\n"
 	printf "  install-boxlang --check-update\n"
@@ -522,6 +515,8 @@ show_help() {
 	printf "${BOLD}NON-INTERACTIVE USAGE:${NORMAL}\n"
 	printf "  🌐 Install with CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox${NORMAL}\n"
 	printf "  🌐 Install without CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox${NORMAL}\n"
+	printf "  🌐 Install with Java auto-install: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre${NORMAL}\n"
+	printf "  🌐 Full auto-install (Java + CommandBox): ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes${NORMAL}\n"
 	printf "  🌐 Install with defaults: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes${NORMAL}\n\n"
 	# ... rest of help text remains the same
 }
@@ -576,7 +571,7 @@ install_boxlang() {
 	# Pre-flight Checks
 	# This function checks for necessary tools and environment
 	###########################################################################
-	if ! preflight_check; then
+	if ! preflight_check "$INSTALL_JRE"; then
 		exit 1
 	fi
 
@@ -797,9 +792,16 @@ main() {
 			"--without-commandbox")
 				INSTALL_COMMANDBOX=false
 				;;
+			"--with-jre")
+				INSTALL_JRE=true
+				;;
+			"--without-jre")
+				INSTALL_JRE=false
+				;;
 			"--yes"|"-y")
 				# Setup all defaults here.
 				INSTALL_COMMANDBOX=true
+				INSTALL_JRE=true
 				;;
 			*)
 				args+=("$1")
