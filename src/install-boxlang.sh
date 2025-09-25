@@ -27,7 +27,6 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 INSTALL_COMMANDBOX=""
 INSTALL_JRE=""
 
-
 ###########################################################################
 # Get current BoxLang install home
 ###########################################################################
@@ -47,7 +46,7 @@ get_boxlang_install_home(){
 
 	# If not found, return empty
 	echo ""
-	return 1
+	return 0
 }
 
 # Check if helpers exist in BoxLang installation directory
