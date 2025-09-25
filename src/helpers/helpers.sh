@@ -11,7 +11,7 @@
 ###########################################################################
 
 print_info() {
-    printf "${BLUE}ℹ️ $1${NORMAL}\n"
+    printf "${BLUE}ℹ️  $1${NORMAL}\n"
 }
 
 print_success() {
