@@ -197,49 +197,8 @@ check_or_set_path() {
 	# Incoming args
 	local bin_dir="$1"
 	local install_home="$2"
-	# Detect the appropriate shell profile file
-	local profile_file=""
-	local current_shell="${SHELL##*/}"
-
-	# Detect if running in WSL
-	local is_wsl=false
-	if [ -f /proc/version ] && grep -q Microsoft /proc/version; then
-		is_wsl=true
-		print_info "💡 WSL environment detected"
-	fi
-
-	# Determine the profile file based on shell and system
-	if [ "$current_shell" = "zsh" ]; then
-		if [ -f "$HOME/.zshrc" ]; then
-			profile_file="$HOME/.zshrc"
-		else
-			profile_file="$HOME/.zshrc"
-			touch "$profile_file"
-		fi
-	elif [ "$current_shell" = "bash" ]; then
-		if [ -f "$HOME/.bash_profile" ]; then
-			profile_file="$HOME/.bash_profile"
-		elif [ -f "$HOME/.bashrc" ]; then
-			profile_file="$HOME/.bashrc"
-		else
-			# Create .bashrc for new installations
-			profile_file="$HOME/.bashrc"
-			touch "$profile_file"
-			# On macOS, also ensure .bash_profile sources .bashrc
-			if [ "$(uname)" = "Darwin" ] && [ ! -f "$HOME/.bash_profile" ]; then
-				echo '# Source .bashrc if it exists' > "$HOME/.bash_profile"
-				echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> "$HOME/.bash_profile"
-			fi
-		fi
-	elif [ "$current_shell" = "fish" ]; then
-		profile_file="$HOME/.config/fish/config.fish"
-		mkdir -p "$HOME/.config/fish"
-		touch "$profile_file"
-	else
-		# Fallback to .profile for other shells
-		profile_file="$HOME/.profile"
-		touch "$profile_file"
-	fi
+	# Detect the appropriate shell profile file using helper function
+	local profile_file=$(get_shell_profile_file)
 
 	# Check if the PATH export already exists in the profile
 	local path_export="export PATH=\"$bin_dir:\$PATH\""
@@ -355,7 +314,7 @@ check_and_install_commandbox() {
 		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
-		print_info "❓ Would you like to install CommandBox? [Y/n"
+		print_info "❓ Would you like to install CommandBox? [Y/n]"
 		read -r response < /dev/tty
 		case "$response" in
 			[nN][oO]|[nN])

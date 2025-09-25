@@ -247,7 +247,8 @@ check_java_version() {
 		"/usr/bin/java"                                # Common system location
 		"/usr/local/bin/java"                          # Homebrew location
 		"/opt/homebrew/bin/java"                       # Apple Silicon Homebrew
-		"/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java"  # macOS Oracle/OpenJDK
+		"/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java"  # macOS Oracle/OpenJDK,
+		"/opt/java/openjdk-21-jre/bin/java"                # Custom install location (Linux
 	)
 
 	# If running under sudo, try to get the original user's environment
@@ -473,37 +474,16 @@ install_java() {
 
 	# Set up environment variables
 	local JAVA_BIN="$JAVA_INSTALL_DIR/bin"
-	local PROFILE_FILE=""
-
-	# Determine shell profile file
-	if [ -n "$ZSH_VERSION" ] && [ -f "$HOME/.zshrc" ]; then
-		PROFILE_FILE="$HOME/.zshrc"
-	elif [ -f "$HOME/.bashrc" ]; then
-		PROFILE_FILE="$HOME/.bashrc"
-	elif [ -f "$HOME/.bash_profile" ]; then
-		PROFILE_FILE="$HOME/.bash_profile"
-	elif [ -f "$HOME/.profile" ]; then
-		PROFILE_FILE="$HOME/.profile"
-	fi
+	local PROFILE_FILE=$(get_shell_profile_file)
 
 	if [ -n "$PROFILE_FILE" ]; then
 		printf "${BLUE}⚙️  Updating shell profile: $PROFILE_FILE${NORMAL}\n"
-
-		# Remove any existing JAVA_HOME exports for our installation
-		if [ "$OS" = "Darwin" ]; then
-			sed -i '' '/export JAVA_HOME.*\/Library\/Java\/JavaVirtualMachines\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
-			sed -i '' '/export PATH.*\/Library\/Java\/JavaVirtualMachines\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
-		else
-			sed -i '/export JAVA_HOME.*\/opt\/java\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
-			sed -i '/export PATH.*\/opt\/java\/openjdk-21-jre/d' "$PROFILE_FILE" 2>/dev/null || true
-		fi
 
 		# Add new environment variables
 		echo "" >> "$PROFILE_FILE"
 		echo "# Java JRE installed by BoxLang installer" >> "$PROFILE_FILE"
 		echo "export JAVA_HOME=\"$JAVA_INSTALL_DIR\"" >> "$PROFILE_FILE"
 		echo "export PATH=\"\$JAVA_HOME/bin:\$PATH\"" >> "$PROFILE_FILE"
-
 		printf "${GREEN}✅ Updated shell profile${NORMAL}\n"
 		printf "${YELLOW}⚠️  Please run 'source $PROFILE_FILE' or restart your terminal to use the new Java installation${NORMAL}\n"
 	else
@@ -528,6 +508,60 @@ install_java() {
 		print_error "Java installation verification failed"
 		return 1
 	fi
+}
+
+###########################################################################
+# Shell Profile Detection Helper
+###########################################################################
+# Detects and returns the appropriate shell profile file for the current environment
+# Creates the profile file if it doesn't exist
+# Returns the profile file path via echo
+get_shell_profile_file() {
+	local profile_file=""
+	local current_shell="${SHELL##*/}"
+
+	# Detect if running in WSL
+	local is_wsl=false
+	if [ -f /proc/version ] && grep -q Microsoft /proc/version; then
+		is_wsl=true
+		printf "${BLUE}💡 WSL environment detected${NORMAL}\n"
+	fi
+
+	# Determine the profile file based on shell and system
+	if [ "$current_shell" = "zsh" ]; then
+		if [ -f "$HOME/.zshrc" ]; then
+			profile_file="$HOME/.zshrc"
+		else
+			profile_file="$HOME/.zshrc"
+			touch "$profile_file"
+		fi
+	elif [ "$current_shell" = "bash" ]; then
+		if [ -f "$HOME/.bash_profile" ]; then
+			profile_file="$HOME/.bash_profile"
+		elif [ -f "$HOME/.bashrc" ]; then
+			profile_file="$HOME/.bashrc"
+		else
+			# Create .bashrc for new installations
+			profile_file="$HOME/.bashrc"
+			touch "$profile_file"
+			# On macOS, also ensure .bash_profile sources .bashrc
+			if [ "$(uname)" = "Darwin" ] && [ ! -f "$HOME/.bash_profile" ]; then
+				echo '# Source .bashrc if it exists' > "$HOME/.bash_profile"
+				echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> "$HOME/.bash_profile"
+			fi
+		fi
+	elif [ "$current_shell" = "fish" ]; then
+		profile_file="$HOME/.config/fish/config.fish"
+		mkdir -p "$HOME/.config/fish"
+		touch "$profile_file"
+	else
+		# Fallback to .profile for other shells (including Alpine's ash)
+		profile_file="$HOME/.profile"
+		touch "$profile_file"
+	fi
+
+	# Return the profile file path
+	echo "$profile_file"
 }
 
 ###########################################################################

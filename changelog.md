@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Encapsulation of a way to determine profile files in all environments in `get_profile_file` function.
 - Improved the download progress bar to be more consistent across platforms.
 - Sudo detection for Linux systems to install dependencies if needed.
 - Automatic/Manual JRE installation for the quick installer
