@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # BoxLang Website Installer Script
 # This script helps install and configure a BoxLang miniserver web application

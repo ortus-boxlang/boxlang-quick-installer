@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # BoxLang Helpers
 # A collection of helper functions for BoxLang scripts.
@@ -132,6 +132,19 @@ preflight_check() {
 				printf "${BLUE}🔍 Executing: $use_sudo apt install -y ${missing_deps[*]}${NORMAL}\n"
 				if ! $use_sudo apt install -y ${missing_deps[*]}; then
 					printf "${RED}❌ Failed to install dependencies with apt. Please install them manually.${NORMAL}\n"
+					return 1
+				fi
+			elif command_exists apk; then
+				printf "${BLUE}   Updating package list...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apk update${NORMAL}\n"
+				if ! $use_sudo apk update; then
+					printf "${RED}❌ Failed to update package list with apk.${NORMAL}\n"
+					return 1
+				fi
+				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apk add ${missing_deps[*]}${NORMAL}\n"
+				if ! $use_sudo apk add ${missing_deps[*]}; then
+					printf "${RED}❌ Failed to install dependencies with apk. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists yum; then

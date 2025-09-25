@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Posix shell support for all scripts, so you can run them in any shell that supports sh.
+- Improved error handling and messaging across all scripts.
+- Improved the download progress bar to be more consistent across platforms.
 - Sudo detection for Linux systems to install dependencies if needed.
 - Automatic and User requested Java 21 installation via the `--with-jre` or `--yes` flags.
 - `--without-jre` flag to skip Java installation if you want to manage it yourself
