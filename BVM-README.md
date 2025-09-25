@@ -43,6 +43,7 @@ The only difference is that BVM adds version management capabilities on top.
 - 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
 - 🎯 **Smart version detection** - automatically detects actual version numbers from installations
 - 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
+- ☕ **Automatic Java installation** - installs Java 21 JRE if needed with `--with-jre` option
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
 
 ## Security & Reliability
@@ -272,13 +273,16 @@ BVM searches for `.bvmrc` files starting from the current directory and walking 
 ### Installation
 
 ```bash
-# Install BVM
+# Install BVM (auto-installs Java 21 if needed)
+curl -fsSL https://install-bvm.boxlang.io | bash -s -- --with-jre
+
+# Or standard installation (requires Java 21 to be pre-installed)
 curl -fsSL https://install-bvm.boxlang.io | bash
 
-# Or download and run locally
+# Download and run locally
 wget https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.sh
 chmod +x install-bvm.sh
-./install-bvm.sh
+./install-bvm.sh --with-jre  # Auto-install Java if needed
 ```
 
 ### Basic Usage
@@ -694,6 +698,22 @@ sudo apt update && sudo apt install curl unzip jq
 ```bash
 sudo dnf install curl unzip jq
 ```
+
+**Alpine Linux:**
+
+```bash
+# Prerequisites automatically installed by BVM installer
+apk add --no-cache bash curl unzip
+# Java 21 automatically installed with --with-jre option
+```
+
+### Java Requirements
+
+- **Java 21+** - Required to run BoxLang
+  - ✨ Can be automatically installed with `--with-jre` option
+  - Supports musl libc (Alpine Linux) and glibc (standard Linux)
+  - Auto-detects architecture (x64/ARM64) and OS (macOS/Linux/Alpine)
+
 
 ## Integration with Shell
 

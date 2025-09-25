@@ -23,7 +23,7 @@ Holy Ghost which is given unto us. ." Romans 5:5
 
 ----
 
-The BoxLang Quick Installer provides convenient installation scripts for Mac, Linux, and Windows systems to get BoxLang up and running in minutes. Choose between a single-version installer for simplicity or BVM (BoxLang Version Manager) for advanced version management.
+The BoxLang Quick Installer provides convenient installation scripts for Mac, Linux (including Alpine Linux containers), and Windows systems to get BoxLang up and running in minutes. Choose between a single-version installer for simplicity or BVM (BoxLang Version Manager) for advanced version management.
 
 ## 🚀 Quick Start
 
@@ -32,6 +32,9 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 ```bash
 # Single version (simple)
 /bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
+
+# With automatic Java installation
+curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
 ```
 
 **Windows:**
@@ -59,8 +62,9 @@ boxlang-miniserver --port 8080
 ### All Platforms
 
 - **Java 21+** - Required to run BoxLang
-  - ✨ Can be automatically installed with `--with-jre` option
+  - ✨ Can be automatically installed with `--with-jre` option (supports musl libc on Alpine Linux)
   - Or install manually (see instructions below)
+- **bash** - Required shell (automatically installed on Alpine Linux)
 
 ### Mac/Linux Additional Requirements
 
@@ -86,6 +90,14 @@ sudo apt update && sudo apt install curl unzip jq default-jdk
 
 ```bash
 sudo dnf install curl unzip jq java-21-openjdk
+```
+
+**Alpine Linux:**
+
+```bash
+# Prerequisites automatically installed by installer
+apk add --no-cache bash curl unzip
+# Java 21 automatically installed with --with-jre option
 ```
 
 **Windows:**
@@ -155,7 +167,8 @@ Here are the available options for the install command.
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
 - ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
 - ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
-- ✨ The installer can detect your OS (macOS/Linux) and architecture (x64/ARM64) for Java installation
+- ✨ The installer can detect your OS (macOS/Linux/Alpine) and architecture (x64/ARM64) for Java installation
+- 🐋 **Container-friendly** - Works in Docker containers with minimal base images
 
 ## 🛠️ What Gets Installed
 
