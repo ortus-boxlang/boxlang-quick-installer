@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # BoxLang Module Installer Script
 # This script helps install and manage BoxLang modules from FORGEBOX.

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # BoxLang Helpers
 # A collection of helper functions for BoxLang scripts.
@@ -91,6 +91,7 @@ preflight_check() {
 			return 1
 		fi
 	fi
+	command_exists bash || missing_deps+=( "bash" )
 	command_exists curl || missing_deps+=( "curl" )
 	command_exists unzip || missing_deps+=( "unzip" )
 	command_exists jq || missing_deps+=( "jq" )
@@ -361,12 +362,34 @@ install_java() {
 			;;
 		Linux)
 			INSTALL_BASE="/opt/java"
+
+			# Detect if this is Alpine Linux (musl-based)
+			local LIBC_TYPE="glibc"
+			if [ -f /etc/alpine-release ]; then
+				LIBC_TYPE="musl"
+				printf "${BLUE}🏔️  Detected Alpine Linux (musl libc)${NORMAL}\n"
+			elif command_exists ldd && ldd --version 2>&1 | grep -q musl; then
+				LIBC_TYPE="musl"
+				printf "${BLUE}🔍 Detected musl libc${NORMAL}\n"
+			fi
+
+			# Set JRE URLs based on architecture and libc
 			if [ "$ARCH" = "aarch64" ]; then
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				if [ "$LIBC_TYPE" = "musl" ]; then
+					JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_alpine-linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+					JRE_FILENAME="OpenJDK21U-jre_aarch64_alpine-linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				else
+					JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+					JRE_FILENAME="OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				fi
 			else
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				if [ "$LIBC_TYPE" = "musl" ]; then
+					JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_alpine-linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+					JRE_FILENAME="OpenJDK21U-jre_x64_alpine-linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				else
+					JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+					JRE_FILENAME="OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				fi
 			fi
 			JAVA_INSTALL_DIR="$INSTALL_BASE/openjdk-21-jre"
 			;;

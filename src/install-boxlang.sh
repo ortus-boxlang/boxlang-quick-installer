@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # BoxLang Installer Script
 # This script helps install BoxLang® runtime and tools on your system.

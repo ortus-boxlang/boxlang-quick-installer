@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # BoxLang Version Manager (BVM)
 # A simple version manager for BoxLang similar to jenv or nvm
 # Author: BoxLang Team

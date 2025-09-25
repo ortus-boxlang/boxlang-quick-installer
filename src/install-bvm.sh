@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # BVM (BoxLang Version Manager) Installer
 # This script installs BVM and sets up the environment
