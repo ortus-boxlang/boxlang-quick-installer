@@ -23,17 +23,16 @@ Holy Ghost which is given unto us. ." Romans 5:5
 
 ----
 
-The BoxLang Quick Installer provides convenient installation scripts for Mac, Linux (including Alpine Linux containers), and Windows systems to get BoxLang up and running in minutes. Choose between a single-version installer for simplicity or BVM (BoxLang Version Manager) for advanced version management.
+The BoxLang Quick Installer provides convenient installation scripts for Mac, Linux, and Windows systems to get BoxLang up and running in minutes. Choose between a single-version installer for simplicity or BVM (BoxLang Version Manager) for advanced version management.
 
 ## 🚀 Quick Start
 
 **Mac and Linux:**
 
 ```bash
-# Single version (simple)
 /bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
 
-# With automatic Java installation
+# With automatic Java 21  installation
 curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
 ```
 
@@ -59,25 +58,34 @@ boxlang-miniserver --port 8080
 
 ## 📋 Prerequisites
 
-### All Platforms
+The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
 
-- **Java 21+** - Required to run BoxLang
-  - ✨ Can be automatically installed with `--with-jre` option (supports musl libc on Alpine Linux)
-  - Or install manually (see instructions below)
-- **bash** - Required shell (automatically installed on Alpine Linux)
-
-### Mac/Linux Additional Requirements
-
+- **bash** - Required shell execution environment, especially on Alpine Linux
 - **curl** - For downloading releases
-- **unzip** - For extracting archives
-- **jq** - For JSON parsing (optional, fallback available)
+- **PowerShell 6+** - Required for Windows installations
 
-### Installing Prerequisites
+**Alpine Linux** : You will need to install bash manually as it is not included by default.
+
+```bash
+apk add --no-cache bash curl
+```
+
+### Requirements
+
+The following are automatically installed for you, but you can install them manually if you prefer.
+
+- **Java 21+** - JRE or JDK
+- **unzip** - For extracting downloaded files
+- **jq** - For parsing JSON (BVM only)
+
+### Manual Installation
+
+Remember, we do this automatically for you, but if you want to do it manually, here are the commands:
 
 **macOS (with Homebrew):**
 
 ```bash
-brew install curl unzip jq
+brew install curl unzip jq openjdk@21
 ```
 
 **Ubuntu/Debian:**
@@ -96,14 +104,9 @@ sudo dnf install curl unzip jq java-21-openjdk
 
 ```bash
 # Prerequisites automatically installed by installer
-apk add --no-cache bash curl unzip
+apk add --no-cache bash curl unzip jq openjdk21
 # Java 21 automatically installed with --with-jre option
 ```
-
-**Windows:**
-
-- Java 21+ from [Oracle](https://www.oracle.com/java/technologies/downloads/) or [OpenJDK](https://openjdk.org/)
-- PowerShell 5.1+ (included with Windows 10+)
 
 ## 📦 Installation Options
 
@@ -179,13 +182,13 @@ Here are the available options for the install command.
 
 ### Helper Scripts
 
-- **install-bx-module** - Install modules from ForgeBox
-- **install-jre** (Windows) - Install Java Runtime Environment
+- **install-bx-module** - Install modules from ForgeBox.
+- **install-boxlang** - Single-version BoxLang installer, so you can reinstall, install specific versions, uninstall and more.
 
 ### Directory Structure
 
 ```
-~/.boxlang/           # BoxLang home directory
+~/.local/boxlang/           # BoxLang home directory
 ├── bin/              # Executable binaries
 ├── lib/              # Core libraries
 ├── scripts/          # Installed scripts
@@ -459,28 +462,6 @@ install-bx-module --verbose
 - 🧑‍💻 [Interactive Playground](https://try.boxlang.io)
 - 📁 [Sample Applications](https://github.com/ortus-boxlang/bx-demos)
 - 🎓 [Tutorials](https://learn.boxlang.io)
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-### Reporting Issues
-
-1. Check existing [issues](https://ortussolutions.atlassian.net/browse/BLINSTALL)
-2. Create a detailed bug report with:
-   - Operating system and version
-   - BoxLang version
-   - Steps to reproduce
-   - Expected vs actual behavior
-
-### Contributing Code
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Add tests if applicable
-5. Update documentation
-6. Submit a pull request
 
 ### Testing
 
