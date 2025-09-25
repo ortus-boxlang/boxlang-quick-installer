@@ -53,6 +53,12 @@ get_boxlang_install_home(){
 boxlang_home=$(get_boxlang_install_home)
 if [ -n "$boxlang_home" ] && [ -f "$boxlang_home/scripts/helpers/helpers.sh" ]; then
 	source "$boxlang_home/scripts/helpers/helpers.sh"
+elif [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	# Source helpers from relative path (development/local setup)
+	source "$(dirname "$0")/helpers/helpers.sh"
+elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
+	# Source helpers from script directory (when run via symlink)
+	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"

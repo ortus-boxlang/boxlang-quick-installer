@@ -111,27 +111,44 @@ preflight_check() {
 			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
 		elif [ "$(uname)" = "Linux" ]; then
 			printf "${BLUE}💡 Installing missing dependencies using system package manager...${NORMAL}\n"
+
+			# Determine if we need sudo based on current user privileges
+			local use_sudo=""
+			if [ "$EUID" -ne 0 ]; then
+				use_sudo="sudo"
+				printf "${BLUE}🔐 Running as user (EUID=$EUID), will use sudo${NORMAL}\n"
+			else
+				printf "${BLUE}👑 Running as root (EUID=$EUID), no sudo needed${NORMAL}\n"
+			fi
+
 			if command_exists apt-get; then
-				printf "${BLUE}   Updating package list and installing dependencies...${NORMAL}\n"
-				if ! sudo apt update && sudo apt install -y ${missing_deps[*]}; then
+				printf "${BLUE}   Updating package list...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apt update${NORMAL}\n"
+				if ! $use_sudo apt update; then
+					printf "${RED}❌ Failed to update package list with apt.${NORMAL}\n"
+					return 1
+				fi
+				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apt install -y ${missing_deps[*]}${NORMAL}\n"
+				if ! $use_sudo apt install -y ${missing_deps[*]}; then
 					printf "${RED}❌ Failed to install dependencies with apt. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists yum; then
 				printf "${BLUE}   Installing dependencies with yum...${NORMAL}\n"
-				if ! sudo yum install -y ${missing_deps[*]}; then
+				if ! $use_sudo yum install -y ${missing_deps[*]}; then
 					printf "${RED}❌ Failed to install dependencies with yum. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists dnf; then
 				printf "${BLUE}   Installing dependencies with dnf...${NORMAL}\n"
-				if ! sudo dnf install -y ${missing_deps[*]}; then
+				if ! $use_sudo dnf install -y ${missing_deps[*]}; then
 					printf "${RED}❌ Failed to install dependencies with dnf. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists pacman; then
 				printf "${BLUE}   Installing dependencies with pacman...${NORMAL}\n"
-				if ! sudo pacman -S --noconfirm ${missing_deps[*]}; then
+				if ! $use_sudo pacman -S --noconfirm ${missing_deps[*]}; then
 					printf "${RED}❌ Failed to install dependencies with pacman. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
@@ -293,7 +310,7 @@ install_java() {
 	# Detect OS and architecture
 	local OS=$(uname -s)
 	local ARCH=$(uname -m)
-	local JRE_VERSION="21.0.8+9 "
+	local JRE_VERSION="21.0.8+9"
 	local INSTALL_BASE=""
 	local JRE_URL=""
 	local JRE_FILENAME=""
@@ -311,30 +328,32 @@ install_java() {
 			;;
 	esac
 
-	# Convert JRE_VERSION to URL format (replace . with %)
-	local JRE_URL_VERSION=$(echo "$JRE_VERSION" | sed 's/\./%2B/g')
+	# Convert JRE_VERSION to URL format (replace + with %2B for URL encoding)
+	local JRE_URL_VERSION=$(echo "$JRE_VERSION" | sed 's/+/%2B/g')
+	# Convert JRE_VERSION to filename format (replace + with _ for filenames)
+	local JRE_FILE_VERSION=$(echo "$JRE_VERSION" | sed 's/+/_/g')
 
 	# Set URLs and paths based on OS
 	case "$OS" in
 		Darwin)
 			INSTALL_BASE="/Library/Java/JavaVirtualMachines"
 			if [ "$ARCH" = "aarch64" ]; then
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_aarch64_mac_hotspot_${JRE_FILE_VERSION}.tar.gz"
 			else
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_mac_hotspot_${JRE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_x64_mac_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_mac_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_x64_mac_hotspot_${JRE_FILE_VERSION}.tar.gz"
 			fi
 			JAVA_INSTALL_DIR="$INSTALL_BASE/openjdk-21-jre"
 			;;
 		Linux)
 			INSTALL_BASE="/opt/java"
 			if [ "$ARCH" = "aarch64" ]; then
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_aarch64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
 			else
-				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_linux_hotspot_${JRE_VERSION}.tar.gz"
-				JRE_FILENAME="OpenJDK21U-jre_x64_linux_hotspot_${JRE_VERSION}.tar.gz"
+				JRE_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JRE_URL_VERSION}/OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
+				JRE_FILENAME="OpenJDK21U-jre_x64_linux_hotspot_${JRE_FILE_VERSION}.tar.gz"
 			fi
 			JAVA_INSTALL_DIR="$INSTALL_BASE/openjdk-21-jre"
 			;;
@@ -344,16 +363,19 @@ install_java() {
 			;;
 	esac
 
-	printf "${BLUE}📍 Detected: $OS ($ARCH)${NORMAL}\n"
-	printf "${BLUE}📥 Downloading JRE from: $JRE_URL${NORMAL}\n"
-	printf "${BLUE}📂 Installing to: $JAVA_INSTALL_DIR${NORMAL}\n"
+	printf "%s📍 Detected: %s (%s)%s\n" "${BLUE}" "${OS}" "${ARCH}" "${NORMAL}"
+	printf "📥 JRE URL [%s]\n" "${JRE_URL}"
+	printf "📦 JRE Filename [%s]\n" "${JRE_FILENAME}"
+	printf "📂 Installing to [%s]\n" "${JAVA_INSTALL_DIR}"
+	printf "${NORMAL}\n"
 
 	# Create temporary directory
 	local TEMP_DIR=$(mktemp -d)
 	local DOWNLOAD_PATH="$TEMP_DIR/$JRE_FILENAME"
 
 	# Download JRE
-	if ! curl -fsSL "$JRE_URL" -o "$DOWNLOAD_PATH"; then
+	printf "${BLUE}📥 Downloading JRE...${NORMAL}\n"
+	if ! curl -L --progress-bar "$JRE_URL" -o "$DOWNLOAD_PATH"; then
 		print_error "Failed to download JRE"
 		rm -rf "$TEMP_DIR"
 		return 1
@@ -361,10 +383,16 @@ install_java() {
 
 	printf "${GREEN}✅ Downloaded JRE successfully${NORMAL}\n"
 
-	# Create installation directory (requires sudo on most systems)
+	# Create installation directory (requires elevated privileges on most systems)
 	printf "${BLUE}📁 Creating installation directory: $JAVA_INSTALL_DIR${NORMAL}\n"
 	if [ "$OS" = "Darwin" ] || [ "$OS" = "Linux" ]; then
-		if ! sudo mkdir -p "$JAVA_INSTALL_DIR"; then
+		# Check if we need sudo or if running as root
+		local use_sudo=""
+		if [ "$EUID" -ne 0 ] && command_exists sudo; then
+			use_sudo="sudo"
+		fi
+
+		if ! $use_sudo mkdir -p "$JAVA_INSTALL_DIR"; then
 			print_error "Failed to create installation directory"
 			rm -rf "$TEMP_DIR"
 			return 1
@@ -390,19 +418,19 @@ install_java() {
 	# Remove existing installation if it exists
 	if [ -d "$JAVA_INSTALL_DIR" ]; then
 		printf "${BLUE}🧹 Removing existing Java installation...${NORMAL}\n"
-		sudo rm -rf "$JAVA_INSTALL_DIR"
+		$use_sudo rm -rf "$JAVA_INSTALL_DIR"
 	fi
 
 	# Move extracted content to final location
 	printf "${BLUE}📋 Installing JRE to $JAVA_INSTALL_DIR...${NORMAL}\n"
-	if ! sudo mv "$EXTRACTED_DIR" "$JAVA_INSTALL_DIR"; then
+	if ! $use_sudo mv "$EXTRACTED_DIR" "$JAVA_INSTALL_DIR"; then
 		print_error "Failed to move JRE to installation directory"
 		rm -rf "$TEMP_DIR"
 		return 1
 	fi
 
 	# Set permissions
-	sudo chmod -R 755 "$JAVA_INSTALL_DIR"
+	$use_sudo chmod -R 755 "$JAVA_INSTALL_DIR"
 
 	# Clean up temporary files
 	rm -rf "$TEMP_DIR"

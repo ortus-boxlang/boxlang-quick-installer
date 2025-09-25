@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sudo detection for Linux systems to install dependencies if needed.
 - Automatic and User requested Java 21 installation via the `--with-jre` or `--yes` flags.
 - `--without-jre` flag to skip Java installation if you want to manage it yourself
 - Updated the `preflight_check` to accept a parameter to install Java if needed.
