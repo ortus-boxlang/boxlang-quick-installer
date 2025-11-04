@@ -15,6 +15,12 @@ set -e
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 
+# We need this in case the target OS we are installing in does not have a `TERM` implementation declared
+# or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions or Docker containers)
+if [ -z "$TERM" ] || [ "$TERM" = "unknown" ] || [ "$TERM" = "dumb" ]; then
+	export TERM="xterm-256color"
+fi
+
 # Include the helper functions
 # These are installed by the installer script
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
