@@ -5,15 +5,3 @@ updates:
     directory: "/"                  # Where your .github/workflows/ folder is
     schedule:
       interval: "monthly"
-
-  # Gradle - updates dependencies in build.gradle or build.gradle.kts
-  - package-ecosystem: "gradle"
-    directory: "/"                  # Adjust if build.gradle is in a subfolder
-    schedule:
-      interval: "monthly"
-
-  # NPM
-  - package-ecosystem: "npm"
-    directory: "/"  # adjust if needed
-    schedule:
-      interval: "monthly"

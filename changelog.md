@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Consistency improvements to the jre installer for powershell
+- Progress bar improvements for powershell jre installer
+
+### Fixed
+
+- Create parent directory for jre installation if it doesn't exist
+
 ## [1.20.0] - 2025-09-25
 
 ### Added
