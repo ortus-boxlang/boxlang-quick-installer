@@ -37,6 +37,11 @@ get_boxlang_install_home(){
 		"$HOME/.local/boxlang"
 	)
 
+	# Add BOXLANG_INSTALL_HOME if set
+	if [ -n "$BOXLANG_INSTALL_HOME" ]; then
+    	possible_locations+=("$BOXLANG_INSTALL_HOME")
+	fi
+
 	for location in "${possible_locations[@]}"; do
 		if [ -d "$location" ]; then
 			echo "$location"
@@ -90,6 +95,11 @@ get_current_version() {
 		"/usr/local/boxlang/bin/boxlang"       # System BoxLang installation
 		"$HOME/.local/boxlang/bin/boxlang"     # User BoxLang installation
 	)
+
+	# Add BOXLANG_INSTALL_HOME if set
+	if [ -n "$BOXLANG_INSTALL_HOME" ]; then
+    	boxlang_candidates+=("$BOXLANG_INSTALL_HOME/bin/boxlang")
+	fi
 
 	for candidate in "${boxlang_candidates[@]}"; do
 		if command_exists "$candidate" || [ -x "$candidate" ]; then
@@ -579,7 +589,7 @@ install_boxlang() {
 	# Setup Installation Directories
 	###########################################################################
 	# These are the system-wide installation directories
-	local SYSTEM_HOME="/usr/local/boxlang"
+	local SYSTEM_HOME="${BOXLANG_INSTALL_HOME:-/usr/local/boxlang}"
 	local SYSTEM_BIN="/usr/local/bin"
 
 	###########################################################################

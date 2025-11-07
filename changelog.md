@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Consistency improvements to the jre installer for powershell
+- Progress bar improvements for powershell jre installer
+
+### Fixed
+
+- Create parent directory for jre installation if it doesn't exist
+
+## [1.20.0] - 2025-09-25
+
+### Added
+
 - **Alpine Linux & Container Support**: Full compatibility with Alpine Linux containers including musl libc JRE detection
 - **Container-friendly environment setup**: Multiple activation methods for minimal container environments
 - **Centralized shell profile detection**: `get_shell_profile_file()` helper function for consistent behavior across all installers
