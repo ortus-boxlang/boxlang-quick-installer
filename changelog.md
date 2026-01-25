@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ability to install modules from FORGEBOX that have secure storage.
+
+### Fixed
+
+- Added missing +x permissions to some files.
+
 ## [1.21.0] - 2025-11-07
 
 ## [1.20.0] - 2025-09-25
