@@ -734,15 +734,13 @@ install_boxlang() {
 	###########################################################################
 	printf "\n"
 	print_info "🛺 Unzipping Assets to ${SYSTEM_HOME}..."
-	printf "\n"
-	unzip -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
-	unzip -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
-	unzip -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
+	unzip -q -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
+	unzip -q -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
+	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
 
 	###########################################################################
 	# Make them executable
 	###########################################################################
-	printf "\n"
 	print_info "⚡Making Assets Executable..."
 	chmod -R 755 "${SYSTEM_HOME}"
 
