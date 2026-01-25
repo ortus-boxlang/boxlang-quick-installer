@@ -43,6 +43,43 @@ function Parse-ModuleList {
     return $modules
 }
 
+function Resolve-ForgeboxStorageUrl {
+    param(
+        [string]$ModuleName,
+        [string]$Version = ""
+    )
+
+    $storageUrl = if ($Version) {
+        "$FORGEBOX_API_URL/storage/$ModuleName/$Version"
+    } else {
+        "$FORGEBOX_API_URL/storage/$ModuleName"
+    }
+
+    Write-Host "🔗 Resolving secure download URL from ForgeBox storage..." -ForegroundColor Blue
+
+    try {
+        # Get the secure download URL
+        $storageJson = Invoke-RestMethod -Uri $storageUrl -ErrorAction Stop
+
+        if (-not $storageJson -or -not $storageJson.data) {
+            Write-Host "❌ Error: Failed to get secure download URL from ForgeBox storage" -ForegroundColor Red
+            exit 1
+        }
+
+        $secureUrl = $storageJson.data
+
+        if (-not $secureUrl) {
+            Write-Host "❌ Error: Invalid response from ForgeBox storage" -ForegroundColor Red
+            exit 1
+        }
+
+        return $secureUrl
+    } catch {
+        Write-Host "❌ Error: Failed to get secure download URL from ForgeBox storage: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 function Get-SnapshotVersionFromForgebox {
     param([string]$ModuleName)
 
@@ -67,8 +104,28 @@ function Get-SnapshotVersionFromForgebox {
             exit 1
         }
 
-        # Build download URL from the version (following the same pattern as specific versions)
-        $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+        # Get the full entry info for this version to check for forgeboxStorage
+        try {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/$version" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data) {
+                $downloadUrlTemp = $versionJson.data.downloadURL
+                if ($downloadUrlTemp -eq "forgeboxStorage") {
+                    $downloadUrl = Resolve-ForgeboxStorageUrl $ModuleName $version
+                } elseif ($downloadUrlTemp) {
+                    # Use the download URL from API
+                    $downloadUrl = $downloadUrlTemp
+                } else {
+                    # Fallback: build download URL from the artifacts directly
+                    $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+                }
+            } else {
+                # Fallback: build download URL from the artifacts directly
+                $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+            }
+        } catch {
+            # Fallback: build download URL from the artifacts directly
+            $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+        }
 
         return @{
             Version = $version
@@ -196,6 +253,11 @@ function Get-LatestVersionFromForgebox {
             exit 1
         }
 
+        # Check if download URL is forgeboxStorage keyword
+        if ($downloadUrl -eq "forgeboxStorage") {
+            $downloadUrl = Resolve-ForgeboxStorageUrl $ModuleName
+        }
+
         return @{
             Version = $version
             DownloadUrl = $downloadUrl
@@ -237,8 +299,25 @@ function Install-Module {
         $targetVersion = $forgeboxResult.Version
         $downloadUrl = $forgeboxResult.DownloadUrl
     } else {
-        # We have a targeted version, let's build the download URL from the artifacts directly
-        $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+        # We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
+        try {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$targetModule/$targetVersion" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data) {
+                $downloadUrlTemp = $versionJson.data.downloadURL
+                if ($downloadUrlTemp -eq "forgeboxStorage") {
+                    $downloadUrl = Resolve-ForgeboxStorageUrl $targetModule $targetVersion
+                } else {
+                    # Use the download URL from API if available
+                    $downloadUrl = $downloadUrlTemp
+                }
+            } else {
+                # Fallback: build the download URL from the artifacts directly
+                $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+            }
+        } catch {
+            # Fallback: build the download URL from the artifacts directly
+            $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+        }
     }
 
     # Define paths based on LOCAL_INSTALL flag
