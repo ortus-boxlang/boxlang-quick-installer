@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.23.0] - 2026-01-25
+### Fixed
 
-## [1.21.0] - 2026-01-25
+- Updated unzip commands to use `-q` for quiet mode and `-o` to overwrite existing files without prompting.
+- Removed unnecessary newline print statements to streamline output during installation.
+
+## [1.23.0] - 2026-01-25
 
 ### Added
 
