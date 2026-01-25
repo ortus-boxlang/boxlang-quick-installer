@@ -988,10 +988,10 @@ check_health() {
     else
         print_warning "BoxLang home bin is not in PATH"
         print_info "Adding $boxlang_home_bin to PATH..."
-        
+
         # Detect shell profile file
         local profile_file=$(get_shell_profile_file)
-        
+
         if [ -n "$profile_file" ]; then
             # Check if already in profile but not in current PATH (restart needed)
             if [ -f "$profile_file" ] && grep -q "$boxlang_home_bin" "$profile_file"; then
