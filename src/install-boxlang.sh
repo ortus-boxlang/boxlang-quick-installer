@@ -223,13 +223,17 @@ check_or_set_path() {
 	local install_home_exists=false
 	local boxlang_home_bin_exists=false
 
-	if [ -f "$profile_file" ] && grep -Fq "$bin_dir" "$profile_file"; then
-		path_exists=true
+	if [ -f "$profile_file" ]; then
+		if grep -Fq "$bin_dir" "$profile_file" 2>/dev/null; then
+			path_exists=true
+		fi
 	fi
 
 	# Check if boxlang home bin is in PATH
-	if [ -n "$boxlang_home_bin" ] && [ -f "$profile_file" ] && grep -Fq "$boxlang_home_bin" "$profile_file" ]; then
-		boxlang_home_bin_exists=true
+	if [ -n "$boxlang_home_bin" ] && [ -f "$profile_file" ]; then
+		if grep -Fq "$boxlang_home_bin" "$profile_file" 2>/dev/null; then
+			boxlang_home_bin_exists=true
+		fi
 	fi
 
 	# Check if BOXLANG_INSTALL_HOME is already set in the profile
@@ -785,12 +789,11 @@ install_boxlang() {
 
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
-	echo "♨ BoxLang® Installation Directory: [${SYSTEM_HOME}]"
+	echo "🥊 BoxLang® Installation Directory: [${SYSTEM_HOME}]"
 	echo "🔗 System Links: [${SYSTEM_BIN}]"
 	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
 	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
-	printf "\n"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo 'BoxLang® - Dynamic : Modular : Productive : https://boxlang.io'
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
