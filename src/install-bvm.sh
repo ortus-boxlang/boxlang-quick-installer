@@ -71,7 +71,7 @@ install_bvm() {
 	# Inflate them
 	###########################################################################
 	print_info "Inflating BoxLang installer scripts..."
-	unzip -o "${TEMP_DIR}"/boxlang-installer.zip -d "${scripts_dir}"
+	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${scripts_dir}"
 
 	###########################################################################
 	# Make them executable
