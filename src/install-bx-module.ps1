@@ -371,6 +371,75 @@ function Install-Module {
             exit 1
         }
 
+        # Check for executables in box.json and create bin scripts
+        $boxJsonPath = Join-Path $destination "box.json"
+        if (Test-Path $boxJsonPath) {
+            try {
+                $boxJson = Get-Content $boxJsonPath | ConvertFrom-Json
+
+                # Get BOXLANG_HOME for bin directory
+                $binDir = if ($LOCAL_INSTALL) {
+                    Join-Path (Get-Location) "boxlang_modules\.bin"
+                } else {
+                    if (-not $env:BOXLANG_HOME) {
+                        $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
+                    }
+                    Join-Path $env:BOXLANG_HOME "bin"
+                }
+
+                # Create bin directory if it doesn't exist
+                if (-not (Test-Path $binDir)) {
+                    New-Item -Path $binDir -ItemType Directory -Force | Out-Null
+                }
+
+                # Check for boxlang.executable (single executable)
+                if ($boxJson.boxlang -and $boxJson.boxlang.executable) {
+                    $executable = $boxJson.boxlang.executable
+                    $execScript = Join-Path $binDir "$executable"
+                    Write-Host "🔧 Creating executable script: $executable" -ForegroundColor Blue
+
+                    # Create shell script
+                    $scriptContent = @"
+#!/bin/sh
+boxlang module:$targetModule `"`$@`"
+"@
+                    Set-Content -Path $execScript -Value $scriptContent -NoNewline
+
+                    # Also create .bat for Windows
+                    $execBat = Join-Path $binDir "$executable.bat"
+                    $batContent = @"
+@echo off
+boxlang module:$targetModule %*
+"@
+                    Set-Content -Path $execBat -Value $batContent
+                }
+
+                # Check for boxlang.executables (multiple executables)
+                if ($boxJson.boxlang -and $boxJson.boxlang.executables) {
+                    Write-Host "🔧 Creating executable scripts..." -ForegroundColor Blue
+                    $executables = $boxJson.boxlang.executables
+                    foreach ($execName in $executables.PSObject.Properties.Name) {
+                        $execContent = $executables.$execName
+                        if ($execContent) {
+                            $execScript = Join-Path $binDir $execName
+                            Write-Host "  - Creating: $execName" -ForegroundColor Blue
+                            Set-Content -Path $execScript -Value $execContent -NoNewline
+
+                            # Also create .bat version if it's a shell script
+                            if ($execContent -match '^#!/') {
+                                # It's a shell script, create a .bat wrapper
+                                $execBat = Join-Path $binDir "$execName.bat"
+                                $batWrapper = "@echo off`r`nbash `"%~dp0$execName`" %*"
+                                Set-Content -Path $execBat -Value $batWrapper
+                            }
+                        }
+                    }
+                }
+            } catch {
+                # Silently ignore box.json parsing errors
+            }
+        }
+
         # Success message
         Write-Host ""
         Write-Host "✅ BoxLang® Module [$targetModule@$targetVersion] installed successfully!" -ForegroundColor Green

@@ -363,7 +363,56 @@ install_module() {
 		printf "${RED}❌ Error: Module extraction appears to have failed - destination directory is empty${NORMAL}\n"
 		exit 1
 	fi
+	# Check for executables in box.json and create bin scripts
+	local BOX_JSON_PATH="${DESTINATION}/box.json"
+	if [ -f "${BOX_JSON_PATH}" ]; then
+		# Get BOXLANG_HOME for bin directory
+		local BIN_DIR
+		if [ "$LOCAL_INSTALL" = true ]; then
+			BIN_DIR="$(pwd)/boxlang_modules/.bin"
+		else
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			BIN_DIR="${BOXLANG_HOME}/bin"
+		fi
 
+		# Create bin directory if it doesn't exist
+		mkdir -p "${BIN_DIR}"
+
+		# Check for boxlang.executable (single executable)
+		local EXECUTABLE=$(jq -r '.boxlang.executable // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+		if [ -n "${EXECUTABLE}" ]; then
+			local EXEC_SCRIPT="${BIN_DIR}/${EXECUTABLE}"
+			printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
+			cat > "${EXEC_SCRIPT}" << EOF
+#!/bin/sh
+boxlang module:${TARGET_MODULE} "\$@"
+EOF
+			chmod +x "${EXEC_SCRIPT}"
+		fi
+
+		# Check for boxlang.executables (multiple executables)
+		local EXECUTABLES=$(jq -r '.boxlang.executables // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+		if [ -n "${EXECUTABLES}" ] && [ "${EXECUTABLES}" != "null" ]; then
+			# Get all executable names (keys)
+			local EXEC_NAMES=$(echo "${EXECUTABLES}" | jq -r 'keys[]' 2>/dev/null)
+			if [ -n "${EXEC_NAMES}" ]; then
+				printf "${BLUE}🔧 Creating executable scripts...${NORMAL}\n"
+				while IFS= read -r exec_name; do
+					if [ -n "${exec_name}" ]; then
+						local exec_content=$(echo "${EXECUTABLES}" | jq -r ".\"${exec_name}\"" 2>/dev/null)
+						if [ -n "${exec_content}" ] && [ "${exec_content}" != "null" ]; then
+							local exec_script="${BIN_DIR}/${exec_name}"
+							printf "${BLUE}  - Creating: ${exec_name}${NORMAL}\n"
+							echo "${exec_content}" > "${exec_script}"
+							chmod +x "${exec_script}"
+						fi
+					fi
+				done <<< "${EXEC_NAMES}"
+			fi
+		fi
+	fi
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
 }
