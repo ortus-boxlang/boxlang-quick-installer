@@ -453,35 +453,72 @@ function Test-Installation {
 # PATH Management Function
 ###########################################################################
 function Update-PathVariable {
-    param([string]$BinDir)
+    param(
+        [string]$BinDir,
+        [string]$BoxLangHomeBin = ""
+    )
 
-    # Check if path is already in PATH
+    # Build list of directories to check/add
+    $dirsToAdd = @($BinDir)
+    if ($BoxLangHomeBin -ne "") {
+        $dirsToAdd += $BoxLangHomeBin
+    }
+
+    # Check if paths are already in PATH
     $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
-    if ($currentPath -like "*$BinDir*") {
-        Write-Host -ForegroundColor Green "✅ $BinDir is already in your PATH"
+    $missingDirs = @()
+    $alreadyInPath = @()
+
+    foreach ($dir in $dirsToAdd) {
+        if ($currentPath -like "*$dir*") {
+            $alreadyInPath += $dir
+        } else {
+            $missingDirs += $dir
+        }
+    }
+
+    # Report already present paths
+    if ($alreadyInPath.Count -gt 0) {
+        foreach ($dir in $alreadyInPath) {
+            Write-Host -ForegroundColor Green "✅ $dir is already in your PATH"
+        }
+    }
+
+    # If all paths are present, we're done
+    if ($missingDirs.Count -eq 0) {
         return
     }
 
-    Write-Host -ForegroundColor Yellow "⚠️  $BinDir is not in your PATH"
+    # Report missing paths
+    foreach ($dir in $missingDirs) {
+        Write-Host -ForegroundColor Yellow "⚠️  $dir is not in your PATH"
+    }
 
     # If non-interactive mode (--yes flag was used), auto-update PATH
     if ($NON_INTERACTIVE) {
-        Write-Host -ForegroundColor Green "Adding $BinDir to PATH (automatic mode)..."
+        Write-Host -ForegroundColor Green "Adding directories to PATH (automatic mode)..."
     } else {
         # Ask user for permission to auto-update
-        $response = Read-Host "Would you like to automatically add $BinDir to your PATH? [Y/n]"
+        $dirList = $missingDirs -join ", "
+        $response = Read-Host "Would you like to automatically add these directories to your PATH? [Y/n]"
         if ($response -match "^[nN]") {
             Write-Host -ForegroundColor Yellow "Skipping automatic PATH update"
-            Write-Host -ForegroundColor Blue "Manually add $BinDir to your system PATH"
+            Write-Host -ForegroundColor Blue "Manually add the following to your system PATH:"
+            foreach ($dir in $missingDirs) {
+                Write-Host -ForegroundColor Blue "  - $dir"
+            }
             return
         }
     }
 
-    # Add to PATH
-    Write-Host -ForegroundColor Blue "Adding $BinDir to PATH..."
-    $newPath = "$currentPath;$BinDir"
+    # Add missing directories to PATH
+    $newPath = $currentPath
+    foreach ($dir in $missingDirs) {
+        Write-Host -ForegroundColor Blue "Adding $dir to PATH..."
+        $newPath = "$newPath;$dir"
+    }
     [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
-    Write-Host -ForegroundColor Green "✅ Successfully added $BinDir to PATH"
+    Write-Host -ForegroundColor Green "✅ Successfully updated PATH"
     Write-Host -ForegroundColor Blue "💡 Restart your terminal to use the new PATH"
 }
 
@@ -810,8 +847,16 @@ catch {
 # Install CommandBox
 Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
-## Add the bin folder to the path
-Update-PathVariable -BinDir $DESTINATION_BIN
+# Create bin directory in BoxLang home for module executables
+$BOXLANG_HOME_BIN = Join-Path $env:USERPROFILE ".boxlang\bin"
+Write-Host -ForegroundColor Blue "📁 Creating BoxLang home bin directory..."
+if (-not (Test-Path $BOXLANG_HOME_BIN)) {
+    New-Item -Path $BOXLANG_HOME_BIN -ItemType Directory -Force | Out-Null
+}
+Write-Host -ForegroundColor Green "✅ BoxLang home bin directory created at [$BOXLANG_HOME_BIN]"
+
+## Add the bin folder and BoxLang home bin to the path
+Update-PathVariable -BinDir $DESTINATION_BIN -BoxLangHomeBin $BOXLANG_HOME_BIN
 
 ## Create a BOXLANG_HOME env variable that points to the $DESTINATION_HOME
 Write-Host -ForegroundColor Green "🏠 Setting the BOXLANG_HOME environment variable to [$DESTINATION_HOME]"
