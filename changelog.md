@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ability to install modules from FORGEBOX that have secure storage.
+- Add the `$BOXLANG_HOME/bin`  to the system PATH upon installation.
+- If a module's box.json exposes a `boxlang.executable` property, create a symlink to that executable in the BoxLang home bin folder.
+- If a module's box.json exposes a `boxlang.executables` property, create those shell scripts in the BoxLang home bin folder.
+
+### Fixed
+
+- Added missing +x permissions to some files.
+
+## [1.21.0] - 2025-11-07
+
+## [1.20.0] - 2025-09-25
+
+### Added
+
 - Consistency improvements to the jre installer for powershell
 - Progress bar improvements for powershell jre installer
 

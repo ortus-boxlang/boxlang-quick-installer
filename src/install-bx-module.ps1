@@ -43,6 +43,43 @@ function Parse-ModuleList {
     return $modules
 }
 
+function Resolve-ForgeboxStorageUrl {
+    param(
+        [string]$ModuleName,
+        [string]$Version = ""
+    )
+
+    $storageUrl = if ($Version) {
+        "$FORGEBOX_API_URL/storage/$ModuleName/$Version"
+    } else {
+        "$FORGEBOX_API_URL/storage/$ModuleName"
+    }
+
+    Write-Host "🔗 Resolving secure download URL from ForgeBox storage..." -ForegroundColor Blue
+
+    try {
+        # Get the secure download URL
+        $storageJson = Invoke-RestMethod -Uri $storageUrl -ErrorAction Stop
+
+        if (-not $storageJson -or -not $storageJson.data) {
+            Write-Host "❌ Error: Failed to get secure download URL from ForgeBox storage" -ForegroundColor Red
+            exit 1
+        }
+
+        $secureUrl = $storageJson.data
+
+        if (-not $secureUrl) {
+            Write-Host "❌ Error: Invalid response from ForgeBox storage" -ForegroundColor Red
+            exit 1
+        }
+
+        return $secureUrl
+    } catch {
+        Write-Host "❌ Error: Failed to get secure download URL from ForgeBox storage: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 function Get-SnapshotVersionFromForgebox {
     param([string]$ModuleName)
 
@@ -67,8 +104,28 @@ function Get-SnapshotVersionFromForgebox {
             exit 1
         }
 
-        # Build download URL from the version (following the same pattern as specific versions)
-        $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+        # Get the full entry info for this version to check for forgeboxStorage
+        try {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/$version" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data) {
+                $downloadUrlTemp = $versionJson.data.downloadURL
+                if ($downloadUrlTemp -eq "forgeboxStorage") {
+                    $downloadUrl = Resolve-ForgeboxStorageUrl $ModuleName $version
+                } elseif ($downloadUrlTemp) {
+                    # Use the download URL from API
+                    $downloadUrl = $downloadUrlTemp
+                } else {
+                    # Fallback: build download URL from the artifacts directly
+                    $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+                }
+            } else {
+                # Fallback: build download URL from the artifacts directly
+                $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+            }
+        } catch {
+            # Fallback: build download URL from the artifacts directly
+            $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+        }
 
         return @{
             Version = $version
@@ -196,6 +253,11 @@ function Get-LatestVersionFromForgebox {
             exit 1
         }
 
+        # Check if download URL is forgeboxStorage keyword
+        if ($downloadUrl -eq "forgeboxStorage") {
+            $downloadUrl = Resolve-ForgeboxStorageUrl $ModuleName
+        }
+
         return @{
             Version = $version
             DownloadUrl = $downloadUrl
@@ -237,8 +299,25 @@ function Install-Module {
         $targetVersion = $forgeboxResult.Version
         $downloadUrl = $forgeboxResult.DownloadUrl
     } else {
-        # We have a targeted version, let's build the download URL from the artifacts directly
-        $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+        # We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
+        try {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$targetModule/$targetVersion" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data) {
+                $downloadUrlTemp = $versionJson.data.downloadURL
+                if ($downloadUrlTemp -eq "forgeboxStorage") {
+                    $downloadUrl = Resolve-ForgeboxStorageUrl $targetModule $targetVersion
+                } else {
+                    # Use the download URL from API if available
+                    $downloadUrl = $downloadUrlTemp
+                }
+            } else {
+                # Fallback: build the download URL from the artifacts directly
+                $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+            }
+        } catch {
+            # Fallback: build the download URL from the artifacts directly
+            $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$targetModule/$targetVersion/$targetModule-$targetVersion.zip"
+        }
     }
 
     # Define paths based on LOCAL_INSTALL flag
@@ -290,6 +369,75 @@ function Install-Module {
         if (-not (Test-Path $destination) -or -not (Get-ChildItem -Path $destination -ErrorAction SilentlyContinue)) {
             Write-Host "❌ Error: Module extraction appears to have failed - destination directory is empty" -ForegroundColor Red
             exit 1
+        }
+
+        # Check for executables in box.json and create bin scripts
+        $boxJsonPath = Join-Path $destination "box.json"
+        if (Test-Path $boxJsonPath) {
+            try {
+                $boxJson = Get-Content $boxJsonPath | ConvertFrom-Json
+
+                # Get BOXLANG_HOME for bin directory
+                $binDir = if ($LOCAL_INSTALL) {
+                    Join-Path (Get-Location) "boxlang_modules\.bin"
+                } else {
+                    if (-not $env:BOXLANG_HOME) {
+                        $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
+                    }
+                    Join-Path $env:BOXLANG_HOME "bin"
+                }
+
+                # Create bin directory if it doesn't exist
+                if (-not (Test-Path $binDir)) {
+                    New-Item -Path $binDir -ItemType Directory -Force | Out-Null
+                }
+
+                # Check for boxlang.executable (single executable)
+                if ($boxJson.boxlang -and $boxJson.boxlang.executable) {
+                    $executable = $boxJson.boxlang.executable
+                    $execScript = Join-Path $binDir "$executable"
+                    Write-Host "🔧 Creating executable script: $executable" -ForegroundColor Blue
+
+                    # Create shell script
+                    $scriptContent = @"
+#!/bin/sh
+boxlang module:$targetModule `"`$@`"
+"@
+                    Set-Content -Path $execScript -Value $scriptContent -NoNewline
+
+                    # Also create .bat for Windows
+                    $execBat = Join-Path $binDir "$executable.bat"
+                    $batContent = @"
+@echo off
+boxlang module:$targetModule %*
+"@
+                    Set-Content -Path $execBat -Value $batContent
+                }
+
+                # Check for boxlang.executables (multiple executables)
+                if ($boxJson.boxlang -and $boxJson.boxlang.executables) {
+                    Write-Host "🔧 Creating executable scripts..." -ForegroundColor Blue
+                    $executables = $boxJson.boxlang.executables
+                    foreach ($execName in $executables.PSObject.Properties.Name) {
+                        $execContent = $executables.$execName
+                        if ($execContent) {
+                            $execScript = Join-Path $binDir $execName
+                            Write-Host "  - Creating: $execName" -ForegroundColor Blue
+                            Set-Content -Path $execScript -Value $execContent -NoNewline
+
+                            # Also create .bat version if it's a shell script
+                            if ($execContent -match '^#!/') {
+                                # It's a shell script, create a .bat wrapper
+                                $execBat = Join-Path $binDir "$execName.bat"
+                                $batWrapper = "@echo off`r`nbash `"%~dp0$execName`" %*"
+                                Set-Content -Path $execBat -Value $batWrapper
+                            }
+                        }
+                    }
+                }
+            } catch {
+                # Silently ignore box.json parsing errors
+            }
         }
 
         # Success message

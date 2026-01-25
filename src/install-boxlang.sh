@@ -207,27 +207,42 @@ check_or_set_path() {
 	# Incoming args
 	local bin_dir="$1"
 	local install_home="$2"
+	local boxlang_home_bin="${3:-}"
 	# Detect the appropriate shell profile file using helper function
 	local profile_file=$(get_shell_profile_file)
 
+	# Build PATH string with both bin directories
+	local path_value="$bin_dir"
+	if [ -n "$boxlang_home_bin" ]; then
+		path_value="$bin_dir:$boxlang_home_bin"
+	fi
+
 	# Check if the PATH export already exists in the profile
-	local path_export="export PATH=\"$bin_dir:\$PATH\""
+	local path_export="export PATH=\"$path_value:\$PATH\""
 	local path_exists=false
 	local install_home_exists=false
+	local boxlang_home_bin_exists=false
 
 	if [ -f "$profile_file" ] && grep -Fq "$bin_dir" "$profile_file"; then
 		path_exists=true
 	fi
 
+	# Check if boxlang home bin is in PATH
+	if [ -n "$boxlang_home_bin" ] && [ -f "$profile_file" ] && grep -Fq "$boxlang_home_bin" "$profile_file" ]; then
+		boxlang_home_bin_exists=true
+	fi
+
 	# Check if BOXLANG_INSTALL_HOME is already set in the profile
-	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file"; then
+	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file" ]; then
 		install_home_exists=true
 	fi
 
-	# If both PATH and BOXLANG_INSTALL_HOME exist, we're done
+	# If all entries exist, we're done
 	if [ "$path_exists" = true ] && [ "$install_home_exists" = true ]; then
-		print_success "PATH entry and BOXLANG_INSTALL_HOME already exist in $profile_file"
-		return 0
+		if [ -z "$boxlang_home_bin" ] || [ "$boxlang_home_bin_exists" = true ]; then
+			print_success "PATH entry and BOXLANG_INSTALL_HOME already exist in $profile_file"
+			return 0
+		fi
 	fi
 
 	# If PATH exists but BOXLANG_INSTALL_HOME doesn't, add only the install home
@@ -248,14 +263,22 @@ check_or_set_path() {
 	fi
 
 	# Add PATH to the profile file
-	print_info "➕ Adding [$bin_dir] to PATH in [$profile_file]..."
+	if [ -n "$boxlang_home_bin" ]; then
+		print_info "➕ Adding [$bin_dir] and [$boxlang_home_bin] to PATH in [$profile_file]..."
+	else
+		print_info "➕ Adding [$bin_dir] to PATH in [$profile_file]..."
+	fi
 	print_info "➕ Adding BOXLANG_INSTALL_HOME [$install_home] in [$profile_file]..."
 
 	{
 		echo ""
 		echo "# Added by BoxLang installer on $(date)"
 		if [ "$current_shell" = "fish" ]; then
-			echo "set -gx PATH $bin_dir \$PATH"
+			if [ -n "$boxlang_home_bin" ]; then
+				echo "set -gx PATH $bin_dir $boxlang_home_bin \$PATH"
+			else
+				echo "set -gx PATH $bin_dir \$PATH"
+			fi
 		else
 			echo "$path_export"
 		fi
@@ -268,7 +291,11 @@ check_or_set_path() {
 		fi
 	} >> "$profile_file"
 
-	print_success "Successfully added [$bin_dir] to PATH in [$profile_file]"
+	if [ -n "$boxlang_home_bin" ]; then
+		print_success "Successfully added [$bin_dir] and [$boxlang_home_bin] to PATH in [$profile_file]"
+	else
+		print_success "Successfully added [$bin_dir] to PATH in [$profile_file]"
+	fi
 	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
 	# Special handling for WSL
@@ -291,7 +318,11 @@ check_or_set_path() {
 	printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 
 	# Update current session PATH
-	export PATH="$bin_dir:$PATH"
+	if [ -n "$boxlang_home_bin" ]; then
+		export PATH="$bin_dir:$boxlang_home_bin:$PATH"
+	else
+		export PATH="$bin_dir:$PATH"
+	fi
 	export BOXLANG_INSTALL_HOME="$install_home"
 }
 
@@ -743,8 +774,14 @@ install_boxlang() {
 	# Verify installation
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
+	# Create bin directory in BoxLang home for module executables
+	local BOXLANG_HOME_BIN="$HOME/.boxlang/bin"
+	print_info "📁 Creating BoxLang home bin directory..."
+	mkdir -p "$BOXLANG_HOME_BIN"
+	print_success "BoxLang home bin directory created at [$BOXLANG_HOME_BIN]"
+
 	# Check PATH for local user execution mostly.
-	check_or_set_path "$SYSTEM_BIN" "$SYSTEM_HOME"
+	check_or_set_path "$SYSTEM_BIN" "$SYSTEM_HOME" "$BOXLANG_HOME_BIN"
 
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"

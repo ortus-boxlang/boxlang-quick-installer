@@ -142,13 +142,46 @@ list_modules() {
 	fi
 }
 
+resolve_forgebox_storage_url() {
+	local MODULE_NAME=${1}
+	local VERSION=${2:-""}
+
+	local STORAGE_URL
+	if [ -z "$VERSION" ]; then
+		# Latest version
+		STORAGE_URL="${FORGEBOX_API_URL}/storage/${MODULE_NAME}"
+	else
+		# Specific version
+		STORAGE_URL="${FORGEBOX_API_URL}/storage/${MODULE_NAME}/${VERSION}"
+	fi
+
+	printf "${BLUE}🔗 Resolving secure download URL from ForgeBox storage...${NORMAL}\n" >&2
+
+	# Get the secure download URL
+	local STORAGE_JSON=$(curl -sSL "${STORAGE_URL}")
+
+	if [ -z "$STORAGE_JSON" ] || [ "$STORAGE_JSON" = "null" ]; then
+		printf "${RED}❌ Error: Failed to get secure download URL from ForgeBox storage${NORMAL}\n" >&2
+		exit 1
+	fi
+
+	local SECURE_URL=$(echo "${STORAGE_JSON}" | jq -r '.data')
+
+	if [ "$SECURE_URL" = "null" ] || [ -z "$SECURE_URL" ]; then
+		printf "${RED}❌ Error: Invalid response from ForgeBox storage${NORMAL}\n" >&2
+		exit 1
+	fi
+
+	echo "$SECURE_URL"
+}
+
 get_latest_version_from_forgebox() {
 	local MODULE_NAME=${1}
 
 	printf "${YELLOW}🔍 No version specified, getting latest version from FORGEBOX...${NORMAL}\n"
 
 	# Store Entry JSON From ForgeBox
-	local ENTRY_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/latest")
+	local ENTRY_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/latest")
 
 	# Validate API response
 	if [ -z "$ENTRY_JSON" ] || [ "$ENTRY_JSON" = "null" ]; then
@@ -170,6 +203,11 @@ get_latest_version_from_forgebox() {
 		exit 1
 	fi
 
+	# Check if download URL is forgeboxStorage keyword
+	if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
+		DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME")
+	fi
+
 	# Return values via global variables
 	TARGET_VERSION="$VERSION"
 	DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
@@ -181,7 +219,7 @@ get_snapshot_version_from_forgebox() {
 	printf "${YELLOW}🔍 Getting latest snapshot version from FORGEBOX...${NORMAL}\n"
 
 	# Store versions JSON From ForgeBox (versions only)
-	local VERSIONS_JSON=$(curl -s "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions")
+	local VERSIONS_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions")
 
 	#echo "${VERSIONS_JSON}" | jq -e '.data'
 
@@ -200,8 +238,23 @@ get_snapshot_version_from_forgebox() {
 		exit 1
 	fi
 
-	# Build download URL from the version (following the same pattern as specific versions)
-	local DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
+	# Get the full entry info for this version to check for forgeboxStorage
+	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/${VERSION}")
+	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
+		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
+			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
+		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
+			# Use the download URL from API
+			DOWNLOAD_URL_TEMP="$DOWNLOAD_URL_TEMP"
+		else
+			# Fallback: build download URL from the artifacts directly
+			DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
+		fi
+	else
+		# Fallback: build download URL from the artifacts directly
+		DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
+	fi
 
 	# Return values via global variables
 	TARGET_VERSION="$VERSION"
@@ -243,8 +296,20 @@ install_module() {
 		# Use the global variables set by the function
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
 	else
-		# We have a targeted version, let's build the download URL from the artifacts directly
-		local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
+		# We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
+		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/${TARGET_VERSION}")
+		if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
+			local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+			if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
+				local DOWNLOAD_URL=$(resolve_forgebox_storage_url "$TARGET_MODULE" "$TARGET_VERSION")
+			else
+				# Use the download URL from API if available
+				local DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
+			fi
+		else
+			# Fallback: build the download URL from the artifacts directly
+			local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
+		fi
 	fi
 
 	# Define paths based on LOCAL_INSTALL flag
@@ -271,7 +336,7 @@ install_module() {
 	trap 'rm -f "${TEMP_FILE}"' EXIT
 
 	# Download module
-	printf "${BLUE}⬇️  Downloading from ${DOWNLOAD_URL}...${NORMAL}\n"
+	printf "${BLUE}⬇️  Downloading...${NORMAL}\n"
 	if ! curl -L --fail --progress-bar -o "${TEMP_FILE}" "${DOWNLOAD_URL}"; then
 		printf "${RED}❌ Error: Download failed${NORMAL}\n"
 		exit 1
@@ -288,7 +353,7 @@ install_module() {
 
 	# Extract module
 	printf "${BLUE}📦 Extracting module...${NORMAL}\n"
-	if ! unzip -o "${TEMP_FILE}" -d "${DESTINATION}"; then
+	if ! unzip -q -o "${TEMP_FILE}" -d "${DESTINATION}"; then
 		printf "${RED}❌ Error: Failed to extract module${NORMAL}\n"
 		exit 1
 	fi
@@ -298,9 +363,58 @@ install_module() {
 		printf "${RED}❌ Error: Module extraction appears to have failed - destination directory is empty${NORMAL}\n"
 		exit 1
 	fi
+	# Check for executables in box.json and create bin scripts
+	local BOX_JSON_PATH="${DESTINATION}/box.json"
+	if [ -f "${BOX_JSON_PATH}" ]; then
+		# Get BOXLANG_HOME for bin directory
+		local BIN_DIR
+		if [ "$LOCAL_INSTALL" = true ]; then
+			BIN_DIR="$(pwd)/boxlang_modules/.bin"
+		else
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			BIN_DIR="${BOXLANG_HOME}/bin"
+		fi
 
+		# Create bin directory if it doesn't exist
+		mkdir -p "${BIN_DIR}"
+
+		# Check for boxlang.executable (single executable)
+		local EXECUTABLE=$(jq -r '.boxlang.executable // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+		if [ -n "${EXECUTABLE}" ]; then
+			local EXEC_SCRIPT="${BIN_DIR}/${EXECUTABLE}"
+			printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
+			cat > "${EXEC_SCRIPT}" << EOF
+#!/bin/sh
+boxlang module:${TARGET_MODULE} "\$@"
+EOF
+			chmod +x "${EXEC_SCRIPT}"
+		fi
+
+		# Check for boxlang.executables (multiple executables)
+		local EXECUTABLES=$(jq -r '.boxlang.executables // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+		if [ -n "${EXECUTABLES}" ] && [ "${EXECUTABLES}" != "null" ]; then
+			# Get all executable names (keys)
+			local EXEC_NAMES=$(echo "${EXECUTABLES}" | jq -r 'keys[]' 2>/dev/null)
+			if [ -n "${EXEC_NAMES}" ]; then
+				printf "${BLUE}🔧 Creating executable scripts...${NORMAL}\n"
+				while IFS= read -r exec_name; do
+					if [ -n "${exec_name}" ]; then
+						local exec_content=$(echo "${EXECUTABLES}" | jq -r ".\"${exec_name}\"" 2>/dev/null)
+						if [ -n "${exec_content}" ] && [ "${exec_content}" != "null" ]; then
+							local exec_script="${BIN_DIR}/${exec_name}"
+							printf "${BLUE}  - Creating: ${exec_name}${NORMAL}\n"
+							echo "${exec_content}" > "${exec_script}"
+							chmod +x "${exec_script}"
+						fi
+					fi
+				done <<< "${EXEC_NAMES}"
+			fi
+		fi
+	fi
 	# Success message
-	printf "${GREEN}\n✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed successfully!${NORMAL}\n"
+	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
 }
 
 remove_module() {
