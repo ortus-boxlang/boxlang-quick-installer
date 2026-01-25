@@ -28,7 +28,7 @@ jobs:
       checks: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Read Version File
         id: version
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload Build Artifacts
         if: success()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-artifacts
           path: |
@@ -130,12 +130,12 @@ jobs:
       checks: write
     steps:
       - name: Checkout Development Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: development
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: build-artifacts
           path: .tmp
