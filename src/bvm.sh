@@ -170,6 +170,71 @@ write_bvmrc_version() {
 # Core Functions
 ###########################################################################
 
+# Ensure BoxLang home bin directory is in PATH
+ensure_boxlang_bin_in_path() {
+    local boxlang_home_bin="$HOME/.boxlang/bin"
+    local quiet_mode="${1:-false}"
+
+    # Create directory if it doesn't exist
+    if [ ! -d "$boxlang_home_bin" ]; then
+        mkdir -p "$boxlang_home_bin"
+        if [ "$quiet_mode" != "true" ]; then
+            print_success "📁 Created BoxLang home bin directory: $boxlang_home_bin"
+        fi
+    fi
+
+    # Check if already in PATH
+    if echo "$PATH" | grep -q "$boxlang_home_bin"; then
+        if [ "$quiet_mode" != "true" ]; then
+            print_success "BoxLang home bin is in PATH"
+        fi
+        return 0
+    fi
+
+    # Not in PATH - need to add it
+    if [ "$quiet_mode" != "true" ]; then
+        print_warning "BoxLang home bin is not in PATH"
+        print_info "Adding $boxlang_home_bin to PATH..."
+    fi
+
+    # Detect shell profile file
+    local profile_file=$(get_shell_profile_file)
+    local shell_name="${SHELL##*/}"
+
+    if [ -n "$profile_file" ]; then
+        # Check if already in profile but not in current PATH (restart needed)
+        if [ -f "$profile_file" ] && grep -q "$boxlang_home_bin" "$profile_file"; then
+            if [ "$quiet_mode" != "true" ]; then
+                print_info "Already configured in $profile_file - restart your shell to apply"
+            fi
+            return 0
+        fi
+
+        # Add to profile
+        {
+            echo ""
+            echo "# BoxLang home bin directory - added by BVM on $(date)"
+            if [ "$shell_name" = "fish" ]; then
+                echo "set -gx PATH $boxlang_home_bin \$PATH"
+            else
+                echo "export PATH=\"$boxlang_home_bin:\$PATH\""
+            fi
+        } >> "$profile_file"
+
+        if [ "$quiet_mode" != "true" ]; then
+            print_success "✅ Added $boxlang_home_bin to PATH in $profile_file"
+            print_info "Restart your shell or run: source $profile_file"
+        fi
+        return 0
+    else
+        if [ "$quiet_mode" != "true" ]; then
+            print_warning "Could not detect shell profile file"
+            print_info "Manually add $boxlang_home_bin to your PATH"
+        fi
+        return 1
+    fi
+}
+
 # Show help
 show_help() {
 	printf "${GREEN}📦 BoxLang Version Manager (BVM) v${BVM_VERSION}${NORMAL}\n\n"
@@ -589,6 +654,10 @@ use_version() {
 
     # Update config
     echo "CURRENT_VERSION=$resolved_version" > "$BVM_CONFIG_FILE"
+
+    # Ensure BoxLang home bin directory is in PATH
+    printf "\n"
+    ensure_boxlang_bin_in_path
 }
 
 # Uninstall a BoxLang version
@@ -972,49 +1041,8 @@ check_health() {
         print_info "Use 'bvm use <version>' to set a current version"
     fi
 
-    # Check BoxLang home bin directory
-    local boxlang_home_bin="$HOME/.boxlang/bin"
-    if [ -d "$boxlang_home_bin" ]; then
-        print_success "BoxLang home bin directory exists: $boxlang_home_bin"
-    else
-        print_warning "BoxLang home bin directory missing: $boxlang_home_bin"
-        mkdir -p "$boxlang_home_bin"
-        print_success "📁 Created BoxLang home bin directory"
-    fi
-
-    # Check if BoxLang home bin is in PATH
-    if echo "$PATH" | grep -q "$boxlang_home_bin"; then
-        print_success "BoxLang home bin is in PATH"
-    else
-        print_warning "BoxLang home bin is not in PATH"
-        print_info "Adding $boxlang_home_bin to PATH..."
-
-        # Detect shell profile file
-        local profile_file=$(get_shell_profile_file)
-
-        if [ -n "$profile_file" ]; then
-            # Check if already in profile but not in current PATH (restart needed)
-            if [ -f "$profile_file" ] && grep -q "$boxlang_home_bin" "$profile_file"; then
-                print_info "Already configured in $profile_file - restart your shell to apply"
-            else
-                # Add to profile
-                {
-                    echo ""
-                    echo "# BoxLang home bin directory - added by BVM doctor on $(date)"
-                    if [ "$current_shell" = "fish" ]; then
-                        echo "set -gx PATH $boxlang_home_bin \$PATH"
-                    else
-                        echo "export PATH=\"$boxlang_home_bin:\$PATH\""
-                    fi
-                } >> "$profile_file"
-                print_success "✅ Added $boxlang_home_bin to PATH in $profile_file"
-                print_info "Restart your shell or run: source $profile_file"
-            fi
-        else
-            print_warning "Could not detect shell profile file"
-            print_info "Manually add $boxlang_home_bin to your PATH"
-        fi
-    fi
+    # Check BoxLang home bin directory and PATH
+    ensure_boxlang_bin_in_path
 
     # Check BVM helper scripts
 	if [ -d "$BVM_SCRIPTS_DIR" ]; then
