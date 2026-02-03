@@ -644,7 +644,6 @@ install_boxlang() {
 			exit 0;
 		else
 			print_success "No previous BoxLang installation found, proceeding with fresh install..."
-			printf "\n"
 		fi
 	else
 		print_warning "🔄 Forcing reinstallation of BoxLang..."
@@ -652,7 +651,6 @@ install_boxlang() {
 			print_error "❌ Failed to remove previous installation, please see log for more information"
 			exit 1
 		}
-		printf "\n"
 	fi
 
 	###########################################################################
@@ -707,6 +705,7 @@ install_boxlang() {
 	###########################################################################
 	print_info "🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]"
 	print_warning "⌛ Downloading Please wait..."
+	print_info "${DOWNLOAD_URL}"
 
 	###########################################################################
 	# Download BoxLang

@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ensure BOXLANG_HOME/bin is in the PATH on installation.
+- Output to show which URL is being downloaded for the binarys during installation for easier debugging.
+
+## [1.24.0] - 2026-01-25
+
+### Added
+
 - BVM Doctor updated to check for the BoxLang home bin folder in the system PATH and alert the user if it's missing and fix it.
 
 ### Fixed
