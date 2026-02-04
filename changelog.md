@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-02-04
+
 ### Fixed
 
 - Updated `install-bx-module` to correctly reference the name of the executable module when creating symlinks in the BoxLang home bin folder.
@@ -418,7 +420,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.25.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.26.0...HEAD
+[1.26.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.25.0...v1.26.0
 [1.25.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.24.0...v1.25.0
 [1.24.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.21.0...v1.23.0
