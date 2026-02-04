@@ -380,6 +380,12 @@ install_module() {
 		# Create bin directory if it doesn't exist
 		mkdir -p "${BIN_DIR}"
 
+		# Get the module name to use for execution (check boxlang.moduleName first, fallback to TARGET_MODULE)
+		local MODULE_NAME=$(jq -r '.boxlang.moduleName // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+		if [ -z "${MODULE_NAME}" ]; then
+			MODULE_NAME="${TARGET_MODULE}"
+		fi
+
 		# Check for boxlang.executable (single executable)
 		local EXECUTABLE=$(jq -r '.boxlang.executable // empty' "${BOX_JSON_PATH}" 2>/dev/null)
 		if [ -n "${EXECUTABLE}" ]; then
@@ -387,7 +393,7 @@ install_module() {
 			printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
 			cat > "${EXEC_SCRIPT}" << EOF
 #!/bin/sh
-boxlang module:${TARGET_MODULE} "\$@"
+boxlang module:${MODULE_NAME} "\$@"
 EOF
 			chmod +x "${EXEC_SCRIPT}"
 		fi

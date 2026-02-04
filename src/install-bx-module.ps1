@@ -392,6 +392,12 @@ function Install-Module {
                     New-Item -Path $binDir -ItemType Directory -Force | Out-Null
                 }
 
+                # Get the module name to use for execution (check boxlang.moduleName first, fallback to targetModule)
+                $moduleName = $targetModule
+                if ($boxJson.boxlang -and $boxJson.boxlang.moduleName) {
+                    $moduleName = $boxJson.boxlang.moduleName
+                }
+
                 # Check for boxlang.executable (single executable)
                 if ($boxJson.boxlang -and $boxJson.boxlang.executable) {
                     $executable = $boxJson.boxlang.executable
@@ -401,7 +407,7 @@ function Install-Module {
                     # Create shell script
                     $scriptContent = @"
 #!/bin/sh
-boxlang module:$targetModule `"`$@`"
+boxlang module:$moduleName `"`$@`"
 "@
                     Set-Content -Path $execScript -Value $scriptContent -NoNewline
 
@@ -409,7 +415,7 @@ boxlang module:$targetModule `"`$@`"
                     $execBat = Join-Path $binDir "$executable.bat"
                     $batContent = @"
 @echo off
-boxlang module:$targetModule %*
+boxlang module:$moduleName %*
 "@
                     Set-Content -Path $execBat -Value $batContent
                 }

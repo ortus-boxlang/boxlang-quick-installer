@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.25.0] - 2026-02-03
+### Fixed
 
-## [1.24.0] - 2026-01-25
+- Updated `install-bx-module` to correctly reference the name of the executable module when creating symlinks in the BoxLang home bin folder.
+
+## [1.25.0] - 2026-02-03
 
 ### Added
 
