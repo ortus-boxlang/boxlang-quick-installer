@@ -9,10 +9,12 @@ This project provides cross-platform installation scripts for BoxLang, a next-ge
 ### Dual Installation Strategy
 - **Single-version installer** (`src/install-boxlang.sh`): Simple, production-focused installation
 - **BVM** (`src/bvm.sh`): Advanced version manager similar to nvm/jenv for development workflows
-- Both share identical core functionality but differ in version management capabilities
+- **BVM installer** (`src/install-bvm.sh`): Dedicated script to install BVM itself and configure the shell environment
+- Both installer and BVM share core functionality but differ in version management capabilities
 
 ### Modular Helper System
 - **`src/helpers/helpers.sh`**: Centralized utility functions for printing, color setup, command detection, and version comparison
+- **`src/helpers/install-jre.ps1`**: PowerShell helper for installing a JRE on Windows systems
 - All scripts source helpers either locally or download them dynamically from CDN
 - Helpers are versioned and replaceable via `@build.version@` token replacement
 
@@ -20,6 +22,15 @@ This project provides cross-platform installation scripts for BoxLang, a next-ge
 - **Unix scripts** (`.sh`): macOS and Linux with bash/zsh compatibility
 - **Windows scripts** (`.bat`, `.ps1`): Batch and PowerShell variants
 - Platform detection and tool-specific commands (shasum vs sha256sum, etc.)
+
+### Assets
+- **`src/assets/`**: Static assets used by the installer web UI
+  - `index.bxm`: BoxLang template served by the miniserver installer
+  - `boxlang-logo.png`, `boxlang-miniserver.png`, `boxlang.jpeg`: Branding images
+
+### Documentation
+- **`README.md`**: Main project documentation
+- **`BVM-README.md`**: BVM-specific documentation and usage guide
 
 ## Key Development Patterns
 
@@ -50,6 +61,20 @@ This project provides cross-platform installation scripts for BoxLang, a next-ge
 ./bump.sh [patch|minor|major]
 ```
 
+Build output lands in `build/` and includes:
+- Shell scripts (`install-boxlang.sh`, `install-bx-module.sh`, `install-bx-site.sh`)
+- Windows scripts (`install-boxlang.bat`, `install-boxlang.ps1`, `install-bx-module.bat`, `install-bx-module.ps1`, `install-jre.ps1`)
+- `boxlang-installer.zip` bundling all artifacts
+- `boxlang-installer.md5` and `boxlang-installer.sha256` checksums
+- `version.json` and `changelog.md`
+
+### Cross-Platform Linux Testing (Docker)
+Convenience scripts at the repo root launch Docker containers with `src/` mounted for local testing:
+```bash
+./alpine.sh   # Opens sh shell in Alpine Linux container
+./ubuntu.sh   # Opens bash shell in Ubuntu container
+```
+
 ### Testing
 ```bash
 # Run all tests with auto-discovery
@@ -62,9 +87,15 @@ cd tests && ./run.sh specs/helpers_test.sh
 cd tests && ./run.sh --list
 ```
 
+Current test suites in `tests/specs/`:
+- `helpers_test.sh`: Unit tests for helper functions
+- `java_version_test.sh`: Tests for Java version detection logic
+- `preflight_check_test.sh`: Tests for system pre-flight checks
+
 ### Installation Testing
 - Use `--force` flag for reinstalling during development
 - Test both installer paths: direct installation and BVM workflows
+- Use `alpine.sh` / `ubuntu.sh` for quick Linux compatibility testing
 - Verify cross-platform compatibility, especially path handling and tool detection
 
 ## Project-Specific Conventions
@@ -107,9 +138,15 @@ Scripts check multiple locations for helpers in priority order:
 
 - **`src/helpers/helpers.sh`**: Core utility functions and patterns
 - **`src/bvm.sh`**: Complete version management implementation
+- **`src/install-bvm.sh`**: BVM installer and shell environment setup
+- **`src/install-bx-site.sh`**: BoxLang miniserver website installer (in progress)
+- **`src/helpers/install-jre.ps1`**: Windows JRE installation helper
+- **`src/assets/index.bxm`**: BoxLang template for miniserver installer UI
 - **`tests/run.sh`**: Test framework architecture
 - **`build.sh`**: Build process and artifact generation
 - **`version.json`**: Single source of truth for versioning
+- **`BVM-README.md`**: BVM-specific documentation
+- **`alpine.sh`** / **`ubuntu.sh`**: Docker convenience scripts for Linux testing
 
 ## Common Tasks
 
