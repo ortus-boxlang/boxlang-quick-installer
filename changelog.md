@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Windows BVM support**: Added `bvm.ps1` — a full-featured PowerShell implementation of BVM (BoxLang Version Manager) for Windows, providing all BVM commands (`install`, `use`, `list`, `remove`, `doctor`, `stats`, `exec`, `miniserver`, `check-update`, `uninstall`, etc.).
+- **Windows BVM launcher**: Added `bvm.bat` — a lightweight batch launcher that delegates to `bvm.ps1` with proper `BVM_HOME` resolution.
+- **Windows BVM installer**: Added `install-bvm.ps1` — a PowerShell installer for BVM on Windows that downloads the installer bundle, extracts helper scripts, creates wrapper batch files (`boxlang.bat`, `bx.bat`, `boxlang-miniserver.bat`, `bx-miniserver.bat`, `install-bx-module.bat`, `install-bvm.bat`), and sets up the User PATH.
+- **Windows BVM installer launcher**: Added `install-bvm.bat` — a batch script to run `install-bvm.ps1` with elevated privileges via UAC.
+
 ## [1.26.0] - 2026-02-04
 
 ### Fixed
