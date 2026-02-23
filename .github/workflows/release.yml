@@ -104,6 +104,69 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: refs/tags/v${{ env.INSTALLER_VERSION }}
 
+      ##########################################################################################
+      # Homebrew Tap Support
+      # Uploads the installer zip as a versioned GitHub release asset so Homebrew formulas can
+      # reference a stable, immutable download URL with a known sha256.
+      ##########################################################################################
+
+      - name: Upload Installer Zip to GitHub Release
+        if: env.SNAPSHOT == 'false'
+        continue-on-error: true
+        run: |
+          gh release upload "v${{ env.INSTALLER_VERSION }}" build/boxlang-installer.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew Formulas
+        if: env.SNAPSHOT == 'false'
+        run: |
+          SHA256=$(sha256sum build/boxlang-installer.zip | awk '{print $1}')
+          VERSION="${{ env.INSTALLER_VERSION }}"
+          echo "Updating Homebrew formulas: sha256=${SHA256} version=${VERSION}"
+
+          for formula in homebrew/Formula/bvm.rb homebrew/Formula/boxlang.rb; do
+            sed -i "s/sha256 \"[a-f0-9]\{64\}\"/sha256 \"${SHA256}\"/" "${formula}"
+            sed -i "s/  version \"[0-9.]*\"/  version \"${VERSION}\"/" "${formula}"
+            sed -i "s|/download/v[0-9.]*/boxlang-installer.zip|/download/v${VERSION}/boxlang-installer.zip|" "${formula}"
+          done
+
+      - name: Commit Updated Homebrew Formulas
+        uses: EndBug/add-and-commit@v9.1.4
+        if: env.SNAPSHOT == 'false'
+        with:
+          author_name: Github Actions
+          author_email: info@ortussolutions.com
+          message: "Update Homebrew formulas for v${{ env.INSTALLER_VERSION }}"
+          add: |
+            homebrew/Formula/bvm.rb
+            homebrew/Formula/boxlang.rb
+
+      - name: Push to Homebrew Tap
+        if: env.SNAPSHOT == 'false'
+        continue-on-error: true
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_TOKEN secret not configured — skipping tap push."
+            echo "See homebrew/README.md for setup instructions."
+            exit 0
+          fi
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/ortus-boxlang/homebrew-boxlang.git" /tmp/homebrew-tap
+          mkdir -p /tmp/homebrew-tap/Formula
+          cp homebrew/Formula/*.rb /tmp/homebrew-tap/Formula/
+          cd /tmp/homebrew-tap
+          git config user.email "info@ortussolutions.com"
+          git config user.name "Github Actions"
+          git add Formula/
+          if git diff --cached --quiet; then
+            echo "No formula changes to push."
+          else
+            git commit -m "Update formulas for v${{ env.INSTALLER_VERSION }}"
+            git push
+          fi
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
       - name: Inform Slack
         if: ${{ always() }}
         uses: rtCamp/action-slack-notify@v2

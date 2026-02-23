@@ -27,6 +27,23 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 
 ## 🚀 Quick Start
 
+### Homebrew (macOS and Linux — recommended)
+
+```bash
+# Add the BoxLang tap (one-time setup)
+brew tap ortus-boxlang/boxlang
+
+# Option A: BVM — manage multiple BoxLang versions (recommended for developers)
+brew install bvm
+bvm install latest && bvm use latest
+
+# Option B: Quick Installer — install the latest BoxLang directly
+brew install boxlang
+install-boxlang
+```
+
+### Curl Installer
+
 **Mac and Linux:**
 
 ```bash
