@@ -173,5 +173,5 @@ jobs:
         run: |
           curl -fsSL -X POST https://api.github.com/repos/ortus-boxlang/homebrew-boxlang/dispatches \
             -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.GHA_WORKFLOW_DISPATCHER_PAT_BOXLANG }}" \
+            -H "Authorization: Bearer ${{ secrets.GHA_WORKFLOW_DISPATCHER_PAT_BOXLANG }}" \
             -d '{"event_type":"installer-released"}'
