@@ -620,6 +620,13 @@ function Use-Version {
     # Ensure BoxLang home bin is in PATH
     Write-Host ""
     Ensure-BoxLangHomeBinInPath
+
+    # Remove old BoxLang classes from home directory after switching versions
+    $boxlangClassesPath = Join-Path $env:USERPROFILE ".boxlang\classes"
+    if (Test-Path $boxlangClassesPath) {
+        Write-BvmWarning "🗑️ Removing old BoxLang classes from home directory..."
+        Remove-Item -Path $boxlangClassesPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 ###########################################################################

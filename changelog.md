@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improvements
+
+- Improved the `install-boxlang` script to remove old BoxLang classes from the user's home directory to avoid stale artifacts after an upgrade.
+
 ### Added
 
 - **Windows BVM support**: Added `bvm.ps1` — a full-featured PowerShell implementation of BVM (BoxLang Version Manager) for Windows, providing all BVM commands (`install`, `use`, `list`, `remove`, `doctor`, `stats`, `exec`, `miniserver`, `check-update`, `uninstall`, etc.).

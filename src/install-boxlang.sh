@@ -584,6 +584,11 @@ remove_previous_installation() {
 		rm -f "${SYSTEM_BIN}/install-boxlang"
 		rm -f "${SYSTEM_BIN}/install-bx-site"
 	fi
+	# Remove $HOME/.boxlang/classes directory to make sure no old classes remain
+	if [ -d "$HOME/.boxlang/classes" ]; then
+		print_warning "🗑️ Removing old BoxLang classes from home directory..."
+		rm -rf "$HOME/.boxlang/classes"
+	fi
 }
 
 ###########################################################################
