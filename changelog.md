@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-03-01
+
 ### Improvements
 
 - Improved the `install-boxlang` script to remove old BoxLang classes from the user's home directory to avoid stale artifacts after an upgrade.
@@ -431,7 +433,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.26.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.27.0...HEAD
+[1.27.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.26.0...v1.27.0
 [1.26.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.25.0...v1.26.0
 [1.25.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.24.0...v1.25.0
 [1.24.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.23.0...v1.24.0
