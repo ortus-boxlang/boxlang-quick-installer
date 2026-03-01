@@ -171,7 +171,8 @@ jobs:
     steps:
       - name: Dispatch Homebrew Tap Update
         run: |
-          curl -fsSL -X POST https://api.github.com/repos/ortus-boxlang/homebrew-boxlang/dispatches \
+          curl -fsSL -X POST https://api.github.com/repos/ortus-boxlang/homebrew-boxlang/actions/workflows/update-formulas.yml/dispatches \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: Bearer ${{ secrets.GHA_WORKFLOW_DISPATCHER_PAT_BOXLANG }}" \
-            -d '{"event_type":"installer-released"}'
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{ "event_type":"installer-released" }'
