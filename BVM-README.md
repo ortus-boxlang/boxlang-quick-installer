@@ -52,9 +52,9 @@ The only difference is that BVM adds version management capabilities on top.
 
 The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
 
-- **bash** - Required shell execution environment, especially on Alpine Linux
+- **bash** - Required shell execution environment (macOS/Linux), especially on Alpine Linux
 - **curl** - For downloading releases
-- **PowerShell 6+** - Required for Windows installations
+- **PowerShell 5.1+** - Required for Windows installations (built into Windows 10/11)
 
 **Alpine Linux** : You will need to install bash manually as it is not included by default.
 
@@ -100,6 +100,8 @@ apk add --no-cache bash curl unzip jq openjdk21
 
 ## ⬇️ Installation
 
+### macOS / Linux
+
 ```bash
 # Install BVM (auto-installs Java 21 if needed)
 curl -fsSL https://install-bvm.boxlang.io | bash -s -- --with-jre
@@ -112,6 +114,80 @@ wget https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/mai
 chmod +x install-bvm.sh
 ./install-bvm.sh --with-jre  # Auto-install Java if needed
 ```
+
+### Windows (PowerShell)
+
+```powershell
+# Install BVM via PowerShell one-liner (run in PowerShell as Administrator)
+iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1 | iex
+
+# Or with Java install check skip
+iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1 | iex; --without-jre
+
+# Download and run locally
+Invoke-WebRequest -Uri https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/install-bvm.ps1 -OutFile install-bvm.ps1
+.\install-bvm.ps1
+```
+
+After installation, **restart your terminal** (or refresh your PATH), then:
+
+```powershell
+bvm install latest
+bvm use latest
+boxlang --version
+```
+
+#### Windows Requirements
+
+- **PowerShell 5.1+** (built into Windows 10/11) or PowerShell Core 6+
+- **Java 21+** — download from [Adoptium](https://adoptium.net/) or [Microsoft OpenJDK](https://www.microsoft.com/openjdk)
+- **Administrator privileges** recommended for junction/symlink creation
+- Internet connection
+
+#### Windows Files Installed
+
+| File | Location | Description |
+|------|----------|-------------|
+| `bvm.bat` | `%USERPROFILE%\.bvm\bin\` | Main BVM launcher (delegates to `bvm.ps1`) |
+| `bvm.ps1` | `%USERPROFILE%\.bvm\scripts\` | Full BVM implementation in PowerShell |
+| `install-bvm.bat` | `%USERPROFILE%\.bvm\bin\` | BVM self-updater launcher |
+| `install-bvm.ps1` | `%USERPROFILE%\.bvm\scripts\` | BVM installer/self-updater |
+| `boxlang.bat` | `%USERPROFILE%\.bvm\bin\` | Wrapper — runs BoxLang via BVM |
+| `bx.bat` | `%USERPROFILE%\.bvm\bin\` | Alias for `boxlang.bat` |
+| `boxlang-miniserver.bat` | `%USERPROFILE%\.bvm\bin\` | Wrapper — runs MiniServer via BVM |
+| `bx-miniserver.bat` | `%USERPROFILE%\.bvm\bin\` | Alias for `boxlang-miniserver.bat` |
+| `install-bx-module.bat` | `%USERPROFILE%\.bvm\bin\` | BoxLang module installer |
+
+#### Windows Directory Structure
+
+```
+%USERPROFILE%\.bvm\
+├── bin\              # Launchers & wrapper .bat files (added to User PATH)
+│   ├── bvm.bat
+│   ├── bvm.ps1
+│   ├── boxlang.bat
+│   ├── bx.bat
+│   ├── boxlang-miniserver.bat
+│   ├── bx-miniserver.bat
+│   └── install-bx-module.bat
+├── versions\         # Installed BoxLang versions
+│   ├── 1.2.0\       # Specific version
+│   └── latest\      # Junction pointing to installed version
+├── current\          # Junction to active BoxLang version
+├── cache\            # Download cache
+├── scripts\          # BVM PowerShell scripts + helpers
+│   ├── bvm.ps1
+│   ├── install-bvm.ps1
+│   ├── install-bx-module.ps1
+│   └── version.json
+└── config            # BVM configuration file
+```
+
+#### Windows Notes
+
+- BVM uses **directory junctions** (not symlinks) for version management — these work without admin rights on most systems but may require running as Administrator on some Windows configurations.
+- If you see `Access Denied` errors when creating junctions, right-click PowerShell → **Run as Administrator** and reinstall.
+- The `%USERPROFILE%\.bvm\bin` directory is added to your **User PATH** (not System PATH). It takes effect in new terminal sessions.
 
 ## 💻 Basic Usage
 
@@ -719,6 +795,32 @@ boxlang --version
 - Restart your terminal
 - Check that `~/.bvm/bin` is in your PATH
 - Run `source ~/.bashrc` (or your shell's profile file)
+
+### Windows: `bvm` not found after installation
+
+- Close and reopen PowerShell or Command Prompt
+- Check that `%USERPROFILE%\.bvm\bin` is in your **User PATH**:
+  ```powershell
+  [Environment]::GetEnvironmentVariable("Path", "User")
+  ```
+- If missing, add it manually:
+  ```powershell
+  $p = [Environment]::GetEnvironmentVariable("Path","User")
+  [Environment]::SetEnvironmentVariable("Path","$p;$env:USERPROFILE\.bvm\bin","User")
+  ```
+- Restart your terminal after making PATH changes
+
+### Windows: `Access Denied` when installing or switching versions
+
+- Run PowerShell as **Administrator** — directory junctions require elevation on some Windows configurations
+- Right-click PowerShell → **Run as Administrator**, then re-run the command
+
+### Windows: `bvm.ps1 cannot be loaded because running scripts is disabled`
+
+- Run this once in an elevated PowerShell to allow scripts:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
 
 ### BoxLang not found after switching versions
 

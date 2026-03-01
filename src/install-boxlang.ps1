@@ -714,6 +714,13 @@ function Remove-PreviousInstallation {
     Remove-Item -Path "$DESTINATION_BIN" -Force -Recurse -ErrorAction SilentlyContinue
     Remove-Item -Path "$DESTINATION_SCRIPTS" -Force -Recurse -ErrorAction SilentlyContinue
 
+    # Remove old BoxLang classes from user home to avoid stale artifacts
+    $boxlangClassesPath = Join-Path $env:USERPROFILE ".boxlang\classes"
+    if (Test-Path $boxlangClassesPath) {
+        Write-Host -ForegroundColor Yellow "🗑️ Removing old BoxLang classes from home directory..."
+        Remove-Item -Path $boxlangClassesPath -Force -Recurse -ErrorAction SilentlyContinue
+    }
+
     Write-Host -ForegroundColor Green "✅ Previous installation removed successfully"
 }
 
