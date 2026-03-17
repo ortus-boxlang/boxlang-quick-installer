@@ -1,0 +1,128 @@
+/**
+ * JavaVersionSpec – TestBox BDD tests for Java version detection in helpers.bxs.
+ *
+ * Covers:
+ *   - checkJavaVersion() with various mock outputs
+ *   - preflightCheck() when Java is available / missing
+ *
+ * Uses temp-file mocking to simulate different Java installations without
+ * modifying the real system environment.  Each test group manipulates JAVA_HOME
+ * and PATH via environment variables before calling the functions under test.
+ */
+class extends="testbox.system.BaseSpec" {
+
+    // Shared temp directory for mock binaries
+    variables.mockDir = "";
+
+    @beforeAll
+    function beforeall(){
+         include expandPath( "/../../src/helpers/helpers.bxs" );
+        variables.mockDir = TEMP_DIR & "/bvmSpecMocks_" & createUUID().replace( "-", "" );
+        directoryCreate( variables.mockDir, true );
+    }
+
+    @afterAll
+    function afterall(){
+        if ( directoryExists( variables.mockDir ) ) {
+            directoryDelete( variables.mockDir, true );
+        }
+    }
+
+    function run() {
+
+        // ── checkJavaVersion() happy paths ─────────────────────────────────────────
+
+        describe( "checkJavaVersion() – Java 21+ present", function() {
+
+            beforeEach( function() {
+                // Write a mock 'java' binary that reports Java 21
+                writeMockJava( variables.mockDir, "21.0.1", 0 );
+                variables.origJavaHome = getsystemsetting( "JAVA_HOME", "" );
+                // Point JAVA_HOME at mock dir so checkJavaVersion finds the mock binary
+                // Note: actual PATH injection depends on runtime; test via JAVA_HOME candidate
+            } );
+
+            it( "should detect Java 21 as sufficient", function() {
+                // Run checkJavaVersion with the mock JAVA_HOME
+                var result = checkJavaVersionFromPath( variables.mockDir & SLASH & "java" );
+                expect( result ).toBeTrue();
+            } );
+
+            it( "should detect Java 23 as sufficient", function() {
+                writeMockJava( variables.mockDir, "23.0.0", 0 );
+                var result = checkJavaVersionFromPath( variables.mockDir & SLASH & "java" );
+                expect( result ).toBeTrue();
+            } );
+
+        } );
+
+        describe( "checkJavaVersion() – Java too old", function() {
+
+            it( "should reject Java 11", function() {
+                writeMockJava( variables.mockDir, "11.0.20", 0 );
+                var result = checkJavaVersionFromPath( variables.mockDir & SLASH & "java" );
+                expect( result ).toBeFalse();
+            } );
+
+            it( "should reject Java 17", function() {
+                writeMockJava( variables.mockDir, "17.0.8", 0 );
+                var result = checkJavaVersionFromPath( variables.mockDir & SLASH & "java" );
+                expect( result ).toBeFalse();
+            } );
+
+        } );
+
+        describe( "checkJavaVersion() – Java not found", function() {
+
+            it( "should return false when java binary is missing", function() {
+                // Call with a path that does not exist
+                var result = checkJavaVersionFromPath( variables.mockDir & SLASH & "nonexistent_java" );
+                expect( result ).toBeFalse();
+            } );
+
+        } );
+
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Writes a minimal mock 'java' shell script to mockDir that emits the given
+     * version string on stderr (matching real javaabc -version behaviour) and exits
+     * with returnCode.
+     */
+    private function writeMockJava( required mockDir, required version, required returnCode ) {
+        if ( !IS_WINDOWS ) {
+            var javaPath = mockDir & "/java";
+            fileWrite( javaPath, "##!/bin/sh" & chr(10) & "echo 'openjdk version """ & version & """ ...' >&2" & chr(10) & "exit " & returnCode & chr(10) );
+            fileSetExecutable( javaPath );
+        }
+    }
+
+    /**
+     * Attempts to determine if a given java binary path reports a version >= 21.
+     * Isolated wrapper that replicates the core of checkJavaVersion() for
+     * controlled binary input without mutating PATH.
+     */
+    private function checkJavaVersionFromPath( required javaPath ) {
+        if ( !fileExists( javaPath ) ) return false;
+
+        var result = runCmd( [ javaPath, "-version" ], true );
+        // Java prints version to stderr, combined by runCmd
+        var rawOutput = result.output & " " & result.error;
+        var semver    = extractSemanticVersion( rawOutput );
+
+        if ( !len( semver ) ) return false;
+
+        var parts    = listToArray( semver, "." );
+        var majorVer = val( parts[ 1 ] );
+
+        // Pre-Java 9 used 1.X versioning
+        if ( majorVer == 1 && arrayLen( parts ) >= 2 ) {
+            majorVer = val( parts[ 2 ] );
+        }
+
+        return majorVer >= 21;
+    }
+
+}

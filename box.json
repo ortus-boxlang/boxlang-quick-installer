@@ -1,0 +1,33 @@
+{
+    "name":"boxlang-quick-installer",
+    "version":"1.0.0",
+    "author":"Ortus Solutions",
+    "description":"Cross-platform BoxLang installer scripts and BVM (BoxLang Version Manager)",
+    "homepage":"https://github.com/ortus-boxlang/boxlang-quick-installer",
+    "license":"Apache-2.0",
+    "testbox":{
+        "runner":{
+            "default":"tests/runner.bxs"
+        },
+        "coverage":{
+            "enabled":false,
+            "sonarqube":false,
+            "browser":false,
+            "outputDir":"tests/results"
+        }
+    },
+    "scripts":{
+        "test":"box testbox run verbose=true",
+        "start":"box server start",
+        "build":"./build.sh"
+    },
+    "devDependencies":{
+        "testbox":"^6.0.0"
+    },
+    "engines":{
+        "boxlang":">=1.0.0"
+    },
+    "installPaths":{
+        "testbox":"testbox/"
+    }
+}

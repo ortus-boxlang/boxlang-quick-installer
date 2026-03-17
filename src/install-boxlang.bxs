@@ -1,0 +1,449 @@
+// BoxLang Installer
+// Installs the BoxLang® runtime, MiniServer, and helper tools on any platform.
+// Compiled to a native platform binary via MatchBox.
+// Author: BoxLang Team
+// Version: @build.version@
+// License: Apache License, Version 2.0
+
+include "helpers/helpers.bxs";
+
+INSTALLER_VERSION = "@build.version@";
+
+// ─── Download URLs ───────────────────────────────────────────────────────────
+BX_BASE_URL       = "https://downloads.ortussolutions.com/ortussolutions/boxlang";
+BX_MS_URL         = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver";
+// Native tool binaries published to GitHub Releases from our CI pipeline
+TOOLS_RELEASE_URL = "https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest/download";
+
+// ─── CLI Argument Parsing ────────────────────────────────────────────────────
+var cli     = cligetargs();
+var rawArgs = cli.positionals;
+var opts    = cli.options;
+
+// Named flags
+INSTALL_COMMANDBOX = opts.keyExists( "with-commandbox" )    ? true
+                   : opts.keyExists( "without-commandbox" ) ? false
+                   : "";
+INSTALL_JRE        = opts.keyExists( "with-jre" )           ? true
+                   : opts.keyExists( "without-jre" )        ? false
+                   : "";
+FORCE_INSTALL      = opts.keyExists( "force" );
+NON_INTERACTIVE    = opts.keyExists( "yes" ) || opts.keyExists( "y" );
+SYSTEM_INSTALL     = opts.keyExists( "system" );
+
+if ( NON_INTERACTIVE ) {
+    if ( INSTALL_COMMANDBOX == "" ) INSTALL_COMMANDBOX = true;
+    if ( INSTALL_JRE        == "" ) INSTALL_JRE        = true;
+}
+
+// Version argument (first positional that isn't a flag)
+TARGET_VERSION = "latest";
+for ( var a in rawArgs ) {
+    if ( !a.startsWith( "--" ) && !a.startsWith( "-" ) ) {
+        TARGET_VERSION = trim( a );
+        break;
+    }
+}
+// Environment variable override
+if ( len( getsystemsetting( "BOXLANG_TARGET_VERSION", "" ) ) ) {
+    TARGET_VERSION = getsystemsetting( "BOXLANG_TARGET_VERSION" );
+}
+// Snapshot always forces
+if ( TARGET_VERSION == "snapshot" ) FORCE_INSTALL = true;
+
+// ─── Help ───────────────────────────────────────────────────────────────────
+function showHelp() {
+    printBanner( "BoxLang® Quick Installer  v" & INSTALLER_VERSION );
+    println( "" );
+    printHeader( "Usage:" );
+    println( "  install-boxlang [version] [--options]" );
+    println( "" );
+    printHeader( "Version arguments:" );
+    println( "  latest      (default) Latest stable release" );
+    println( "  snapshot    Latest development snapshot" );
+    println( "  1.2.0       A specific version number" );
+    println( "" );
+    printHeader( "Options:" );
+    println( "  --help, -h            Show this help" );
+    println( "  --uninstall           Remove BoxLang from the system" );
+    println( "  --check-update        Check if an update is available" );
+    println( "  --force               Force reinstall even if already installed" );
+    println( "  --system              Force system-wide install (requires sudo/admin)" );
+    println( "  --with-commandbox     Install CommandBox without prompting" );
+    println( "  --without-commandbox  Skip CommandBox installation" );
+    println( "  --with-jre            Auto-install Java 21 JRE if needed" );
+    println( "  --without-jre         Skip Java check" );
+    println( "  --yes, -y             Accept all defaults (installs Java + CommandBox)" );
+    println( "" );
+    printHeader( "Examples:" );
+    println( "  install-boxlang" );
+    println( "  install-boxlang snapshot --force" );
+    println( "  install-boxlang 2.1.0 --with-commandbox" );
+    println( "  curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes" );
+    println( "" );
+}
+
+// ─── Version Resolution ──────────────────────────────────────────────────────
+function resolveVersion( channel ) {
+    var propsUrl = BX_BASE_URL & "/version-" & channel & ".properties";
+    var resp     = http( propsUrl );
+    if ( resp.status != 200 ) {
+        printError( "Failed to fetch version info: " & propsUrl );
+        return "";
+    }
+    var props   = loadProperties( resp.file_content );
+    var version = extractSemanticVersion( props.version ?: "" );
+    if ( len( version ) ) printInfo( "Resolved " & channel & " → " & version );
+    return version;
+}
+
+function getLatestVersion() { return resolveVersion( "latest" );   }
+function getSnapshotVersion() { return resolveVersion( "snapshot" ); }
+
+// ─── Current Version Detection ───────────────────────────────────────────────
+function getCurrentVersion() {
+    var bxCandidates = [ "boxlang", "/usr/local/bin/boxlang", HOME_DIR & "/.local/bin/boxlang" ];
+    var bxHome       = getsystemsetting( "BOXLANG_INSTALL_HOME", "" );
+    if ( len( bxHome ) ) arrayAppend( bxCandidates, bxHome & "/bin/boxlang" );
+
+    for ( var candidate in bxCandidates ) {
+        var result = runCmd( [ candidate, "--version" ], true );
+        if ( result.exitCode == 0 ) {
+            var ver = extractSemanticVersion( result.output );
+            if ( len( ver ) ) return ver;
+        }
+    }
+    return "";
+}
+
+// ─── Installation Paths ──────────────────────────────────────────────────────
+function determineInstallPaths() {
+    var isRoot = !IS_WINDOWS && getsystemsetting( "user.name", "" ) == "root";
+    if ( IS_WINDOWS ) {
+        return {
+            home   : "C:\boxlang",
+            bin    : "C:\boxlang\bin",
+            lib    : "C:\boxlang\lib",
+            sysbin : "C:\Windows\System32"
+        };
+    }
+    if ( isRoot || SYSTEM_INSTALL ) {
+        return {
+            home   : getsystemsetting( "BOXLANG_INSTALL_HOME", "/usr/local/boxlang" ),
+            bin    : "/usr/local/boxlang/bin",
+            lib    : "/usr/local/boxlang/lib",
+            sysbin : "/usr/local/bin"
+        };
+    }
+    // User-local install
+    printWarning( "Installing to ~/.local/boxlang (not root). Use --system for system-wide install." );
+    return {
+        home   : HOME_DIR & "/.local/boxlang",
+        bin    : HOME_DIR & "/.local/boxlang/bin",
+        lib    : HOME_DIR & "/.local/boxlang/lib",
+        sysbin : HOME_DIR & "/.local/bin"
+    };
+}
+
+// ─── Remove Previous Installation ────────────────────────────────────────────
+function removePreviousInstall( paths ) {
+    printWarning( "Removing previous BoxLang installation at " & paths.home & "..." );
+    if ( directoryExists( paths.home ) ) directoryDelete( paths.home, true );
+    // Remove symlinks
+    for ( var link in [ "boxlang", "bx", "boxlang-miniserver", "bx-miniserver",
+                         "install-boxlang", "install-bx-module", "install-bx-site" ] ) {
+        var l = paths.sysbin & SLASH & link;
+        if ( fileExists( l ) ) fileDelete( l );
+    }
+    // Clear compiled classes cache
+    var classCache = HOME_DIR & "/.boxlang/classes";
+    if ( directoryExists( classCache ) ) directoryDelete( classCache, true );
+}
+
+// ─── Download Tool Binaries ──────────────────────────────────────────────────
+function getToolsArchiveName() {
+    if ( IS_WINDOWS ) return "boxlang-tools-windows-x64.zip";
+    if ( IS_MAC )     return IS_ARM ? "boxlang-tools-macos-arm64.tar.gz" : "boxlang-tools-macos-x64.tar.gz";
+    return IS_ARM ? "boxlang-tools-linux-arm64.tar.gz" : "boxlang-tools-linux-x64.tar.gz";
+}
+
+function installToolBinaries( destDir ) {
+    var archiveName  = getToolsArchiveName();
+    var archiveUrl   = TOOLS_RELEASE_URL & "/" & archiveName;
+    var archivePath  = TEMP_DIR & SLASH & archiveName;
+
+    printInfo( "Downloading tool binaries..." );
+    download( archiveUrl, archivePath );
+
+    if ( !directoryExists( destDir ) ) directoryCreate( destDir );
+
+    if ( archiveName.endsWith( ".tar.gz" ) ) {
+        runCmd( [ "tar", "xzf", archivePath, "-C", destDir, "--strip-components=1" ] );
+    } else {
+        extract( archivePath, destDir );
+    }
+    fileDelete( archivePath );
+
+    // Make all binaries executable
+    if ( !IS_WINDOWS ) {
+        for ( var f in directoryList( destDir ) ) fileSetExecutable( f );
+    }
+}
+
+// ─── BoxLang Core Download + Extraction ─────────────────────────────────────
+function downloadAndExtractBoxLang( version, destHome ) {
+    var bxZipUrl = ( version == "snapshot" || version == "latest" )
+        ? BX_BASE_URL & "/boxlang-" & version & ".zip"
+        : BX_BASE_URL & "/" & version & "/boxlang-" & version & ".zip";
+    var msZipUrl = ( version == "snapshot" || version == "latest" )
+        ? BX_MS_URL & "/boxlang-miniserver-" & version & ".zip"
+        : BX_MS_URL & "/" & version & "/boxlang-miniserver-" & version & ".zip";
+
+    var bxZip = TEMP_DIR & SLASH & "boxlang.zip";
+    var msZip = TEMP_DIR & SLASH & "boxlang-miniserver.zip";
+
+    download( bxZipUrl, bxZip );
+    download( msZipUrl, msZip );
+
+    printInfo( "Extracting to " & destHome & "..." );
+    if ( !directoryExists( destHome ) ) directoryCreate( destHome );
+    extract( bxZip, destHome );
+    extract( msZip, destHome );
+
+    fileDelete( bxZip );
+    fileDelete( msZip );
+}
+
+// ─── Create Symlinks ─────────────────────────────────────────────────────────
+function createSymlinks( paths ) {
+    printInfo( "Creating system symlinks in " & paths.sysbin & "..." );
+    if ( !directoryExists( paths.sysbin ) ) directoryCreate( paths.sysbin );
+
+    var sfx = IS_WINDOWS ? ".exe" : "";
+
+    // BoxLang + alias
+    createLink( paths.bin & SLASH & "boxlang" & sfx, paths.sysbin & SLASH & "boxlang" );
+    createLink( paths.sysbin & SLASH & "boxlang", paths.sysbin & SLASH & "bx" );
+
+    // MiniServer + alias
+    createLink( paths.bin & SLASH & "boxlang-miniserver" & sfx, paths.sysbin & SLASH & "boxlang-miniserver" );
+    createLink( paths.sysbin & SLASH & "boxlang-miniserver", paths.sysbin & SLASH & "bx-miniserver" );
+
+    // Tool binaries (already in paths.bin from installToolBinaries)
+    for ( var tool in [ "install-boxlang", "install-bx-module", "install-bx-site", "install-bvm" ] ) {
+        var src = paths.bin & SLASH & tool & sfx;
+        if ( fileExists( src ) ) {
+            createLink( src, paths.sysbin & SLASH & tool );
+        }
+    }
+
+    // Make everything executable on Unix
+    if ( !IS_WINDOWS ) {
+        for ( var f in directoryList( paths.bin ) ) fileSetExecutable( f );
+    }
+}
+
+// ─── CommandBox ──────────────────────────────────────────────────────────────
+function checkAndInstallCommandBox( paths ) {
+    if ( commandExists( "box" ) ) {
+        printSuccess( "CommandBox is already installed" );
+        return;
+    }
+
+    printWarning( "CommandBox is not installed" );
+    printInfo( "CommandBox is the package manager for BoxLang® (optional)" );
+
+    var shouldInstall = INSTALL_COMMANDBOX;
+    if ( shouldInstall == "" ) {
+        shouldInstall = trim( cliask( "Install CommandBox? [Y/n]" ) ).lCase();
+        shouldInstall = ( shouldInstall == "" || shouldInstall == "y" || shouldInstall == "yes" );
+    }
+
+    if ( !shouldInstall ) {
+        printInfo( "Skipping CommandBox. Install later from https://commandbox.ortusbooks.com" );
+        return;
+    }
+
+    printInfo( "Downloading CommandBox..." );
+    var cbZip = TEMP_DIR & SLASH & "commandbox.zip";
+    download( "https://www.ortussolutions.com/parent/download/commandbox/type/bin", cbZip );
+
+    var cbTmp = TEMP_DIR & SLASH & "commandbox";
+    if ( !directoryExists( cbTmp ) ) directoryCreate( cbTmp );
+    extract( cbZip, cbTmp );
+
+    var cbBin = IS_WINDOWS ? cbTmp & SLASH & "box.exe" : cbTmp & SLASH & "box";
+    var dest  = paths.bin & SLASH & "box" & ( IS_WINDOWS ? ".exe" : "" );
+    fileCopy( cbBin, dest );
+    if ( !IS_WINDOWS ) fileSetExecutable( dest );
+    createLink( dest, paths.sysbin & SLASH & "box" );
+
+    directoryDelete( cbTmp, true );
+    fileDelete( cbZip );
+    printSuccess( "CommandBox installed" );
+}
+
+// ─── Verify Installation ─────────────────────────────────────────────────────
+function verifyInstallation( paths ) {
+    printInfo( "Verifying installation..." );
+    var bxBin = paths.bin & SLASH & "boxlang" & ( IS_WINDOWS ? ".bat" : "" );
+    var result = runCmd( [ bxBin, "--version" ], true );
+    if ( result.exitCode != 0 ) {
+        printError( "BoxLang installation verification failed" );
+        return false;
+    }
+    printSuccess( "BoxLang installed: " & trim( result.output ) );
+    return true;
+}
+
+// ─── Uninstall ───────────────────────────────────────────────────────────────
+function uninstallBoxLang() {
+    printWarning( "Uninstalling BoxLang..." );
+    var paths = determineInstallPaths();
+    removePreviousInstall( paths );
+    printSuccess( "BoxLang uninstalled successfully" );
+    printInfo( "BoxLang Home (~/.boxlang) was preserved. Remove manually if desired." );
+}
+
+// ─── Check for Updates ───────────────────────────────────────────────────────
+function checkForUpdates() {
+    printInfo( "Checking for BoxLang updates..." );
+    var current = getCurrentVersion();
+    var latest  = getLatestVersion();
+
+    if ( !len( current ) ) {
+        printWarning( "BoxLang is not currently installed" );
+        return;
+    }
+    if ( !len( latest ) ) {
+        printError( "Could not fetch latest version information" );
+        return;
+    }
+
+    println( "Current: " & GREEN & current & NORMAL );
+    println( "Latest:  " & GREEN & latest  & NORMAL );
+
+    var cmp = compareVersions( current, latest );
+    if ( cmp == 0 ) {
+        printSuccess( "You have the latest version!" );
+    } else if ( cmp == 1 ) {
+        printInfo( "You appear to have a pre-release version" );
+    } else {
+        printWarning( "A newer version is available: " & latest );
+        var resp = trim( cliask( "Update to " & latest & "? [Y/n]" ) ).lCase();
+        if ( resp == "" || resp == "y" || resp == "yes" ) {
+            TARGET_VERSION = latest;
+            FORCE_INSTALL  = true;
+            runInstall();
+        }
+    }
+}
+
+// ─── Main Installation ───────────────────────────────────────────────────────
+function runInstall() {
+    printBanner( "BoxLang® Quick Installer  v" & INSTALLER_VERSION );
+    println( "" );
+
+    var version = TARGET_VERSION;
+
+    // Resolve alias to concrete version
+    var actualVersion = ( version == "latest" || version == "snapshot" )
+        ? resolveVersion( version )
+        : version;
+    if ( !len( actualVersion ) ) {
+        printError( "Could not determine version to install" );
+        cliexit( 1 );
+    }
+
+    // Preflight
+    var autoJre = ( INSTALL_JRE == true );
+    if ( INSTALL_JRE != false && !preflightCheck( autoJre ) ) {
+        // Prompt for manual Java install if JRE flag not explicitly skipped
+        if ( INSTALL_JRE == "" ) {
+            var jreResp = trim( cliask( "Install Java 21 automatically? [Y/n]" ) ).lCase();
+            if ( jreResp == "" || jreResp == "y" || jreResp == "yes" ) {
+                if ( !installJava() ) cliexit( 1 );
+            } else {
+                cliexit( 1 );
+            }
+        } else {
+            cliexit( 1 );
+        }
+    }
+
+    // Determine paths
+    var paths = determineInstallPaths();
+
+    // Check existing install
+    if ( !FORCE_INSTALL ) {
+        var existing = getCurrentVersion();
+        if ( len( existing ) ) {
+            printWarning( "BoxLang " & existing & " is already installed at " & paths.home );
+            printInfo( "Use --force to reinstall, or --check-update to compare versions." );
+            cliexit( 0 );
+        }
+    } else {
+        removePreviousInstall( paths );
+    }
+
+    // Create directory structure
+    for ( var d in [ paths.home, paths.bin, paths.lib ] ) {
+        if ( !directoryExists( d ) ) directoryCreate( d );
+    }
+
+    // Download + extract BoxLang core
+    downloadAndExtractBoxLang( version, paths.home );
+
+    // Download + install tool binaries to paths.bin
+    installToolBinaries( paths.bin );
+
+    // Create system symlinks
+    createSymlinks( paths );
+
+    // CommandBox
+    checkAndInstallCommandBox( paths );
+
+    // Create BoxLang home bin dir for module executables
+    var bxHomeBin = HOME_DIR & SLASH & ".boxlang" & SLASH & "bin";
+    if ( !directoryExists( bxHomeBin ) ) directoryCreate( bxHomeBin );
+
+    // PATH
+    addToPath( paths.sysbin, "BoxLang Installer" );
+    addToPath( bxHomeBin,    "BoxLang home bin" );
+
+    // Verify
+    if ( !verifyInstallation( paths ) ) cliexit( 1 );
+
+    // Banner
+    println( "" );
+    printLine();
+    println( GREEN & "🥊 BoxLang® " & actualVersion & " installed successfully!" & NORMAL );
+    println( "   Installation directory : " & paths.home );
+    println( "   System links           : " & paths.sysbin );
+    println( "   BoxLang Home           : " & HOME_DIR & SLASH & ".boxlang" );
+    println( "" );
+    println( MAGENTA & "💡 Run 'boxlang --version' to confirm. Check for updates with 'install-boxlang --check-update'" & NORMAL );
+    printLine();
+    println( GREEN & "BoxLang® – Dynamic : Modular : Productive : https://boxlang.io" & NORMAL );
+    printLine();
+}
+
+// ─── Command Dispatch ────────────────────────────────────────────────────────
+if ( opts.keyExists( "help" ) || opts.keyExists( "h" ) ) {
+    showHelp();
+    cliexit( 0 );
+}
+if ( opts.keyExists( "uninstall" ) ) {
+    uninstallBoxLang();
+    cliexit( 0 );
+}
+if ( opts.keyExists( "check-update" ) ) {
+    checkForUpdates();
+    cliexit( 0 );
+}
+if ( opts.keyExists( "version" ) || opts.keyExists( "v" ) ) {
+    println( "BoxLang Installer v" & INSTALLER_VERSION );
+    cliexit( 0 );
+}
+
+runInstall();

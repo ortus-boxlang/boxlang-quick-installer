@@ -1,0 +1,352 @@
+// BoxLang Module Installer (install-bx-module)
+// Installs, removes, and lists BoxLang modules from ForgeBox.
+// Compiled to a native platform binary via MatchBox.
+// Author: BoxLang Team
+// Version: @build.version@
+// License: Apache License, Version 2.0
+
+include "helpers/helpers.bxs";
+
+FORGEBOX_API   = "https://forgebox.io/api/v1";
+INSTALLER_VER  = "@build.version@";
+
+// ─── CLI Argument Parsing ────────────────────────────────────────────────────
+var cli  = cligetargs();
+var args = cli.positionals;
+var opts = cli.options;
+
+LOCAL_INSTALL = opts.keyExists( "local" );
+REMOVE_MODE   = opts.keyExists( "remove" );
+LIST_MODE     = opts.keyExists( "list" );
+FORCE_REMOVE  = opts.keyExists( "force" );
+
+// Determine modules home
+if ( LOCAL_INSTALL ) {
+    MODULES_HOME = expandPath( "./boxlang_modules" );
+} else {
+    var bxHome = getsystemsetting( "BOXLANG_HOME", HOME_DIR & SLASH & ".boxlang" );
+    MODULES_HOME = bxHome & SLASH & "modules";
+}
+
+// ─── Help ───────────────────────────────────────────────────────────────────
+function showHelp() {
+    printBanner( "BoxLang® Module Installer  v" & INSTALLER_VER );
+    println( "" );
+    printHeader( "Usage:" );
+    println( "  install-bx-module <module>[@<version>] [module2...] [--flags]" );
+    println( "  install-bx-module --remove <module> [module2...] [--force]" );
+    println( "  install-bx-module --list" );
+    println( "" );
+    printHeader( "Flags:" );
+    println( "  --local     Install to / remove from local ./boxlang_modules/" );
+    println( "              (default: BoxLang HOME modules)" );
+    println( "  --remove    Remove specified module(s)" );
+    println( "  --force     Skip confirmation when removing" );
+    println( "  --list      Show installed modules" );
+    println( "  --help, -h  Show this help message" );
+    println( "" );
+    printHeader( "Examples:" );
+    println( "  install-bx-module bx-orm" );
+    println( "  install-bx-module bx-orm@2.5.0" );
+    println( "  install-bx-module bx-orm bx-ai bx-esapi" );
+    println( "  install-bx-module ""bx-orm, bx-ai"" --local" );
+    println( "  install-bx-module --remove bx-orm" );
+    println( "  install-bx-module --remove bx-orm,bx-ai --force" );
+    println( "  install-bx-module --list" );
+    println( "  install-bx-module --list --local" );
+    println( "" );
+}
+
+// ─── Module List Parser ──────────────────────────────────────────────────────
+/**
+ * Converts all positional args (space/comma-delimited) into a clean array of
+ * module specifiers like ["bx-orm", "bx-ai@2.0.0"].
+ */
+function parseModuleList( rawArgs ) {
+    var combined = arrayToList( rawArgs, " " );
+    combined     = combined.replace( ",", " " );
+
+    var parts   = combined.split( "\s+" );
+    var modules = [];
+    for ( var p in parts ) {
+        p = trim( p );
+        if ( len( p ) && !p.startsWith( "--" ) ) arrayAppend( modules, p );
+    }
+    return modules;
+}
+
+// ─── ForgeBox Helpers ────────────────────────────────────────────────────────
+function resolveForgeBoxStorageUrl( moduleName, version="" ) {
+    var storageUrl = len( version )
+        ? FORGEBOX_API & "/storage/" & moduleName & "/" & version
+        : FORGEBOX_API & "/storage/" & moduleName;
+
+    printInfo( "🔗 Resolving secure download URL from ForgeBox storage..." );
+    var resp = http( storageUrl );
+    if ( resp.status != 200 ) {
+        printError( "ForgeBox storage request failed (HTTP " & resp.status & ")" );
+        cliexit( 1 );
+    }
+    var data = deserializeJSON( resp.file_content );
+    if ( !data.keyExists( "data" ) || !len( data.data ) ) {
+        printError( "Invalid response from ForgeBox storage" );
+        cliexit( 1 );
+    }
+    return data.data;
+}
+
+function getLatestVersionFromForgeBox( moduleName ) {
+    printInfo( "Fetching latest version of " & moduleName & " from ForgeBox..." );
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/latest" );
+    if ( resp.status != 200 ) {
+        printError( "Could not fetch module info for: " & moduleName );
+        cliexit( 1 );
+    }
+    var data = deserializeJSON( resp.file_content );
+    if ( !data.keyExists( "data" ) ) {
+        printError( "Module '" & moduleName & "' not found in ForgeBox" );
+        cliexit( 1 );
+    }
+    var entry       = data.data;
+    var version     = entry.version ?: "";
+    var downloadUrl = entry.downloadURL ?: "";
+
+    if ( downloadUrl == "forgeboxStorage" ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+function getSnapshotVersionFromForgeBox( moduleName ) {
+    printInfo( "Fetching latest snapshot of " & moduleName & " from ForgeBox..." );
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/versions" );
+    if ( resp.status != 200 ) {
+        printError( "Could not fetch versions for: " & moduleName );
+        cliexit( 1 );
+    }
+    var data     = deserializeJSON( resp.file_content );
+    var versions = data.data ?: [];
+    var version  = "";
+    for ( var v in versions ) {
+        if ( v.version.contains( "-snapshot" ) ) {
+            version = v.version;
+            break;
+        }
+    }
+    if ( !len( version ) ) {
+        printError( "No snapshot version found for: " & moduleName );
+        cliexit( 1 );
+    }
+    // Retrieve download URL for this snapshot version
+    var vResp = http( FORGEBOX_API & "/entry/" & moduleName & "/" & version );
+    var downloadUrl = "";
+    if ( vResp.status == 200 ) {
+        var vData = deserializeJSON( vResp.file_content );
+        downloadUrl = vData.data?.downloadURL ?: "";
+    }
+    if ( downloadUrl == "forgeboxStorage" || !len( downloadUrl ) ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName, version );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+function getSpecificVersionFromForgeBox( moduleName, version ) {
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/" & version );
+    var downloadUrl = "";
+    if ( resp.status == 200 ) {
+        var data = deserializeJSON( resp.file_content );
+        downloadUrl = data.data?.downloadURL ?: "";
+    }
+    if ( downloadUrl == "forgeboxStorage" || !len( downloadUrl ) ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName, version );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+// ─── List Installed Modules ──────────────────────────────────────────────────
+function listModules() {
+    var location = LOCAL_INSTALL ? "local (./boxlang_modules)" : "BoxLang HOME";
+    printHeader( "📋 Installed BoxLang Modules (" & location & "):" );
+
+    if ( !directoryExists( MODULES_HOME ) ) {
+        printWarning( "No modules directory found at " & MODULES_HOME );
+        return;
+    }
+
+    var moduleList = directoryList( MODULES_HOME, false, "name" );
+    if ( !arrayLen( moduleList ) ) {
+        printWarning( "No modules installed" );
+        return;
+    }
+
+    for ( var modName in moduleList ) {
+        var boxJson = MODULES_HOME & SLASH & modName & SLASH & "box.json";
+        if ( fileExists( boxJson ) ) {
+            var meta    = deserializeJSON( fileRead( boxJson ) );
+            var version = meta.version ?: "unknown";
+            println( GREEN & "  ✓ " & modName & NORMAL & " (" & version & ")" );
+        } else {
+            println( GREEN & "  ✓ " & modName & NORMAL );
+        }
+    }
+}
+
+// ─── Install Module ──────────────────────────────────────────────────────────
+function installModule( moduleSpec ) {
+    // Parse name@version
+    var moduleName    = moduleSpec;
+    var targetVersion = "";
+
+    if ( moduleSpec.contains( "@" ) ) {
+        moduleName    = listFirst( moduleSpec, "@" ).lCase();
+        targetVersion = listLast(  moduleSpec, "@" );
+    } else {
+        moduleName = moduleSpec.lCase();
+    }
+
+    printHeader( "📦 Installing module: " & moduleName & ( len( targetVersion ) ? "@" & targetVersion : "" ) );
+
+    // Resolve version + download URL
+    var info = {};
+    if ( !len( targetVersion ) ) {
+        info = getLatestVersionFromForgeBox( moduleName );
+    } else if ( targetVersion == "be" || targetVersion == "snapshot" ) {
+        info = getSnapshotVersionFromForgeBox( moduleName );
+    } else {
+        info = getSpecificVersionFromForgeBox( moduleName, targetVersion );
+    }
+
+    printInfo( "Version: " & info.version & "  |  URL: " & info.downloadUrl );
+
+    // Prepare destination
+    var destination = MODULES_HOME & SLASH & moduleName;
+    if ( !directoryExists( MODULES_HOME ) ) directoryCreate( MODULES_HOME );
+
+    if ( directoryExists( destination ) ) {
+        printWarning( "Overwriting existing installation at " & destination );
+        directoryDelete( destination, true );
+    }
+
+    // Download
+    var tmpFile = TEMP_DIR & SLASH & moduleName & "-" & info.version & ".zip";
+    download( info.downloadUrl, tmpFile );
+
+    // Record install with ForgeBox (best-effort, non-fatal)
+    try { http( FORGEBOX_API & "/install/" & moduleName & "/" & info.version ); } catch ( any e ) {}
+
+    // Extract
+    printInfo( "Extracting..." );
+    extract( tmpFile, destination );
+    fileDelete( tmpFile );
+
+    if ( !directoryExists( destination ) || !arrayLen( directoryList( destination ) ) ) {
+        printError( "Extraction failed – destination is empty" );
+        cliexit( 1 );
+    }
+
+    // Create executable wrappers for any boxlang.executable / boxlang.executables defined in box.json
+    createModuleExecutables( destination, moduleName );
+
+    printSuccess( "Module [" & moduleName & "@" & info.version & "] installed to " & destination );
+}
+
+// ─── Module Executables ──────────────────────────────────────────────────────
+function createModuleExecutables( moduleDir, moduleName ) {
+    var boxJson = moduleDir & SLASH & "box.json";
+    if ( !fileExists( boxJson ) ) return;
+
+    var meta = deserializeJSON( fileRead( boxJson ) );
+    var bxMeta = meta.boxlang ?: {};
+
+    var bxHome  = getsystemsetting( "BOXLANG_HOME", HOME_DIR & SLASH & ".boxlang" );
+    var binDir  = LOCAL_INSTALL ? expandPath( "./boxlang_modules/.bin" ) : bxHome & SLASH & "bin";
+    if ( !directoryExists( binDir ) ) directoryCreate( binDir );
+
+    var modName = bxMeta.moduleName ?: moduleName;
+
+    // Single executable
+    if ( bxMeta.keyExists( "executable" ) && len( bxMeta.executable ) ) {
+        writeExecWrapper( binDir, bxMeta.executable, "module:" & modName );
+    }
+
+    // Multiple executables (struct of name → content)
+    if ( bxMeta.keyExists( "executables" ) && isStruct( bxMeta.executables ) ) {
+        for ( var execName in bxMeta.executables ) {
+            writeExecWrapper( binDir, execName, bxMeta.executables[ execName ] );
+        }
+    }
+}
+
+function writeExecWrapper( binDir, execName, execContent ) {
+    printInfo( "Creating executable: " & execName );
+    var scriptPath = binDir & SLASH & execName;
+    if ( IS_WINDOWS ) {
+        fileWrite( scriptPath & ".bat", "@echo off" & chr(10) & "boxlang " & execContent & " %*" );
+    } else {
+        fileWrite( scriptPath, "#!/bin/sh" & chr(10) & "exec boxlang " & execContent & " ""$@""" );
+        fileSetExecutable( scriptPath );
+    }
+}
+
+// ─── Remove Module ───────────────────────────────────────────────────────────
+function removeModule( moduleName ) {
+    moduleName = moduleName.lCase();
+    var modulePath = MODULES_HOME & SLASH & moduleName;
+
+    if ( !directoryExists( modulePath ) ) {
+        printWarning( "Module '" & moduleName & "' is not installed at " & MODULES_HOME );
+        return;
+    }
+
+    // Read version for display
+    var boxJson  = modulePath & SLASH & "box.json";
+    var version  = "unknown";
+    if ( fileExists( boxJson ) ) {
+        var meta = deserializeJSON( fileRead( boxJson ) );
+        version  = meta.version ?: "unknown";
+    }
+
+    printWarning( "Found: " & moduleName & " (" & version & ") at " & modulePath );
+
+    if ( !FORCE_REMOVE ) {
+        var confirm = trim( cliask( "Remove this module? [y/N]" ) ).lCase();
+        if ( confirm != "y" && confirm != "yes" ) {
+            printWarning( "Removal cancelled" );
+            return;
+        }
+    }
+
+    directoryDelete( modulePath, true );
+    printSuccess( "Module '" & moduleName & "' removed successfully" );
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+if ( opts.keyExists( "help" ) || opts.keyExists( "h" ) ) {
+    showHelp();
+    cliexit( 0 );
+}
+
+if ( LIST_MODE ) {
+    listModules();
+    cliexit( 0 );
+}
+
+if ( REMOVE_MODE ) {
+    var toRemove = parseModuleList( args );
+    if ( !arrayLen( toRemove ) ) {
+        printError( "Specify at least one module to remove" );
+        showHelp();
+        cliexit( 1 );
+    }
+    for ( var m in toRemove ) removeModule( m );
+    cliexit( 0 );
+}
+
+// Install mode
+var toInstall = parseModuleList( args );
+if ( !arrayLen( toInstall ) ) {
+    printError( "No module(s) specified" );
+    showHelp();
+    cliexit( 1 );
+}
+for ( var m in toInstall ) installModule( m );
