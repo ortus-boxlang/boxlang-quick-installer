@@ -1,0 +1,419 @@
+// BoxLang Helpers
+// Shared utility functions for BoxLang installer scripts compiled with MatchBox.
+// Include this file at the top of each script: include "helpers/helpers.bxs";
+// Author: BoxLang Team
+// Version: @build.version@
+// License: Apache License, Version 2.0
+
+// ─── ANSI Colors ────────────────────────────────────────────────────────────
+ESC       = char( 27 );
+NORMAL    = ESC & "[0m";
+BOLD      = ESC & "[1m";
+DIM       = ESC & "[2m";
+UNDERLINE = ESC & "[4m";
+RED       = ESC & "[31m";
+GREEN     = ESC & "[32m";
+YELLOW    = ESC & "[33m";
+BLUE      = ESC & "[34m";
+MAGENTA   = ESC & "[35m";
+CYAN      = ESC & "[36m";
+WHITE     = ESC & "[37m";
+BLACK     = ESC & "[30m";
+
+// ─── Platform Detection ──────────────────────────────────────────────────────
+_OS_RAW    = getsystemsetting( "os.name", "linux" ).lCase();
+_ARCH_RAW  = getsystemsetting( "os.arch", "x86_64" ).lCase();
+IS_WINDOWS = _OS_RAW.contains( "windows" );
+IS_MAC     = _OS_RAW.contains( "mac" );
+IS_LINUX   = !IS_WINDOWS && !IS_MAC;
+IS_ARM     = _ARCH_RAW.contains( "aarch64" ) || _ARCH_RAW.contains( "arm64" );
+SLASH      = IS_WINDOWS ? "\" : "/";
+HOME_DIR   = getsystemsetting( "user.home", getsystemsetting( "HOME", "~" ) );
+TEMP_DIR   = getsystemsetting( "java.io.tmpdir", IS_WINDOWS ? "C:\Temp" : "/tmp" );
+
+// ─── Print Functions ─────────────────────────────────────────────────────────
+function printInfo( msg )    { println( BLUE    & "ℹ️  " & msg & NORMAL ); }
+function printSuccess( msg ) { println( GREEN   & "✅ " & msg & NORMAL ); }
+function printWarning( msg ) { println( YELLOW  & "⚠️  " & msg & NORMAL ); }
+function printError( msg )   { println( RED     & "🔴  " & msg & NORMAL ); }
+function printHeader( msg )  { println( BOLD & CYAN & msg & NORMAL ); }
+function printLine()         { println( BLUE & repeatString( "─", 79 ) & NORMAL ); }
+function printBanner( msg ) {
+    printLine();
+    println( BOLD & BLUE & "  " & msg & NORMAL );
+    printLine();
+}
+
+// ─── System Command Execution ────────────────────────────────────────────────
+/**
+ * Runs a system command and returns a struct: {exitCode, output, error}.
+ * @command  String or array. If a string, it is run via the shell (sh -c / cmd /c).
+ *           If an array, parts[1] is the executable and the rest are arguments.
+ * @ignoreError  When true, does not print error on non-zero exit.
+ */
+function runCmd( command, ignoreError=false ) {
+    var exeName = "";
+    var exeArgs = "";
+
+    if ( isArray( command ) ) {
+        exeName = command[ 1 ];
+        var argParts = [];
+        for ( var i = 2; i <= arrayLen( command ); i++ ) {
+            arrayAppend( argParts, command[ i ] );
+        }
+        exeArgs = arrayToList( argParts, " " );
+    } else if ( IS_WINDOWS ) {
+        // Route through cmd for shell-level quoting / expansion
+        exeName = "cmd";
+        exeArgs = "/c " & command;
+    } else {
+        exeName = "sh";
+        exeArgs = "-c " & command;
+    }
+
+    var output    = "";
+    var errOutput = "";
+
+    try {
+        $execute name=exeName
+                 arguments=exeArgs
+                 variable="output"
+                 errorVariable="errOutput"
+                 timeout=120;
+    } catch ( any e ) {
+        if ( !ignoreError ) {
+            printError( "Command failed: " & ( isArray( command ) ? arrayToList( command, " " ) : command ) );
+            printError( e.message );
+        }
+        return { exitCode: 1, output: "", error: e.message };
+    }
+
+    return { exitCode: 0, output: trim( output ), error: trim( errOutput ) };
+}
+
+// ─── Command Existence Check ─────────────────────────────────────────────────
+/**
+ * Returns true if the given command is available on the system PATH.
+ */
+function commandExists( cmd ) {
+    var checker = IS_WINDOWS ? "where" : "which";
+    var result  = runCmd( [ checker, cmd ], true );
+    return result.exitCode == 0;
+}
+
+// ─── HTTP Download ───────────────────────────────────────────────────────────
+/**
+ * Downloads a file from url to destination path.
+ * Throws on failure.
+ */
+function download( url, destination, silent=false ) {
+    if ( !silent ) printInfo( "⬇️  Downloading: " & url );
+
+    var resp = http( url, "GET", destination );
+
+    if ( resp.status != 200 ) {
+        throw(
+            type    = "DownloadError",
+            message = "Download failed with HTTP " & resp.status & " from: " & url
+        );
+    }
+    if ( !silent ) printSuccess( "Downloaded to: " & destination );
+    return true;
+}
+
+// ─── Version Utilities ───────────────────────────────────────────────────────
+/**
+ * Extracts the first X.Y.Z semantic version found in a string.
+ * Returns empty string if not found.
+ */
+function extractSemanticVersion( versionString ) {
+    var matches = reMatchNoCase( "\d+\.\d+\.\d+", versionString );
+    return arrayLen( matches ) ? matches[ 1 ] : "";
+}
+
+/**
+ * Compares two semantic version strings.
+ * Returns: 0 = equal, 1 = v1 > v2, 2 = v1 < v2
+ */
+function compareVersions( v1, v2 ) {
+    var p1 = listToArray( v1, "." );
+    var p2 = listToArray( v2, "." );
+    for ( var i = 1; i <= 3; i++ ) {
+        var a = ( i <= arrayLen( p1 ) ) ? val( p1[ i ] ) : 0;
+        var b = ( i <= arrayLen( p2 ) ) ? val( p2[ i ] ) : 0;
+        if ( a > b ) return 1;
+        if ( a < b ) return 2;
+    }
+    return 0;
+}
+
+// ─── Shell Profile Detection ─────────────────────────────────────────────────
+/**
+ * Returns the appropriate shell profile file to modify for PATH updates.
+ * Returns empty string on Windows (use registry / environment).
+ */
+function getShellProfileFile() {
+    if ( IS_WINDOWS ) return "";
+
+    var shellBin  = getsystemsetting( "SHELL", "/bin/bash" );
+    var shellName = listLast( shellBin, "/" );
+
+    switch ( shellName ) {
+        case "fish":
+            var fishConf = getsystemsetting( "XDG_CONFIG_HOME", HOME_DIR & "/.config" ) & "/fish";
+            return fishConf & "/config.fish";
+        case "zsh":
+            return HOME_DIR & "/.zshrc";
+        default:
+            if ( IS_MAC && fileExists( HOME_DIR & "/.bash_profile" ) ) {
+                return HOME_DIR & "/.bash_profile";
+            }
+            return HOME_DIR & "/.bashrc";
+    }
+}
+
+// ─── PATH Management ─────────────────────────────────────────────────────────
+/**
+ * Appends directory to the user's PATH via the shell profile or Windows registry.
+ */
+function addToPath( directory, label="BoxLang" ) {
+    if ( IS_WINDOWS ) {
+        runCmd( [
+            "powershell", "-NoProfile", "-Command",
+            "$p = [Environment]::GetEnvironmentVariable('Path','User'); " &
+            "if ($p -notlike '*" & directory & "*') { " &
+            "[Environment]::SetEnvironmentVariable('Path', $p + ';' + '" & directory & "', 'User') }"
+        ] );
+        printSuccess( "Added " & directory & " to user PATH (restart terminal to activate)" );
+        return;
+    }
+
+    var profileFile = getShellProfileFile();
+    var shellName   = listLast( getsystemsetting( "SHELL", "/bin/bash" ), "/" );
+
+    if ( fileExists( profileFile ) && fileRead( profileFile ).contains( directory ) ) {
+        printSuccess( directory & " is already in PATH (" & profileFile & ")" );
+        return;
+    }
+
+    printInfo( "Adding " & directory & " to PATH in " & profileFile );
+
+    var snippet = char( 10 )
+        & "## Added by " & label & char( 10 );
+
+    if ( shellName == "fish" ) {
+        snippet &= "set -gx PATH """ & directory & """ $PATH" & char( 10 );
+    } else {
+        snippet &= "export PATH=""" & directory & ":$PATH""" & char( 10 );
+    }
+
+    fileAppend( profileFile, snippet );
+
+    printSuccess( "Added to PATH in " & profileFile );
+    printWarning( "Restart your terminal or run:  source " & profileFile );
+}
+
+// ─── Symlink / Shortcut Creation ─────────────────────────────────────────────
+/**
+ * Creates a symlink at linkPath pointing to targetPath.
+ * Falls back to .bat wrapper on Windows when mklink fails (no elevation).
+ */
+function createLink( targetPath, linkPath ) {
+    if ( fileExists( linkPath ) || directoryExists( linkPath ) ) {
+        fileDelete( linkPath );
+    }
+    if ( IS_WINDOWS ) {
+        var result = runCmd( [ "cmd", "/c", "mklink", linkPath, targetPath ], true );
+        if ( result.exitCode != 0 ) {
+            fileWrite( linkPath & ".bat", "@echo off" & char( 10 ) & """" & targetPath & """ %*" );
+        }
+    } else {
+        fileCreateSymlink( linkPath, targetPath );
+    }
+}
+
+// ─── Java Detection ──────────────────────────────────────────────────────────
+/**
+ * Checks if Java 21+ is available.
+ * When autoInstall=true, attempts automatic JRE installation if not found.
+ * Returns true/false.
+ */
+function checkJavaVersion( autoInstall=false ) {
+    printInfo( "🔍 Checking for Java 21+..." );
+
+    var candidates = [
+        "java",
+        HOME_DIR & "/.jdks/openjdk-21/bin/java",
+        "/usr/bin/java",
+        "/usr/local/bin/java",
+        "/opt/homebrew/bin/java",
+        "/opt/java/openjdk-21-jre/bin/java",
+        "/Library/Java/JavaVirtualMachines/temurin-21.jre/Contents/Home/bin/java"
+    ];
+
+    var javaHome = getsystemsetting( "JAVA_HOME", "" );
+    if ( len( javaHome ) ) {
+        arrayPrepend( candidates, javaHome & ( IS_WINDOWS ? "\bin\java.exe" : "/bin/java" ) );
+    }
+
+    if ( IS_WINDOWS ) {
+        arrayAppend( candidates, "java.exe" );
+        arrayAppend( candidates, "C:\Program Files\Eclipse Adoptium\jdk-21-hotspot\bin\java.exe" );
+    }
+
+    for ( var candidate in candidates ) {
+        var result = runCmd( [ candidate, "-version" ], true );
+        if ( result.exitCode != 0 ) continue;
+
+        var out    = result.output & result.error;
+        var verStr = "";
+
+        var m1 = reMatchNoCase( "version ""1\.(\d+)", out );
+        var m2 = reMatchNoCase( "version ""(\d+)", out );
+
+        if ( arrayLen( m1 ) ) {
+            verStr = reMatchNoCase( "\d+", m1[ 1 ] );
+            verStr = arrayLen( verStr ) ? verStr[ 1 ] : "";
+        } else if ( arrayLen( m2 ) ) {
+            verStr = reMatchNoCase( "\d+", m2[ 1 ] );
+            verStr = arrayLen( verStr ) ? verStr[ 1 ] : "";
+        }
+
+        if ( len( verStr ) && val( verStr ) >= 21 ) {
+            printSuccess( "Java " & verStr & " found at: " & candidate );
+            return true;
+        } else if ( len( verStr ) ) {
+            printWarning( "Java " & verStr & " at " & candidate & " is too old (need 21+)" );
+        }
+    }
+
+    printError( "Java 21+ not found on this system" );
+
+    if ( autoInstall ) {
+        return installJava();
+    }
+
+    return false;
+}
+
+// ─── Java Installation ───────────────────────────────────────────────────────
+/**
+ * Downloads and installs Eclipse Temurin 21 JRE for the current platform.
+ * Returns true on success.
+ */
+function installJava() {
+    var jreVersion     = "21.0.8+9";
+    var jreUrlVersion  = jreVersion.replace( "+", "%2B" );
+    var jreFileVersion = jreVersion.replace( "+", "_" );
+    var arch           = IS_ARM ? "aarch64" : "x64";
+    var baseUrl        = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-" & jreUrlVersion & "/";
+    var url            = "";
+    var filename       = "";
+    var installDir     = "";
+
+    printInfo( "☕ Installing Eclipse Temurin Java 21 JRE..." );
+
+    if ( IS_MAC ) {
+        filename   = "OpenJDK21U-jre_" & arch & "_mac_hotspot_" & jreFileVersion & ".tar.gz";
+        installDir = "/Library/Java/JavaVirtualMachines/openjdk-21-jre";
+    } else if ( IS_LINUX ) {
+        var isAlpine = fileExists( "/etc/alpine-release" );
+        var platform = isAlpine ? "alpine-linux" : "linux";
+        filename   = "OpenJDK21U-jre_" & arch & "_" & platform & "_hotspot_" & jreFileVersion & ".tar.gz";
+        installDir = "/opt/java/openjdk-21-jre";
+    } else if ( IS_WINDOWS ) {
+        filename   = "OpenJDK21U-jre_x64_windows_hotspot_" & jreFileVersion & ".zip";
+        installDir = "C:\Program Files\Java\jre21";
+    } else {
+        printError( "Unsupported OS for automatic Java installation" );
+        return false;
+    }
+
+    url              = baseUrl & filename;
+    var downloadPath = TEMP_DIR & SLASH & filename;
+
+    try {
+        download( url, downloadPath );
+
+        if ( !directoryExists( installDir ) ) directoryCreate( installDir );
+
+        if ( filename.endsWith( ".tar.gz" ) ) {
+            var tarResult = runCmd( [ "tar", "xzf", downloadPath, "-C", installDir, "--strip-components=1" ] );
+            if ( tarResult.exitCode != 0 ) {
+                throw( message="tar extraction failed" );
+            }
+        } else {
+            extract( downloadPath, installDir );
+        }
+
+        fileDelete( downloadPath );
+
+        printSuccess( "Java 21 installed to " & installDir );
+        return true;
+
+    } catch ( any e ) {
+        printError( "Failed to install Java: " & e.message );
+        return false;
+    }
+}
+
+// ─── Package Manager Dependency Installation ─────────────────────────────────
+/**
+ * Installs system packages (curl, jq, unzip) using the available package manager.
+ * Only needed in environments that lack these tools and require them.
+ */
+function installSystemDeps( deps ) {
+    if ( IS_MAC ) {
+        if ( !commandExists( "brew" ) ) {
+            printError( "Homebrew is required on macOS. Install it from https://brew.sh" );
+            return false;
+        }
+        for ( var dep in deps ) {
+            printInfo( "Installing " & dep & " via Homebrew..." );
+            runCmd( [ "brew", "install", dep ] );
+        }
+        return true;
+    }
+
+    // Determine if sudo is needed
+    var useSudo  = getsystemsetting( "user.name", "" ) != "root";
+    var sudoCmd  = useSudo ? "sudo " : "";
+
+    if ( commandExists( "apt-get" ) ) {
+        runCmd( sudoCmd & "apt-get update -qq" );
+        runCmd( sudoCmd & "apt-get install -y " & arrayToList( deps, " " ) );
+    } else if ( commandExists( "apk" ) ) {
+        runCmd( sudoCmd & "apk add " & arrayToList( deps, " " ) );
+    } else if ( commandExists( "dnf" ) ) {
+        runCmd( sudoCmd & "dnf install -y " & arrayToList( deps, " " ) );
+    } else if ( commandExists( "yum" ) ) {
+        runCmd( sudoCmd & "yum install -y " & arrayToList( deps, " " ) );
+    } else if ( commandExists( "pacman" ) ) {
+        runCmd( sudoCmd & "pacman -S --noconfirm " & arrayToList( deps, " " ) );
+    } else {
+        printError( "No supported package manager found. Please install manually: " & arrayToList( deps, ", " ) );
+        return false;
+    }
+    return true;
+}
+
+// ─── Preflight Check ─────────────────────────────────────────────────────────
+/**
+ * Verifies Java 21+ is available. Since BoxLang native binaries include HTTP,
+ * JSON, and extraction capabilities, external tool checks are not required.
+ * @autoInstallJava  Whether to auto-install Java if not found.
+ */
+function preflightCheck( autoInstallJava=false ) {
+    printInfo( "🔍 Running system requirements check..." );
+
+    if ( !checkJavaVersion( autoInstallJava ) ) {
+        printError( "Java 21+ is required to run BoxLang" );
+        printWarning( "Install Java from: https://adoptium.net/ or via your package manager" );
+        if ( IS_MAC )   printInfo( "  brew install openjdk@21" );
+        if ( IS_LINUX ) printInfo( "  sudo apt install openjdk-21-jre  ## or dnf/yum/pacman equivalent" );
+        return false;
+    }
+
+    printSuccess( "All system requirements met ✅" );
+    return true;
+}

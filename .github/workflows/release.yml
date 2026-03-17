@@ -19,23 +19,106 @@ env:
   SNAPSHOT: ${{ github.ref == 'refs/heads/development' }}
 
 jobs:
+  ##########################################################################################
+  # Compile BoxLang scripts to native platform binaries via MatchBox
+  ##########################################################################################
+  compile:
+    name: Compile – ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-x64
+            archive_ext: tar.gz
+            matchbox_binary: matchbox-linux-x64
+          - runner: macos-13
+            target: macos-x64
+            archive_ext: tar.gz
+            matchbox_binary: matchbox-macos-x64
+          - runner: macos-latest
+            target: macos-arm64
+            archive_ext: tar.gz
+            matchbox_binary: matchbox-macos-arm64
+          - runner: windows-latest
+            target: windows-x64
+            archive_ext: zip
+            matchbox_binary: matchbox-windows-x64.exe
+
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download MatchBox
+        shell: bash
+        run: |
+          MATCHBOX_URL="https://github.com/ortus-boxlang/matchbox/releases/latest/download/${{ matrix.matchbox_binary }}"
+          echo "Downloading MatchBox from: $MATCHBOX_URL"
+          curl -fsSL -o matchbox "$MATCHBOX_URL"
+          chmod +x matchbox
+
+      - name: Compile BoxLang scripts
+        shell: bash
+        run: |
+          mkdir -p dist
+          SCRIPTS=("bvm" "install-boxlang" "install-bx-module" "install-bx-site")
+          for script in "${SCRIPTS[@]}"; do
+            echo "Compiling src/${script}.bxs for ${{ matrix.target }}..."
+            ./matchbox --target ${{ matrix.target }} src/${script}.bxs
+            # Move/rename output binary into dist/
+            if [ -f "${script}" ]; then
+              mv "${script}" "dist/${script}"
+            elif [ -f "${script}.exe" ]; then
+              mv "${script}.exe" "dist/${script}.exe"
+            else
+              echo "ERROR: compiled binary not found for ${script}"
+              exit 1
+            fi
+          done
+          ls -la dist/
+
+      - name: Package binaries (tar.gz)
+        if: matrix.archive_ext == 'tar.gz'
+        run: |
+          tar -czf boxlang-tools-${{ matrix.target }}.tar.gz -C dist .
+
+      - name: Package binaries (zip)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\* -DestinationPath boxlang-tools-${{ matrix.target }}.zip
+
+      - name: Upload compiled artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: boxlang-tools-${{ matrix.target }}
+          path: boxlang-tools-${{ matrix.target }}.${{ matrix.archive_ext }}
+          retention-days: 1
+
+  ##########################################################################################
+  # Build install-bvm bootstrap scripts + publish everything
+  ##########################################################################################
   publish:
     name: Build & Publish
     runs-on: ubuntu-latest
+    needs: [compile]
     # add write permissions
     permissions:
       contents: write
       checks: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Read Version File
         id: version
         run: |
           INSTALLER_VERSION=$(jq -r '.INSTALLER_VERSION' version.json)
           echo "INSTALLER_VERSION=${INSTALLER_VERSION}" >> $GITHUB_ENV
-          echo "image_version=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Update changelog [unreleased] with latest version
         uses: thomaseizinger/keep-a-changelog-new-release@3.1.0
@@ -51,9 +134,18 @@ jobs:
           npm install -g markdownlint-cli
           markdownlint changelog.md --fix
 
-      - name: Build the Installer
+      - name: Build bootstrap installer scripts
         run: |
           ./build.sh ${{ env.SNAPSHOT == 'true' && '--snapshot' || '' }}
+
+      - name: Download all compiled platform binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: boxlang-tools-*
+          path: build/binaries/
+
+      - name: List build artifacts
+        run: find build/ -type f | sort
 
       - name: Commit Changelog [unreleased] with latest version
         uses: EndBug/add-and-commit@v9.1.4
@@ -74,14 +166,14 @@ jobs:
 
       - name: Upload Build Artifacts
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
             build/**
             changelog.md
 
-      - name: Upload Distributions to S3
+      - name: Upload Bootstrap Scripts to S3
         uses: jakejarvis/s3-sync-action@master
         if: success()
         with:
@@ -93,16 +185,23 @@ jobs:
           SOURCE_DIR: "build/"
           DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
-      - name: Create Github Release
-        uses: taiki-e/create-gh-release-action@v1.9.2
+      - name: Create GitHub Release with Platform Binaries
+        uses: softprops/action-gh-release@v2
         if: env.SNAPSHOT == 'false'
         continue-on-error: true
-        id: create_release
         with:
-          title: ${{ env.INSTALLER_VERSION }}
-          changelog: changelog.md
+          tag_name: v${{ env.INSTALLER_VERSION }}
+          name: ${{ env.INSTALLER_VERSION }}
+          body_path: changelog.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/v${{ env.INSTALLER_VERSION }}
+          files: |
+            build/binaries/boxlang-tools-linux-x64/boxlang-tools-linux-x64.tar.gz
+            build/binaries/boxlang-tools-macos-x64/boxlang-tools-macos-x64.tar.gz
+            build/binaries/boxlang-tools-macos-arm64/boxlang-tools-macos-arm64.tar.gz
+            build/binaries/boxlang-tools-windows-x64/boxlang-tools-windows-x64.zip
+            build/install-bvm.sh
+            build/install-bvm.ps1
+            build/install-bvm.bat
 
       - name: Inform Slack
         if: ${{ always() }}
@@ -130,12 +229,12 @@ jobs:
       checks: write
     steps:
       - name: Checkout Development Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           ref: development
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: build-artifacts
           path: .tmp

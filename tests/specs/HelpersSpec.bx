@@ -1,0 +1,214 @@
+/**
+ * HelpersSpec – TestBox BDD tests for helpers.bxs utility functions.
+ *
+ * Covers:
+ *   - ANSI color constants
+ *   - Platform detection variables
+ *   - Print functions (output format)
+ *   - extractSemanticVersion()
+ *   - compareVersions()
+ *   - commandExists()
+ *   - getShellProfileFile()
+ */
+class extends="testbox.system.BaseSpec" {
+
+    function run() {
+
+        // ---------------------------------------------------------------------------
+        // Helpers to inline helpers.bxs – we capture the variables defined at include
+        // time into the current scope so individual its() can call them.
+        // ---------------------------------------------------------------------------
+        include expandPath( "/src/helpers/helpers.bxs" );
+
+        // ── Color Constants ────────────────────────────────────────────────────────
+
+        describe( "ANSI color constants", function() {
+
+            it( "should define ESC as chr(27)", function() {
+                expect( ESC ).toBe( chr( 27 ) );
+            } );
+
+            it( "should define RED as an ANSI escape sequence", function() {
+                expect( RED ).toContain( chr( 27 ) );
+                expect( RED ).toContain( "[31m" );
+            } );
+
+            it( "should define GREEN as an ANSI escape sequence", function() {
+                expect( GREEN ).toContain( chr( 27 ) );
+                expect( GREEN ).toContain( "[32m" );
+            } );
+
+            it( "should define YELLOW as an ANSI escape sequence", function() {
+                expect( YELLOW ).toContain( chr( 27 ) );
+                expect( YELLOW ).toContain( "[33m" );
+            } );
+
+            it( "should define BLUE as an ANSI escape sequence", function() {
+                expect( BLUE ).toContain( chr( 27 ) );
+                expect( BLUE ).toContain( "[34m" );
+            } );
+
+            it( "should define NORMAL as a reset sequence", function() {
+                expect( NORMAL ).toContain( chr( 27 ) );
+                expect( NORMAL ).toContain( "[0m" );
+            } );
+
+        } );
+
+        // ── Platform Detection ─────────────────────────────────────────────────────
+
+        describe( "Platform detection variables", function() {
+
+            it( "should define IS_WINDOWS as a boolean", function() {
+                expect( IS_WINDOWS ).toBeTypeOf( "boolean" );
+            } );
+
+            it( "should define IS_MAC as a boolean", function() {
+                expect( IS_MAC ).toBeTypeOf( "boolean" );
+            } );
+
+            it( "should define IS_LINUX as a boolean", function() {
+                expect( IS_LINUX ).toBeTypeOf( "boolean" );
+            } );
+
+            it( "should define exactly one OS type as true", function() {
+                var trueCount = ( IS_WINDOWS ? 1 : 0 ) + ( IS_MAC ? 1 : 0 ) + ( IS_LINUX ? 1 : 0 );
+                expect( trueCount ).toBe( 1 );
+            } );
+
+            it( "should define SLASH as / or \", function() {
+                expect( SLASH == "/" || SLASH == "\" ).toBeTrue();
+            } );
+
+            it( "should populate HOME_DIR", function() {
+                expect( len( HOME_DIR ) ).toBeGT( 0 );
+            } );
+
+            it( "should populate TEMP_DIR", function() {
+                expect( len( TEMP_DIR ) ).toBeGT( 0 );
+            } );
+
+        } );
+
+        // ── extractSemanticVersion() ───────────────────────────────────────────────
+
+        describe( "extractSemanticVersion()", function() {
+
+            it( "should extract a bare version string", function() {
+                expect( extractSemanticVersion( "1.2.3" ) ).toBe( "1.2.3" );
+            } );
+
+            it( "should extract version from a BoxLang version banner", function() {
+                expect( extractSemanticVersion( "BoxLang 1.2.3+20241201.120000" ) ).toBe( "1.2.3" );
+            } );
+
+            it( "should extract version preceded by text", function() {
+                expect( extractSemanticVersion( "version=2.0.1+buildId" ) ).toBe( "2.0.1" );
+            } );
+
+            it( "should extract the first version when multiple exist", function() {
+                expect( extractSemanticVersion( "BoxLang Version 2.1.0 Build 20241225.100000" ) ).toBe( "2.1.0" );
+            } );
+
+            it( "should return empty string when no version is present", function() {
+                expect( extractSemanticVersion( "no version here" ) ).toBe( "" );
+            } );
+
+            it( "should return empty string for blank input", function() {
+                expect( extractSemanticVersion( "" ) ).toBe( "" );
+            } );
+
+        } );
+
+        // ── compareVersions() ──────────────────────────────────────────────────────
+
+        describe( "compareVersions()", function() {
+
+            it( "should return 0 for equal versions", function() {
+                expect( compareVersions( "1.2.3", "1.2.3" ) ).toBe( 0 );
+            } );
+
+            it( "should return 1 when patch of v1 is greater", function() {
+                expect( compareVersions( "1.2.4", "1.2.3" ) ).toBe( 1 );
+            } );
+
+            it( "should return 1 when minor of v1 is greater", function() {
+                expect( compareVersions( "1.3.0", "1.2.9" ) ).toBe( 1 );
+            } );
+
+            it( "should return 1 when major of v1 is greater", function() {
+                expect( compareVersions( "2.0.0", "1.9.9" ) ).toBe( 1 );
+            } );
+
+            it( "should return 2 when patch of v1 is lesser", function() {
+                expect( compareVersions( "1.2.3", "1.2.4" ) ).toBe( 2 );
+            } );
+
+            it( "should return 2 when minor of v1 is lesser", function() {
+                expect( compareVersions( "1.2.9", "1.3.0" ) ).toBe( 2 );
+            } );
+
+            it( "should return 2 when major of v1 is lesser", function() {
+                expect( compareVersions( "1.9.9", "2.0.0" ) ).toBe( 2 );
+            } );
+
+            it( "should treat missing patch segment as 0", function() {
+                expect( compareVersions( "1.2", "1.2.0" ) ).toBe( 0 );
+            } );
+
+            it( "should treat missing minor+patch as 0", function() {
+                expect( compareVersions( "1", "1.0.0" ) ).toBe( 0 );
+            } );
+
+        } );
+
+        // ── commandExists() ────────────────────────────────────────────────────────
+
+        describe( "commandExists()", function() {
+
+            it( "should return true for an existing command", function() {
+                // 'echo' is available on all platforms
+                expect( commandExists( "echo" ) ).toBeTrue();
+            } );
+
+            it( "should return false for a non-existent command", function() {
+                expect( commandExists( "nonexistent_command_xyzzy_12345" ) ).toBeFalse();
+            } );
+
+        } );
+
+        // ── getShellProfileFile() ──────────────────────────────────────────────────
+
+        describe( "getShellProfileFile()", function() {
+
+            it( "should return empty string on Windows", function() {
+                if ( IS_WINDOWS ) {
+                    expect( getShellProfileFile() ).toBe( "" );
+                } else {
+                    // On non-Windows, test that it returns a non-empty path
+                    expect( len( getShellProfileFile() ) ).toBeGT( 0 );
+                }
+            } );
+
+            it( "should return a path containing the home directory on Unix", function() {
+                if ( !IS_WINDOWS ) {
+                    expect( getShellProfileFile() ).toContain( HOME_DIR );
+                }
+            } );
+
+            it( "should return a path ending in a known profile file on Unix", function() {
+                if ( !IS_WINDOWS ) {
+                    var profile = getShellProfileFile();
+                    var valid   = profile.endsWith( ".bashrc" )
+                               || profile.endsWith( ".bash_profile" )
+                               || profile.endsWith( ".zshrc" )
+                               || profile.endsWith( "config.fish" );
+                    expect( valid ).toBeTrue();
+                }
+            } );
+
+        } );
+
+    }
+
+}

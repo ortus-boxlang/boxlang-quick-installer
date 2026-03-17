@@ -1,5 +1,5 @@
 # BVM (BoxLang Version Manager) Installer for Windows
-# Description: This script installs BVM and sets up the environment on Windows.
+# Downloads the native BVM binary bundle from GitHub Releases and sets up the environment.
 # Author: BoxLang Team
 # Version: @build.version@
 # License: Apache License, Version 2.0
@@ -7,10 +7,10 @@
 # Ensure console supports UTF-8 for emojis
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$BVM_VERSION = "@build.version@"
-$BVM_HOME = if ($env:BVM_HOME) { $env:BVM_HOME } else { Join-Path $env:USERPROFILE ".bvm" }
-$INSTALLER_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
-$BVM_SCRIPT_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.ps1"
+$BVM_VERSION          = "@build.version@"
+$BVM_HOME             = if ($env:BVM_HOME) { $env:BVM_HOME } else { Join-Path $env:USERPROFILE ".bvm" }
+$GITHUB_RELEASES_URL  = "https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest/download"
+$TOOLS_ARCHIVE        = "boxlang-tools-windows-x64.zip"
 
 # Set the progress preference to silently continue to avoid cluttering the console
 $ProgressPreference = 'SilentlyContinue'
@@ -154,174 +154,47 @@ function Test-JavaVersion {
 }
 
 ###########################################################################
-# Create Wrapper Batch Files in BVM bin
-###########################################################################
-function New-WrapperScript {
-    param(
-        [string]$BinDir,
-        [string]$Name,
-        [string]$BvmCommand
-    )
-
-    $batContent = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "BVM_PS1=%BVM_HOME%\scripts\bvm.ps1"
-if not exist "%BVM_PS1%" (
-    echo Error: BVM not found. Please reinstall BVM.
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%BVM_PS1%' $BvmCommand %*"
-"@
-
-    $batPath = Join-Path $BinDir "$Name.bat"
-    Set-Content -Path $batPath -Value $batContent -Encoding ASCII
-}
-
-###########################################################################
-# Install BVM
+# Install BVM – downloads native binary bundle from GitHub Releases
 ###########################################################################
 function Install-BVM {
-    $binDir     = Join-Path $BVM_HOME "bin"
+    $binDir      = Join-Path $BVM_HOME "bin"
     $versionsDir = Join-Path $BVM_HOME "versions"
-    $cacheDir   = Join-Path $BVM_HOME "cache"
-    $scriptsDir = Join-Path $BVM_HOME "scripts"
-    $tempDir    = [System.IO.Path]::GetTempPath()
-    $zipPath    = Join-Path $tempDir "boxlang-installer.zip"
+    $cacheDir    = Join-Path $BVM_HOME "cache"
+    $tempDir     = [System.IO.Path]::GetTempPath()
+    $zipPath     = Join-Path $tempDir $TOOLS_ARCHIVE
+    $downloadUrl = "$GITHUB_RELEASES_URL/$TOOLS_ARCHIVE"
 
     # Create BVM directories
     Write-Host -ForegroundColor Blue "📁 Creating BVM directories at [$BVM_HOME]..."
-    foreach ($dir in @($binDir, $versionsDir, $cacheDir, $scriptsDir)) {
+    foreach ($dir in @($binDir, $versionsDir, $cacheDir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    # Download BoxLang installer bundle (contains all helper scripts)
-    Write-Host -ForegroundColor Blue "⬇️  Downloading BVM installer bundle from [$INSTALLER_URL]..."
+    # Download native tool binaries archive
+    Write-Host -ForegroundColor Blue "⬇️  Downloading BoxLang tools from [$downloadUrl]..."
     try {
-        Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $zipPath -ErrorAction Stop
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
     }
     catch {
-        Write-Host -ForegroundColor Red "❌ Failed to download installer bundle: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Red "❌ Failed to download tools archive: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Blue "   Check: https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest"
         return $false
     }
 
-    # Extract scripts to ~/.bvm/scripts/
-    Write-Host -ForegroundColor Blue "📦 Extracting helper scripts to [$scriptsDir]..."
+    # Extract native binaries to ~/.bvm/bin/
+    Write-Host -ForegroundColor Blue "📦 Extracting native binaries to [$binDir]..."
     try {
-        Expand-Archive -Path $zipPath -DestinationPath $scriptsDir -Force -ErrorAction Stop
+        Expand-Archive -Path $zipPath -DestinationPath $binDir -Force -ErrorAction Stop
     }
     catch {
-        Write-Host -ForegroundColor Red "❌ Failed to extract installer bundle: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Red "❌ Extraction failed: $($_.Exception.Message)"
         return $false
     }
 
-    # Download bvm.ps1 directly to ~/.bvm/scripts/
-    Write-Host -ForegroundColor Blue "⬇️  Downloading bvm.ps1 from [$BVM_SCRIPT_URL]..."
-    $bvmPs1Path = Join-Path $scriptsDir "bvm.ps1"
-    try {
-        Invoke-WebRequest -Uri $BVM_SCRIPT_URL -OutFile $bvmPs1Path -ErrorAction Stop
-    }
-    catch {
-        Write-Host -ForegroundColor Red "❌ Failed to download bvm.ps1: $($_.Exception.Message)"
-        return $false
-    }
-
-    # Create bvm.bat in bin dir (main entry point)
-    Write-Host -ForegroundColor Blue "🔗 Creating BVM entry point scripts in [$binDir]..."
-    $bvmBatContent = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "BVM_PS1=%BVM_HOME%\scripts\bvm.ps1"
-if not exist "%BVM_PS1%" (
-    echo Error: BVM script not found at %BVM_PS1%
-    echo Please reinstall BVM using: iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1 ^| iex
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%BVM_PS1%'" -- %*
-"@
-    Set-Content -Path (Join-Path $binDir "bvm.bat") -Value $bvmBatContent -Encoding ASCII
-
-    # Create direct bvm.ps1 wrapper in bin (for PS users who call bvm.ps1 directly)
-    $bvmPs1Wrapper = @"
-# BVM Wrapper - redirects to the actual bvm.ps1
-`$BvmHome = if (`$env:BVM_HOME) { `$env:BVM_HOME } else { Join-Path `$env:USERPROFILE ".bvm" }
-`$BvmScript = Join-Path `$BvmHome "scripts\bvm.ps1"
-if (-not (Test-Path `$BvmScript)) {
-    Write-Host -ForegroundColor Red "Error: BVM script not found at `$BvmScript"
-    Write-Host -ForegroundColor Blue "Please reinstall BVM using: iwr -useb https://install-bvm.boxlang.io | iex"
-    exit 1
-}
-& `$BvmScript @args
-"@
-    Set-Content -Path (Join-Path $binDir "bvm.ps1") -Value $bvmPs1Wrapper -Encoding UTF8
-
-    # Create convenience wrapper batch files for direct tool access
-    Write-Host -ForegroundColor Blue "🔗 Creating convenience wrapper scripts..."
-
-    # boxlang.bat / bx.bat - run BoxLang via BVM
-    $boxlangBat = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "BVM_PS1=%BVM_HOME%\scripts\bvm.ps1"
-if not exist "%BVM_PS1%" (
-    echo Error: BVM not found. Please reinstall BVM.
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%BVM_PS1%' exec %*"
-"@
-    Set-Content -Path (Join-Path $binDir "boxlang.bat") -Value $boxlangBat -Encoding ASCII
-    Set-Content -Path (Join-Path $binDir "bx.bat") -Value $boxlangBat -Encoding ASCII
-
-    # boxlang-miniserver.bat / bx-miniserver.bat - run MiniServer via BVM
-    $miniServerBat = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "BVM_PS1=%BVM_HOME%\scripts\bvm.ps1"
-if not exist "%BVM_PS1%" (
-    echo Error: BVM not found. Please reinstall BVM.
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%BVM_PS1%' miniserver %*"
-"@
-    Set-Content -Path (Join-Path $binDir "boxlang-miniserver.bat") -Value $miniServerBat -Encoding ASCII
-    Set-Content -Path (Join-Path $binDir "bx-miniserver.bat") -Value $miniServerBat -Encoding ASCII
-
-    # install-bx-module.bat - link to helper script
-    $installModuleBat = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "PS1_SCRIPT=%BVM_HOME%\scripts\install-bx-module.ps1"
-if not exist "%PS1_SCRIPT%" (
-    echo Error: install-bx-module.ps1 not found. Please reinstall BVM.
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PS1_SCRIPT%' %*"
-"@
-    Set-Content -Path (Join-Path $binDir "install-bx-module.bat") -Value $installModuleBat -Encoding ASCII
-
-    # install-bvm.bat - self-updater
-    $installBvmBat = @"
-@echo off
-setlocal
-if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
-set "PS1_SCRIPT=%BVM_HOME%\scripts\install-bvm.ps1"
-if not exist "%PS1_SCRIPT%" (
-    echo Error: install-bvm.ps1 not found. Please reinstall BVM.
-    exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PS1_SCRIPT%' %*"
-"@
-    Set-Content -Path (Join-Path $binDir "install-bvm.bat") -Value $installBvmBat -Encoding ASCII
-
-    # Clean up temp zip
+    # Clean up temp archive
     Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
 
-    Write-Host -ForegroundColor Green "✅ BVM scripts and wrappers installed to [$BVM_HOME]"
+    Write-Host -ForegroundColor Green "✅ BVM and tools installed to [$BVM_HOME\bin]"
     return $true
 }
 
@@ -374,7 +247,7 @@ Write-Host -ForegroundColor Blue "━━━━━━━━━━━━━━━�
 Write-Host ""
 
 # Check if already installed (unless force)
-if ((Test-Path (Join-Path $BVM_HOME "bin\bvm.bat")) -and -not $FORCE_INSTALL) {
+if ((Test-Path (Join-Path $BVM_HOME "bin\bvm.exe")) -and -not $FORCE_INSTALL) {
     Write-Host -ForegroundColor Yellow "⚠️  BVM is already installed at [$BVM_HOME]"
     Write-Host -ForegroundColor Blue "💡 Use --force to reinstall, or run 'bvm check-update' to update."
     exit 0

@@ -1,0 +1,96 @@
+// BoxLang Site Installer (install-bx-site)
+// Sets up a BoxLang miniserver web application.
+// Compiled to a native platform binary via MatchBox.
+// Author: BoxLang Team
+// Version: @build.version@
+// License: Apache License, Version 2.0
+
+include "helpers/helpers.bxs";
+
+INSTALLER_VER = "@build.version@";
+
+// ─── Defaults ────────────────────────────────────────────────────────────────
+DEFAULT_SITE_NAME   = "default";
+DEFAULT_PORT        = "8080";
+DEFAULT_HOST        = "localhost";
+DEFAULT_REWRITES    = "yes";
+DEFAULT_MIN_MEMORY  = "512m";
+DEFAULT_MAX_MEMORY  = "512m";
+
+// ─── CLI Argument Parsing ────────────────────────────────────────────────────
+var cli  = cligetargs();
+var args = cli.positionals;
+var opts = cli.options;
+
+// ─── Help ───────────────────────────────────────────────────────────────────
+function showHelp() {
+    printBanner( "BoxLang® Site Installer  v" & INSTALLER_VER );
+    println( "" );
+    printHeader( "Usage:" );
+    println( "  install-bx-site [--name <siteName>] [--port <port>] [--host <host>] [--flags]" );
+    println( "" );
+    printHeader( "Options:" );
+    println( "  --name <name>      Site name (default: " & DEFAULT_SITE_NAME & ")" );
+    println( "  --port <port>      Listening port (default: " & DEFAULT_PORT & ")" );
+    println( "  --host <host>      Binding host (default: " & DEFAULT_HOST & ")" );
+    println( "  --no-rewrites      Disable URL rewrites" );
+    println( "  --min-memory <mb>  JVM minimum heap (default: " & DEFAULT_MIN_MEMORY & ")" );
+    println( "  --max-memory <mb>  JVM maximum heap (default: " & DEFAULT_MAX_MEMORY & ")" );
+    println( "  --help, -h         Show this help message" );
+    println( "" );
+    printHeader( "Examples:" );
+    println( "  install-bx-site" );
+    println( "  install-bx-site --name myapp --port 9000" );
+    println( "" );
+}
+
+// ─── Site Setup ──────────────────────────────────────────────────────────────
+function setupSite( siteName, port, host, rewrites, minMem, maxMem ) {
+    printHeader( "Setting up BoxLang site: " & siteName );
+
+    var webRoot    = expandPath( "./" );
+    var configDir  = webRoot & ".boxlang";
+
+    if ( !directoryExists( configDir ) ) directoryCreate( configDir );
+
+    // Write miniserver config
+    var config = {
+        "host"               : host,
+        "port"               : val( port ),
+        "webroot"            : webRoot,
+        "debug"              : false,
+        "rewritesEnabled"    : rewrites,
+        "jvmArgs"            : [ "-Xms" & minMem, "-Xmx" & maxMem ]
+    };
+    fileWrite( configDir & SLASH & "server.json", serializeJSON( config, true ) );
+    printSuccess( "Server config written to " & configDir & "/server.json" );
+
+    // Create index file if none exists
+    var indexFile = webRoot & "index.bxm";
+    if ( !fileExists( indexFile ) && !fileExists( webRoot & "index.cfm" ) ) {
+        fileWrite( indexFile, "<bx:output>Hello from BoxLang® MiniServer! 🥊</bx:output>" & chr(10) );
+        printSuccess( "Created index.bxm" );
+    }
+
+    printLine();
+    printSuccess( "Site '" & siteName & "' configured!" );
+    println( "" );
+    println( "Start your site:" );
+    println( GREEN & "  boxlang-miniserver --port " & port & " --host " & host & NORMAL );
+    println( "" );
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+if ( opts.keyExists( "help" ) || opts.keyExists( "h" ) ) {
+    showHelp();
+    cliexit( 0 );
+}
+
+var siteName = opts.name    ?: DEFAULT_SITE_NAME;
+var port     = opts.port    ?: DEFAULT_PORT;
+var host     = opts.host    ?: DEFAULT_HOST;
+var rewrites = !opts.keyExists( "no-rewrites" );
+var minMem   = opts[ "min-memory" ] ?: DEFAULT_MIN_MEMORY;
+var maxMem   = opts[ "max-memory" ] ?: DEFAULT_MAX_MEMORY;
+
+setupSite( siteName, port, host, rewrites, minMem, maxMem );

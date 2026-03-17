@@ -146,52 +146,43 @@ main() {
     log_info "Creating build directories..."
     mkdir -p build .tmp
 
-    # Copy source files to build directory
-    log_info "Copying source files..."
-    if ! cp -r src/* build/; then
-        log_error "Failed to copy source files"
-        exit 1
-    fi
+    # Copy only the bootstrap installer scripts (tool binaries are built by MatchBox in CI)
+    log_info "Copying bootstrap installer scripts..."
+    cp -v src/install-bvm.sh  build/install-bvm.sh
+    cp -v src/install-bvm.ps1 build/install-bvm.ps1
+    cp -v src/install-bvm.bat build/install-bvm.bat
 
     # Copy additional files
     log_info "Copying additional files..."
     cp -v changelog.md build/changelog.md
     cp -v version.json build/version.json
 
-	local INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer"
-    # If snapshot build, append prefix to URL in the following files
-	# build/install-boxlang.sh
-	# build/install-boxlang.ps1
-	# build/install-bvm.sh
+    local GITHUB_RELEASES_URL="https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest/download"
+    # If snapshot build, point install-bvm scripts at the snapshot pre-release tag
     if [[ "${1:-}" == "--snapshot" ]]; then
-        log_info "Snapshot build detected, adding [/snapshot] to installer URL..."
+        local SNAPSHOT_URL="https://github.com/ortus-boxlang/boxlang-quick-installer/releases/download/snapshot/download"
+        log_info "Snapshot build detected, pointing to snapshot releases URL..."
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS requires empty string after -i
-            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
-            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
-            sed -i "" "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+            sed -i "" "s|${GITHUB_RELEASES_URL}|${SNAPSHOT_URL}|g" build/install-bvm.sh
+            sed -i "" "s|${GITHUB_RELEASES_URL}|${SNAPSHOT_URL}|g" build/install-bvm.ps1
         else
-            # Linux doesn't use empty string after -i
-            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.sh
-            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-boxlang.ps1
-            sed -i "s|${INSTALLER_URL}|${INSTALLER_URL}/snapshot|g" build/install-bvm.sh
+            sed -i "s|${GITHUB_RELEASES_URL}|${SNAPSHOT_URL}|g" build/install-bvm.sh
+            sed -i "s|${GITHUB_RELEASES_URL}|${SNAPSHOT_URL}|g" build/install-bvm.ps1
         fi
     else
-		log_info "Standard build detected, using default installer URL"
+        log_info "Standard build detected, using default GitHub releases URL"
     fi
 
-	log_info "Replacing @build.version@ to [$version]"
-	if [[ "$OSTYPE" == "darwin"* ]]; then
-		# macOS requires empty string after -i
-		sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
-		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.sh
-		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.ps1
-	else
-		# Linux doesn't use empty string after -i
-		sed -i "s|@build.version@|${version}|g" build/bvm.sh
-		sed -i "s|@build.version@|${version}|g" build/install-boxlang.sh
-		sed -i "s|@build.version@|${version}|g" build/install-boxlang.ps1
-	fi
+    log_info "Replacing @build.version@ to [$version]"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i "" "s|@build.version@|${version}|g" build/install-bvm.sh
+        sed -i "" "s|@build.version@|${version}|g" build/install-bvm.ps1
+        sed -i "" "s|@build.version@|${version}|g" build/install-bvm.bat
+    else
+        sed -i "s|@build.version@|${version}|g" build/install-bvm.sh
+        sed -i "s|@build.version@|${version}|g" build/install-bvm.ps1
+        sed -i "s|@build.version@|${version}|g" build/install-bvm.bat
+    fi
 
     # Generate checksums (excluding checksum files themselves)
     generate_checksums "build" ".tmp"
@@ -230,6 +221,8 @@ main() {
     echo "  Archive: boxlang-installer.zip ($zip_size)"
     echo "  Files: $file_count"
     echo "  Location: $(pwd)/build/"
+    echo "  Contents: install-bvm.sh, install-bvm.ps1, install-bvm.bat"
+    echo "  Note: Tool binaries (bvm, install-boxlang, etc.) are compiled by MatchBox in CI"
     echo
     echo "🔐 Checksums generated:"
     echo "  MD5: boxlang-installer.md5"

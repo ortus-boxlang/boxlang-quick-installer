@@ -36,3 +36,5 @@ src/main/java/ortus/boxlang/web/www/testbox/
 
 # JDBC artifacts
 derby.log
+build.sh
+testbox/

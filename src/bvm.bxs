@@ -1,0 +1,282 @@
+// BoxLang Version Manager (BVM)
+// Manages multiple BoxLang installations: install, switch, list, uninstall.
+// Compiled to a native platform binary via MatchBox.
+// Author: BoxLang Team
+// Version: @build.version@
+// License: Apache License, Version 2.0
+
+include "helpers/helpers.bxs";
+
+BVM_APP_VERSION = "@build.version@";
+
+// ─── URL Configuration ───────────────────────────────────────────────────────
+BX_BASE_URL           = "https://downloads.ortussolutions.com/ortussolutions/boxlang";
+BX_MINISERVER_URL     = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver";
+BX_VERSION_PROPS_URL  = BX_BASE_URL & "/version-{channel}.properties";
+
+// ─── Path Setup ──────────────────────────────────────────────────────────────
+bvmHome     = getsystemsetting( "BVM_HOME", HOME_DIR & SLASH & ".bvm" );
+bvmVersions = bvmHome & SLASH & "versions";
+bvmCache    = bvmHome & SLASH & "cache";
+bvmBin      = bvmHome & SLASH & "bin";
+bvmCurrent  = bvmHome & SLASH & "current";
+bvmConfig   = bvmHome & SLASH & "config.json";
+
+// Ensure base directories exist
+if ( !directoryExists( bvmHome ) )     directoryCreate( bvmHome );
+if ( !directoryExists( bvmVersions ) ) directoryCreate( bvmVersions );
+if ( !directoryExists( bvmCache ) )    directoryCreate( bvmCache );
+if ( !directoryExists( bvmBin ) )      directoryCreate( bvmBin );
+
+// ─── Internal Helpers ────────────────────────────────────────────────────────
+function resolveVersion( version ) {
+    if ( version == "latest" || version == "snapshot" ) {
+        printInfo( "Resolving " & version & " version..." );
+        var propsUrl = BX_VERSION_PROPS_URL.replace( "{channel}", version );
+        var resp     = http( propsUrl );
+        if ( resp.status != 200 ) {
+            printError( "Could not fetch version info from: " & propsUrl );
+            return "";
+        }
+        var props    = loadProperties( resp.file_content );
+        var resolved = extractSemanticVersion( props.version ?: "" );
+        if ( len( resolved ) ) printInfo( "Resolved " & version & " → " & resolved );
+        return resolved;
+    }
+    return version;
+}
+
+function getCurrentVersionName() {
+    if ( !fileExists( bvmCurrent ) ) return "";
+    var info = fileInfo( bvmCurrent );
+    if ( info.is_symlink && len( info.target ?: "" ) ) {
+        return listLast( info.target, IS_WINDOWS ? "\" : "/" );
+    }
+    return "";
+}
+
+// ─── Commands ────────────────────────────────────────────────────────────────
+function showHelp() {
+    printBanner( "BVM – BoxLang Version Manager  v" & BVM_APP_VERSION );
+    println( "" );
+    printHeader( "Usage:  bvm <command> [arguments] [--flags]" );
+    println( "" );
+    printHeader( "Commands:" );
+    println( "  install <version>   Install a version (latest, snapshot, or X.Y.Z)" );
+    println( "  use <version>       Switch active version (or pick interactively)" );
+    println( "  list  (ls)          List installed versions" );
+    println( "  current             Show currently active version" );
+    println( "  uninstall <ver>     Remove an installed version" );
+    println( "  exec [args...]      Run boxlang with the current version" );
+    println( "  miniserver [args..] Run boxlang-miniserver with the current version" );
+    println( "  version             Show BVM version" );
+    println( "  help                Show this help message" );
+    println( "" );
+    printHeader( "Flags:" );
+    println( "  --force   Force re-download even if already installed" );
+    println( "" );
+    printHeader( "Examples:" );
+    println( "  bvm install latest" );
+    println( "  bvm install 2.1.0" );
+    println( "  bvm use 2.1.0" );
+    println( "  bvm list" );
+    println( "" );
+}
+
+function installVersion( version, force=false ) {
+    var actualVersion = resolveVersion( version );
+    if ( !len( actualVersion ) ) {
+        printError( "Could not resolve version: " & version );
+        cliexit( 1 );
+    }
+
+    var versionDir = bvmVersions & SLASH & actualVersion;
+    if ( directoryExists( versionDir ) && !force ) {
+        printWarning( "BoxLang " & actualVersion & " is already installed. Use --force to re-download." );
+        return;
+    }
+
+    var bxZipUrl = ( version == "snapshot" || version == "latest" )
+        ? BX_BASE_URL & "/boxlang-" & version & ".zip"
+        : BX_BASE_URL & "/" & actualVersion & "/boxlang-" & actualVersion & ".zip";
+
+    var msZipUrl = ( version == "snapshot" || version == "latest" )
+        ? BX_MINISERVER_URL & "/boxlang-miniserver-" & version & ".zip"
+        : BX_MINISERVER_URL & "/" & actualVersion & "/boxlang-miniserver-" & actualVersion & ".zip";
+
+    var bxZip = bvmCache & SLASH & "boxlang-" & actualVersion & ".zip";
+    var msZip = bvmCache & SLASH & "boxlang-miniserver-" & actualVersion & ".zip";
+
+    printHeader( "Installing BoxLang " & actualVersion & "..." );
+
+    download( bxZipUrl, bxZip );
+    download( msZipUrl, msZip );
+
+    if ( !directoryExists( versionDir ) ) directoryCreate( versionDir );
+    printInfo( "Extracting to " & versionDir & "..." );
+    extract( bxZip, versionDir );
+    extract( msZip, versionDir );
+
+    if ( !IS_WINDOWS ) {
+        var binDir = versionDir & "/bin";
+        if ( directoryExists( binDir ) ) {
+            for ( var f in directoryList( binDir ) ) fileSetExecutable( f );
+        }
+    }
+
+    fileDelete( bxZip );
+    fileDelete( msZip );
+
+    printSuccess( "BoxLang " & actualVersion & " installed!" );
+    printInfo( "Activate with: bvm use " & actualVersion );
+}
+
+function useVersion( version ) {
+    if ( !len( trim( version ) ) ) {
+        if ( fileExists( ".bvmrc" ) ) {
+            version = trim( fileRead( ".bvmrc" ) );
+            printInfo( "Using version from .bvmrc: " & version );
+        } else {
+            var installed = directoryList( bvmVersions, false, "name" );
+            if ( !arrayLen( installed ) ) {
+                printWarning( "No BoxLang versions installed. Run 'bvm install latest' first." );
+                return;
+            }
+            version = cliselect( "Pick a BoxLang version", installed );
+            if ( !len( version ) ) return;
+        }
+    }
+
+    if ( version == "latest" || version == "snapshot" ) {
+        var resolved = resolveVersion( version );
+        if ( !len( resolved ) ) {
+            printError( "Could not resolve alias '" & version & "'." );
+            cliexit( 1 );
+        }
+        version = resolved;
+    }
+
+    var versionDir = bvmVersions & SLASH & version;
+    if ( !directoryExists( versionDir ) ) {
+        printError( "BoxLang " & version & " is not installed. Run: bvm install " & version );
+        cliexit( 1 );
+    }
+
+    if ( fileExists( bvmCurrent ) ) fileDelete( bvmCurrent );
+    fileCreateSymlink( bvmCurrent, versionDir );
+    printSuccess( "Now using BoxLang " & version );
+}
+
+function listVersions() {
+    printHeader( "Installed BoxLang versions:" );
+    var installed      = directoryList( bvmVersions, false, "name" );
+    var currentVersion = getCurrentVersionName();
+
+    if ( !arrayLen( installed ) ) {
+        printWarning( "No versions installed. Run: bvm install latest" );
+        return;
+    }
+    for ( var vName in installed ) {
+        println( vName == currentVersion
+            ? GREEN & "  ▶  " & vName & "  (current)" & NORMAL
+            : "     " & vName );
+    }
+    println( "" );
+}
+
+function showCurrent() {
+    var current = getCurrentVersionName();
+    if ( len( current ) ) {
+        printInfo( "Current BoxLang version: " & GREEN & current & NORMAL );
+    } else {
+        printWarning( "No version currently active. Run: bvm use <version>" );
+    }
+}
+
+function uninstallVersion( version ) {
+    if ( !len( trim( version ) ) ) {
+        printError( "Specify a version: bvm uninstall <version>" );
+        cliexit( 1 );
+    }
+    var versionDir = bvmVersions & SLASH & version;
+    if ( !directoryExists( versionDir ) ) {
+        printWarning( "BoxLang " & version & " is not installed." );
+        return;
+    }
+    if ( version == getCurrentVersionName() && fileExists( bvmCurrent ) ) {
+        fileDelete( bvmCurrent );
+        printWarning( "Deactivated current version." );
+    }
+    directoryDelete( versionDir, true );
+    printSuccess( "BoxLang " & version & " has been removed." );
+}
+
+function execCurrentVersion( execArgs, isMiniserver=false ) {
+    var current = getCurrentVersionName();
+    if ( !len( current ) ) {
+        printError( "No BoxLang version is active. Run: bvm use <version>" );
+        cliexit( 1 );
+    }
+    var binName   = isMiniserver ? "boxlang-miniserver" : "boxlang";
+    var binSuffix = IS_WINDOWS ? ".bat" : "";
+    var binPath   = bvmVersions & SLASH & current & SLASH & "bin" & SLASH & binName & binSuffix;
+    if ( !fileExists( binPath ) ) {
+        printError( "Binary not found: " & binPath );
+        cliexit( 1 );
+    }
+    var cmdParts = [ binPath ];
+    for ( var a in execArgs ) arrayAppend( cmdParts, a );
+    runCmd( cmdParts, false );
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+var cli   = cligetargs();
+var args  = cli.positionals;
+var opts  = cli.options;
+var force = opts.keyExists( "force" ) && opts.force;
+
+if ( !arrayLen( args ) ) {
+    showHelp();
+    cliexit( 0 );
+}
+
+var command = trim( args[ 1 ] );
+
+switch ( command ) {
+    case "install":
+        installVersion( arrayLen( args ) >= 2 ? trim( args[ 2 ] ) : "latest", force );
+        break;
+    case "use":
+        useVersion( arrayLen( args ) >= 2 ? trim( args[ 2 ] ) : "" );
+        break;
+    case "list":
+    case "ls":
+        listVersions();
+        break;
+    case "current":
+        showCurrent();
+        break;
+    case "uninstall":
+    case "remove":
+        uninstallVersion( arrayLen( args ) >= 2 ? trim( args[ 2 ] ) : "" );
+        break;
+    case "exec":
+        execCurrentVersion( args.slice( 2 ), false );
+        break;
+    case "miniserver":
+        execCurrentVersion( args.slice( 2 ), true );
+        break;
+    case "version":
+        println( "BVM version: " & BVM_APP_VERSION );
+        break;
+    case "help":
+    case "--help":
+    case "-h":
+        showHelp();
+        break;
+    default:
+        printError( "Unknown command: " & command );
+        println( "" );
+        showHelp();
+        cliexit( 1 );
+}
