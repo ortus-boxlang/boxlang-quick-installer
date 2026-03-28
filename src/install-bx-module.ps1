@@ -107,7 +107,7 @@ function Get-BeVersionFromForgebox {
 
         # Get the full entry info for this version to check for forgeboxStorage
         try {
-            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/$version" -ErrorAction Stop
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/versions/$version" -ErrorAction Stop
             if ($versionJson -and $versionJson.data) {
                 $downloadUrlTemp = $versionJson.data.downloadURL
                 if ($downloadUrlTemp -eq "forgeboxStorage") {

@@ -238,7 +238,7 @@ get_be_version_from_forgebox() {
 	fi
 
 	# Get the full entry info for this version to check for forgeboxStorage
-	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/${VERSION}")
+	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions/${VERSION}")
 	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
 		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
 		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
