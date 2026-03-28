@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Updated the `install-bx-module` scripts to support correct behavior of `be` and `snapshot` versions of modules.
+
 ## [1.27.0] - 2026-03-01
 
 ### Improvements
@@ -60,8 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added missing +x permissions to some files.
 
 ## [1.21.0] - 2025-11-07
-
-## [1.20.0] - 2025-09-25
 
 ### Added
 

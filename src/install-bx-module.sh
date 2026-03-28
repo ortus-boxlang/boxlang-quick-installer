@@ -213,6 +213,53 @@ get_latest_version_from_forgebox() {
 	DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
 }
 
+get_be_version_from_forgebox() {
+	local MODULE_NAME=${1}
+
+	printf "${YELLOW}🔍 Getting latest bleeding edge version from FORGEBOX...${NORMAL}\n"
+
+	# Store versions JSON From ForgeBox (versions only)
+	local VERSIONS_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions")
+
+	# Validate API response
+	if [ -z "$VERSIONS_JSON" ] || [ "$VERSIONS_JSON" = "null" ]; then
+		printf "${RED}❌ Error: Failed to fetch version information from FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	# Take the first (latest) version regardless of stable/pre-release status
+	# The ForgeBox API returns versions in newest-first order
+	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[0].version')
+
+	# Validate parsed data
+	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+		printf "${RED}❌ Error: No version(s) found for module '${MODULE_NAME}' in FORGEBOX${NORMAL}\n"
+		exit 1
+	fi
+
+	# Get the full entry info for this version to check for forgeboxStorage
+	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions/${VERSION}")
+	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
+		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
+			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
+		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
+			# Use the download URL from API
+			DOWNLOAD_URL_TEMP="$DOWNLOAD_URL_TEMP"
+		else
+			# Fallback: build download URL from the artifacts directly
+			DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
+		fi
+	else
+		# Fallback: build download URL from the artifacts directly
+		DOWNLOAD_URL_TEMP="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${MODULE_NAME}/${VERSION}/${MODULE_NAME}-${VERSION}.zip"
+	fi
+
+	# Return values via global variables
+	TARGET_VERSION="$VERSION"
+	DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
+}
+
 get_snapshot_version_from_forgebox() {
 	local MODULE_NAME=${1}
 
@@ -291,7 +338,11 @@ install_module() {
 		get_latest_version_from_forgebox "$TARGET_MODULE"
 		# Use the global variables set by the function
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
-	elif [ "$TARGET_VERSION" = "be" ] || [ "$TARGET_VERSION" = "snapshot" ]; then
+	elif [ "$TARGET_VERSION" = "be" ]; then
+		get_be_version_from_forgebox "$TARGET_MODULE"
+		# Use the global variables set by the function
+		local DOWNLOAD_URL="$DOWNLOAD_URL"
+	elif [ "$TARGET_VERSION" = "snapshot" ]; then
 		get_snapshot_version_from_forgebox "$TARGET_MODULE"
 		# Use the global variables set by the function
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
