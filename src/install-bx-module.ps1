@@ -80,6 +80,64 @@ function Resolve-ForgeboxStorageUrl {
     }
 }
 
+function Get-BeVersionFromForgebox {
+    param([string]$ModuleName)
+
+    Write-Host "🔍 Getting latest bleeding edge version from FORGEBOX..." -ForegroundColor Yellow
+
+    try {
+        # Store versions JSON From ForgeBox (versions only)
+        $versionsJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/versions" -ErrorAction Stop
+
+        # Validate API response
+        if (-not $versionsJson -or -not $versionsJson.data) {
+            Write-Host "❌ Error: Failed to fetch version information from FORGEBOX" -ForegroundColor Red
+            exit 1
+        }
+
+        # Take the first (latest) version regardless of stable/pre-release status
+        # The ForgeBox API returns versions in newest-first order
+        $version = $versionsJson.data | Select-Object -First 1 | Select-Object -ExpandProperty version
+
+        # Validate parsed data
+        if (-not $version) {
+            Write-Host "❌ Error: No version(s) found for module '$ModuleName' in FORGEBOX" -ForegroundColor Red
+            exit 1
+        }
+
+        # Get the full entry info for this version to check for forgeboxStorage
+        try {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/$version" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data) {
+                $downloadUrlTemp = $versionJson.data.downloadURL
+                if ($downloadUrlTemp -eq "forgeboxStorage") {
+                    $downloadUrl = Resolve-ForgeboxStorageUrl $ModuleName $version
+                } elseif ($downloadUrlTemp) {
+                    # Use the download URL from API
+                    $downloadUrl = $downloadUrlTemp
+                } else {
+                    # Fallback: build download URL from the artifacts directly
+                    $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+                }
+            } else {
+                # Fallback: build download URL from the artifacts directly
+                $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+            }
+        } catch {
+            # Fallback: build download URL from the artifacts directly
+            $downloadUrl = "https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/$ModuleName/$version/$ModuleName-$version.zip"
+        }
+
+        return @{
+            Version = $version
+            DownloadUrl = $downloadUrl
+        }
+    } catch {
+        Write-Host "❌ Error: Failed to fetch version information from FORGEBOX: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 function Get-SnapshotVersionFromForgebox {
     param([string]$ModuleName)
 
@@ -294,7 +352,11 @@ function Install-Module {
         $forgeboxResult = Get-LatestVersionFromForgebox $targetModule
         $targetVersion = $forgeboxResult.Version
         $downloadUrl = $forgeboxResult.DownloadUrl
-    } elseif ($targetVersion -eq "be" -or $targetVersion -eq "snapshot") {
+    } elseif ($targetVersion -eq "be") {
+        $forgeboxResult = Get-BeVersionFromForgebox $targetModule
+        $targetVersion = $forgeboxResult.Version
+        $downloadUrl = $forgeboxResult.DownloadUrl
+    } elseif ($targetVersion -eq "snapshot") {
         $forgeboxResult = Get-SnapshotVersionFromForgebox $targetModule
         $targetVersion = $forgeboxResult.Version
         $downloadUrl = $forgeboxResult.DownloadUrl
