@@ -53,6 +53,47 @@ ensure_bvm_dirs() {
     mkdir -p "$BVM_HOME" "$BVM_CACHE_DIR" "$BVM_VERSIONS_DIR" "$BVM_SCRIPTS_DIR"
 }
 
+# Detect Windows-like Git Bash/MSYS/Cygwin environments
+is_windows_shell() {
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Create current version link with Windows Git Bash compatibility
+create_current_link() {
+    local version_dir="$1"
+
+    # Remove existing current link/directory
+    rm -rf "$BVM_CURRENT_LINK"
+
+    # In Git Bash on Windows, prefer junctions to avoid symlink limitations
+    if is_windows_shell && command_exists powershell; then
+        local current_path="$BVM_CURRENT_LINK"
+        local target_path="$version_dir"
+
+        if command_exists cygpath; then
+            current_path=$(cygpath -w "$BVM_CURRENT_LINK")
+            target_path=$(cygpath -w "$version_dir")
+        fi
+
+        # Escape single quotes for PowerShell single-quoted strings
+        current_path="${current_path//\'/\'\'}"
+        target_path="${target_path//\'/\'\'}"
+
+        if powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Junction -Path '$current_path' -Target '$target_path' -Force | Out-Null" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    ln -s "$version_dir" "$BVM_CURRENT_LINK"
+}
+
 # Resolve version aliases (latest, snapshot) to actual installed versions
 resolve_version_alias() {
     local requested_version="$1"
@@ -640,11 +681,8 @@ use_version() {
         return 1
     fi
 
-    # Remove existing current link
-    rm -f "$BVM_CURRENT_LINK"
-
-    # Create new symlink
-    ln -s "$version_dir" "$BVM_CURRENT_LINK"
+    # Create new current link/junction
+    create_current_link "$version_dir"
 
     if [ "$version" != "$resolved_version" ]; then
         print_success "Now using BoxLang $resolved_version (resolved from '$version')"
