@@ -11,8 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.29.0] - 2026-06-02
 
-## [1.28.0] - 2026-03-28
-
 ### Fixed
 
 - Fixed `bvm use` on Windows Git Bash to reliably recreate `~/.bvm/current` as a link (including when a stale directory already exists), so `bvm current` reports the active version correctly after switching.
