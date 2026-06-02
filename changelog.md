@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-06-02
+
+## [1.28.0] - 2026-03-28
+
 ### Fixed
 
 - Fixed `bvm use` on Windows Git Bash to reliably recreate `~/.bvm/current` as a link (including when a stale directory already exists), so `bvm current` reports the active version correctly after switching.
@@ -441,7 +445,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.28.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.29.0...HEAD
+[1.29.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.28.0...v1.29.0
 [1.28.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.27.0...v1.28.0
 [1.27.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.26.0...v1.27.0
 [1.26.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.25.0...v1.26.0
