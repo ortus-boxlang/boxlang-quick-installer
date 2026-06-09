@@ -26,25 +26,39 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
 GITHUB_RELEASES_URL="https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest/download"
 
-# Helpers
-if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
-	source "$(dirname "$0")/helpers/helpers.sh"
-elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
-	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
-elif [ -f "${BVM_HOME}/scripts/helpers.sh" ]; then
-	source "${BVM_HOME}/scripts/helpers.sh"
-else
-	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
-	helpers_url="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/helpers/helpers.sh"
-	helpers_file="${TEMP_DIR}/helpers.sh"
+# ── Inline Helpers (self-contained – no external helpers.sh dependency) ───────
 
-	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
-		source "$helpers_file"
+setup_colors() {
+	if [ -t 1 ]; then
+		BLUE='\033[0;34m'; RED='\033[0;31m'; GREEN='\033[0;32m'
+		YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NORMAL='\033[0m'
 	else
-		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
-		exit 1
+		BLUE=''; RED=''; GREEN=''; YELLOW=''; CYAN=''; BOLD=''; NORMAL=''
 	fi
-fi
+}
+
+print_info()    { printf "${BLUE}ℹ️  %s${NORMAL}\n" "$1"; }
+print_error()   { printf "${RED}🔴  %s${NORMAL}\n" "$1" >&2; }
+print_success() { printf "${GREEN}✅ %s${NORMAL}\n" "$1"; }
+print_header()  { printf "${BOLD}${CYAN}%s${NORMAL}\n" "$1"; }
+
+get_shell_profile_file() {
+	local shell_name
+	shell_name="$(basename "${SHELL:-/bin/bash}")"
+	case "$shell_name" in
+		fish)
+			local fish_conf="${XDG_CONFIG_HOME:-$HOME/.config}/fish"
+			echo "${fish_conf}/config.fish" ;;
+		zsh)
+			echo "$HOME/.zshrc" ;;
+		*)
+			if [ "$(uname -s)" = "Darwin" ] && [ -f "$HOME/.bash_profile" ]; then
+				echo "$HOME/.bash_profile"
+			else
+				echo "$HOME/.bashrc"
+			fi ;;
+	esac
+}
 
 ###########################################################################
 # Platform Detection

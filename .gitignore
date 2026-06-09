@@ -38,3 +38,7 @@ src/main/java/ortus/boxlang/web/www/testbox/
 derby.log
 build.sh
 testbox/
+
+# Integration test build artifacts
+dist/
+.cache/

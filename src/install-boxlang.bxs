@@ -38,7 +38,7 @@ if ( NON_INTERACTIVE ) {
 
 // Version argument (first positional that isn't a flag)
 TARGET_VERSION = "latest";
-for ( var a in rawArgs ) {
+for ( a in rawArgs ) {
     if ( !a.startsWith( "--" ) && !a.startsWith( "-" ) ) {
         TARGET_VERSION = trim( a );
         break;
@@ -106,7 +106,7 @@ function getCurrentVersion() {
     var bxHome       = getsystemsetting( "BOXLANG_INSTALL_HOME", "" );
     if ( len( bxHome ) ) arrayAppend( bxCandidates, bxHome & "/bin/boxlang" );
 
-    for ( var candidate in bxCandidates ) {
+    for ( candidate in bxCandidates ) {
         var result = runCmd( [ candidate, "--version" ], true );
         if ( result.exitCode == 0 ) {
             var ver = extractSemanticVersion( result.output );
@@ -150,7 +150,7 @@ function removePreviousInstall( paths ) {
     printWarning( "Removing previous BoxLang installation at " & paths.home & "..." );
     if ( directoryExists( paths.home ) ) directoryDelete( paths.home, true );
     // Remove symlinks
-    for ( var link in [ "boxlang", "bx", "boxlang-miniserver", "bx-miniserver",
+    for ( link in [ "boxlang", "bx", "boxlang-miniserver", "bx-miniserver",
                          "install-boxlang", "install-bx-module", "install-bx-site" ] ) {
         var l = paths.sysbin & SLASH & link;
         if ( fileExists( l ) ) fileDelete( l );
@@ -186,7 +186,7 @@ function installToolBinaries( destDir ) {
 
     // Make all binaries executable
     if ( !IS_WINDOWS ) {
-        for ( var f in directoryList( destDir ) ) fileSetExecutable( f );
+        for ( f in directoryList( destDir ) ) fileSetExecutable( f );
     }
 }
 
@@ -230,7 +230,7 @@ function createSymlinks( paths ) {
     createLink( paths.sysbin & SLASH & "boxlang-miniserver", paths.sysbin & SLASH & "bx-miniserver" );
 
     // Tool binaries (already in paths.bin from installToolBinaries)
-    for ( var tool in [ "install-boxlang", "install-bx-module", "install-bx-site", "install-bvm" ] ) {
+    for ( tool in [ "install-boxlang", "install-bx-module", "install-bx-site", "install-bvm" ] ) {
         var src = paths.bin & SLASH & tool & sfx;
         if ( fileExists( src ) ) {
             createLink( src, paths.sysbin & SLASH & tool );
@@ -239,7 +239,7 @@ function createSymlinks( paths ) {
 
     // Make everything executable on Unix
     if ( !IS_WINDOWS ) {
-        for ( var f in directoryList( paths.bin ) ) fileSetExecutable( f );
+        for ( f in directoryList( paths.bin ) ) fileSetExecutable( f );
     }
 }
 
@@ -387,7 +387,7 @@ function runInstall() {
     }
 
     // Create directory structure
-    for ( var d in [ paths.home, paths.bin, paths.lib ] ) {
+    for ( d in [ paths.home, paths.bin, paths.lib ] ) {
         if ( !directoryExists( d ) ) directoryCreate( d );
     }
 

@@ -23,10 +23,10 @@ BLACK     = ESC & "[30m";
 // ─── Platform Detection ──────────────────────────────────────────────────────
 _OS_RAW    = getsystemsetting( "os.name", "linux" ).lCase();
 _ARCH_RAW  = getsystemsetting( "os.arch", "x86_64" ).lCase();
-IS_WINDOWS = _OS_RAW.contains( "windows" );
-IS_MAC     = _OS_RAW.contains( "mac" );
+IS_WINDOWS = _OS_RAW contains "windows";
+IS_MAC     = _OS_RAW contains "mac";
 IS_LINUX   = !IS_WINDOWS && !IS_MAC;
-IS_ARM     = _ARCH_RAW.contains( "aarch64" ) || _ARCH_RAW.contains( "arm64" );
+IS_ARM     = _ARCH_RAW contains "aarch64" || _ARCH_RAW contains "arm64";
 SLASH      = IS_WINDOWS ? "\" : "/";
 HOME_DIR   = getsystemsetting( "user.home", getsystemsetting( "HOME", "~" ) );
 TEMP_DIR   = getsystemsetting( "java.io.tmpdir", IS_WINDOWS ? "C:\Temp" : "/tmp" );
@@ -80,7 +80,7 @@ function runCmd( command, ignoreError=false ) {
                  variable="output"
                  errorVariable="errOutput"
                  timeout=120;
-    } catch ( any e ) {
+    } catch ( e ) {
         if ( !ignoreError ) {
             printError( "Command failed: " & ( isArray( command ) ? arrayToList( command, " " ) : command ) );
             printError( e.message );
@@ -191,7 +191,7 @@ function addToPath( directory, label="BoxLang" ) {
     var profileFile = getShellProfileFile();
     var shellName   = listLast( getsystemsetting( "SHELL", "/bin/bash" ), "/" );
 
-    if ( fileExists( profileFile ) && fileRead( profileFile ).contains( directory ) ) {
+    if ( fileExists( profileFile ) && fileRead( profileFile ) contains directory ) {
         printSuccess( directory & " is already in PATH (" & profileFile & ")" );
         return;
     }
@@ -261,7 +261,7 @@ function checkJavaVersion( autoInstall=false ) {
         arrayAppend( candidates, "C:\Program Files\Eclipse Adoptium\jdk-21-hotspot\bin\java.exe" );
     }
 
-    for ( var candidate in candidates ) {
+    for ( candidate in candidates ) {
         var result = runCmd( [ candidate, "-version" ], true );
         if ( result.exitCode != 0 ) continue;
 
@@ -351,7 +351,7 @@ function installJava() {
         printSuccess( "Java 21 installed to " & installDir );
         return true;
 
-    } catch ( any e ) {
+    } catch ( e ) {
         printError( "Failed to install Java: " & e.message );
         return false;
     }
@@ -368,7 +368,7 @@ function installSystemDeps( deps ) {
             printError( "Homebrew is required on macOS. Install it from https://brew.sh" );
             return false;
         }
-        for ( var dep in deps ) {
+        for ( dep in deps ) {
             printInfo( "Installing " & dep & " via Homebrew..." );
             runCmd( [ "brew", "install", dep ] );
         }

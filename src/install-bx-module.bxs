@@ -68,7 +68,7 @@ function parseModuleList( rawArgs ) {
 
     var parts   = combined.split( "\s+" );
     var modules = [];
-    for ( var p in parts ) {
+    for ( p in parts ) {
         p = trim( p );
         if ( len( p ) && !p.startsWith( "--" ) ) arrayAppend( modules, p );
     }
@@ -127,8 +127,8 @@ function getSnapshotVersionFromForgeBox( moduleName ) {
     var data     = deserializeJSON( resp.file_content );
     var versions = data.data ?: [];
     var version  = "";
-    for ( var v in versions ) {
-        if ( v.version.contains( "-snapshot" ) ) {
+    for ( v in versions ) {
+        if ( v.version contains "-snapshot" ) {
             version = v.version;
             break;
         }
@@ -179,7 +179,7 @@ function listModules() {
         return;
     }
 
-    for ( var modName in moduleList ) {
+    for ( modName in moduleList ) {
         var boxJson = MODULES_HOME & SLASH & modName & SLASH & "box.json";
         if ( fileExists( boxJson ) ) {
             var meta    = deserializeJSON( fileRead( boxJson ) );
@@ -197,7 +197,7 @@ function installModule( moduleSpec ) {
     var moduleName    = moduleSpec;
     var targetVersion = "";
 
-    if ( moduleSpec.contains( "@" ) ) {
+    if ( moduleSpec contains "@" ) {
         moduleName    = listFirst( moduleSpec, "@" ).lCase();
         targetVersion = listLast(  moduleSpec, "@" );
     } else {
@@ -232,7 +232,11 @@ function installModule( moduleSpec ) {
     download( info.downloadUrl, tmpFile );
 
     // Record install with ForgeBox (best-effort, non-fatal)
-    try { http( FORGEBOX_API & "/install/" & moduleName & "/" & info.version ); } catch ( any e ) {}
+    try {
+        http( FORGEBOX_API & "/install/" & moduleName & "/" & info.version );
+    } catch ( e ) {
+        // Silently ignore - install recording is non-critical
+    }
 
     // Extract
     printInfo( "Extracting..." );
@@ -271,7 +275,7 @@ function createModuleExecutables( moduleDir, moduleName ) {
 
     // Multiple executables (struct of name → content)
     if ( bxMeta.keyExists( "executables" ) && isStruct( bxMeta.executables ) ) {
-        for ( var execName in bxMeta.executables ) {
+        for ( execName in bxMeta.executables ) {
             writeExecWrapper( binDir, execName, bxMeta.executables[ execName ] );
         }
     }
@@ -281,9 +285,9 @@ function writeExecWrapper( binDir, execName, execContent ) {
     printInfo( "Creating executable: " & execName );
     var scriptPath = binDir & SLASH & execName;
     if ( IS_WINDOWS ) {
-        fileWrite( scriptPath & ".bat", "@echo off" & chr(10) & "boxlang " & execContent & " %*" );
+        fileWrite( scriptPath & ".bat", "@echo off" & char(10) & "boxlang " & execContent & " %*" );
     } else {
-        fileWrite( scriptPath, "#!/bin/sh" & chr(10) & "exec boxlang " & execContent & " ""$@""" );
+        fileWrite( scriptPath, char(35) & "!/bin/sh" & char(10) & "exec boxlang " & execContent & " " & char(34) & "$@" & char(34) );
         fileSetExecutable( scriptPath );
     }
 }
@@ -338,7 +342,7 @@ if ( REMOVE_MODE ) {
         showHelp();
         cliexit( 1 );
     }
-    for ( var m in toRemove ) removeModule( m );
+    for ( m in toRemove ) removeModule( m );
     cliexit( 0 );
 }
 
@@ -349,4 +353,4 @@ if ( !arrayLen( toInstall ) ) {
     showHelp();
     cliexit( 1 );
 }
-for ( var m in toInstall ) installModule( m );
+for ( m in toInstall ) installModule( m );

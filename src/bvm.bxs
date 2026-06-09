@@ -61,25 +61,39 @@ function showHelp() {
     println( "" );
     printHeader( "Usage:  bvm <command> [arguments] [--flags]" );
     println( "" );
-    printHeader( "Commands:" );
-    println( "  install <version>   Install a version (latest, snapshot, or X.Y.Z)" );
-    println( "  use <version>       Switch active version (or pick interactively)" );
-    println( "  list  (ls)          List installed versions" );
-    println( "  current             Show currently active version" );
-    println( "  uninstall <ver>     Remove an installed version" );
-    println( "  exec [args...]      Run boxlang with the current version" );
-    println( "  miniserver [args..] Run boxlang-miniserver with the current version" );
-    println( "  version             Show BVM version" );
-    println( "  help                Show this help message" );
+    printHeader( "Version Management:" );
+    println( "  install <version>     Install a version (latest, snapshot, or X.Y.Z)" );
+    println( "  use <version>         Switch active version (or pick interactively)" );
+    println( "  list  (ls)            List installed versions" );
+    println( "  current               Show currently active version" );
+    println( "  uninstall <ver>       Remove an installed version" );
+    println( "  exec [args...]        Run boxlang with the current version" );
+    println( "  miniserver [args..]   Run boxlang-miniserver with the current version" );
+    println( "" );
+    printHeader( "Modules:" );
+    println( "  module install <mod>  Install a module from ForgeBox" );
+    println( "  module remove <mod>   Remove an installed module" );
+    println( "  module list           List installed modules" );
+    println( "" );
+    printHeader( "Sites:" );
+    println( "  site create           Scaffold a new BoxLang site" );
+    println( "" );
+    printHeader( "System:" );
+    println( "  setup                 System-wide BoxLang install (symlinks, PATH)" );
+    println( "" );
+    printHeader( "Other:" );
+    println( "  version               Show BVM version" );
+    println( "  help                  Show this help message" );
     println( "" );
     printHeader( "Flags:" );
     println( "  --force   Force re-download even if already installed" );
     println( "" );
     printHeader( "Examples:" );
     println( "  bvm install latest" );
-    println( "  bvm install 2.1.0" );
     println( "  bvm use 2.1.0" );
-    println( "  bvm list" );
+    println( "  bvm module install bx-orm" );
+    println( "  bvm site create --name myapp --port 9000" );
+    println( "  bvm setup" );
     println( "" );
 }
 
@@ -120,7 +134,7 @@ function installVersion( version, force=false ) {
     if ( !IS_WINDOWS ) {
         var binDir = versionDir & "/bin";
         if ( directoryExists( binDir ) ) {
-            for ( var f in directoryList( binDir ) ) fileSetExecutable( f );
+            for ( f in directoryList( binDir ) ) fileSetExecutable( f );
         }
     }
 
@@ -176,7 +190,7 @@ function listVersions() {
         printWarning( "No versions installed. Run: bvm install latest" );
         return;
     }
-    for ( var vName in installed ) {
+    for ( vName in installed ) {
         println( vName == currentVersion
             ? GREEN & "  ▶  " & vName & "  (current)" & NORMAL
             : "     " & vName );
@@ -225,8 +239,296 @@ function execCurrentVersion( execArgs, isMiniserver=false ) {
         cliexit( 1 );
     }
     var cmdParts = [ binPath ];
-    for ( var a in execArgs ) arrayAppend( cmdParts, a );
+    for ( a in execArgs ) arrayAppend( cmdParts, a );
     runCmd( cmdParts, false );
+}
+
+// ─── Module Subcommands ──────────────────────────────────────────────────────
+FORGEBOX_API = "https://forgebox.io/api/v1";
+
+function getModulesHome() {
+    var bxHome = getsystemsetting( "BOXLANG_HOME", HOME_DIR & SLASH & ".boxlang" );
+    return bxHome & SLASH & "modules";
+}
+
+function moduleInstall( moduleSpec ) {
+    if ( !len( trim( moduleSpec ) ) ) {
+        printError( "Specify a module: bvm module install <module>[@version]" );
+        cliexit( 1 );
+    }
+
+    var moduleName    = moduleSpec;
+    var targetVersion = "";
+
+    if ( moduleSpec contains "@" ) {
+        moduleName    = listFirst( moduleSpec, "@" ).lCase();
+        targetVersion = listLast( moduleSpec, "@" );
+    } else {
+        moduleName = moduleSpec.lCase();
+    }
+
+    printHeader( "Installing module: " & moduleName & ( len( targetVersion ) ? "@" & targetVersion : "" ) );
+
+    var info = {};
+    if ( !len( targetVersion ) ) {
+        info = getLatestVersionFromForgeBox( moduleName );
+    } else if ( targetVersion == "be" || targetVersion == "snapshot" ) {
+        info = getSnapshotVersionFromForgeBox( moduleName );
+    } else {
+        info = getSpecificVersionFromForgeBox( moduleName, targetVersion );
+    }
+
+    printInfo( "Version: " & info.version & "  |  URL: " & info.downloadUrl );
+
+    var modulesHome = getModulesHome();
+    var destination = modulesHome & SLASH & moduleName;
+    if ( !directoryExists( modulesHome ) ) directoryCreate( modulesHome );
+
+    if ( directoryExists( destination ) ) {
+        printWarning( "Overwriting existing installation at " & destination );
+        directoryDelete( destination, true );
+    }
+
+    var tmpFile = bvmCache & SLASH & moduleName & "-" & info.version & ".zip";
+    download( info.downloadUrl, tmpFile );
+
+    printInfo( "Extracting..." );
+    extract( tmpFile, destination );
+    fileDelete( tmpFile );
+
+    if ( !directoryExists( destination ) || !arrayLen( directoryList( destination ) ) ) {
+        printError( "Extraction failed – destination is empty" );
+        cliexit( 1 );
+    }
+
+    printSuccess( "Module [" & moduleName & "@" & info.version & "] installed to " & destination );
+}
+
+function moduleRemove( moduleName ) {
+    if ( !len( trim( moduleName ) ) ) {
+        printError( "Specify a module: bvm module remove <module>" );
+        cliexit( 1 );
+    }
+    moduleName = moduleName.lCase();
+    var modulePath = getModulesHome() & SLASH & moduleName;
+
+    if ( !directoryExists( modulePath ) ) {
+        printWarning( "Module '" & moduleName & "' is not installed." );
+        return;
+    }
+
+    directoryDelete( modulePath, true );
+    printSuccess( "Module '" & moduleName & "' removed." );
+}
+
+function moduleList() {
+    printHeader( "Installed BoxLang Modules:" );
+    var modulesHome = getModulesHome();
+
+    if ( !directoryExists( modulesHome ) ) {
+        printWarning( "No modules directory found." );
+        return;
+    }
+
+    var modList = directoryList( modulesHome, false, "name" );
+    if ( !arrayLen( modList ) ) {
+        printWarning( "No modules installed." );
+        return;
+    }
+
+    for ( modName in modList ) {
+        var boxJson = modulesHome & SLASH & modName & SLASH & "box.json";
+        if ( fileExists( boxJson ) ) {
+            var meta    = deserializeJSON( fileRead( boxJson ) );
+            var version = meta.version ?: "unknown";
+            println( GREEN & "  ✓ " & modName & NORMAL & " (" & version & ")" );
+        } else {
+            println( GREEN & "  ✓ " & modName & NORMAL );
+        }
+    }
+}
+
+function getLatestVersionFromForgeBox( moduleName ) {
+    printInfo( "Fetching latest version of " & moduleName & " from ForgeBox..." );
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/latest" );
+    if ( resp.status != 200 ) {
+        printError( "Could not fetch module info for: " & moduleName );
+        cliexit( 1 );
+    }
+    var data = deserializeJSON( resp.file_content );
+    if ( !data.keyExists( "data" ) ) {
+        printError( "Module '" & moduleName & "' not found in ForgeBox" );
+        cliexit( 1 );
+    }
+    var entry       = data.data;
+    var version     = entry.version ?: "";
+    var downloadUrl = entry.downloadURL ?: "";
+
+    if ( downloadUrl == "forgeboxStorage" ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+function getSnapshotVersionFromForgeBox( moduleName ) {
+    printInfo( "Fetching latest snapshot of " & moduleName & " from ForgeBox..." );
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/versions" );
+    if ( resp.status != 200 ) {
+        printError( "Could not fetch versions for: " & moduleName );
+        cliexit( 1 );
+    }
+    var data     = deserializeJSON( resp.file_content );
+    var versions = data.data ?: [];
+    var version  = "";
+    for ( v in versions ) {
+        if ( v.version contains "-snapshot" ) {
+            version = v.version;
+            break;
+        }
+    }
+    if ( !len( version ) ) {
+        printError( "No snapshot version found for: " & moduleName );
+        cliexit( 1 );
+    }
+    var vResp = http( FORGEBOX_API & "/entry/" & moduleName & "/" & version );
+    var downloadUrl = "";
+    if ( vResp.status == 200 ) {
+        var vData = deserializeJSON( vResp.file_content );
+        downloadUrl = vData.data?.downloadURL ?: "";
+    }
+    if ( downloadUrl == "forgeboxStorage" || !len( downloadUrl ) ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName, version );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+function getSpecificVersionFromForgeBox( moduleName, version ) {
+    var resp = http( FORGEBOX_API & "/entry/" & moduleName & "/" & version );
+    var downloadUrl = "";
+    if ( resp.status == 200 ) {
+        var data = deserializeJSON( resp.file_content );
+        downloadUrl = data.data?.downloadURL ?: "";
+    }
+    if ( downloadUrl == "forgeboxStorage" || !len( downloadUrl ) ) {
+        downloadUrl = resolveForgeBoxStorageUrl( moduleName, version );
+    }
+    return { version: version, downloadUrl: downloadUrl };
+}
+
+function resolveForgeBoxStorageUrl( moduleName, version="" ) {
+    var storageUrl = len( version )
+        ? FORGEBOX_API & "/storage/" & moduleName & "/" & version
+        : FORGEBOX_API & "/storage/" & moduleName;
+
+    printInfo( "Resolving secure download URL from ForgeBox storage..." );
+    var resp = http( storageUrl );
+    if ( resp.status != 200 ) {
+        printError( "ForgeBox storage request failed (HTTP " & resp.status & ")" );
+        cliexit( 1 );
+    }
+    var data = deserializeJSON( resp.file_content );
+    if ( !data.keyExists( "data" ) || !len( data.data ) ) {
+        printError( "Invalid response from ForgeBox storage" );
+        cliexit( 1 );
+    }
+    return data.data;
+}
+
+// ─── Site Subcommands ────────────────────────────────────────────────────────
+function siteCreate( siteOpts ) {
+    var siteName = siteOpts.name    ?: "default";
+    var port     = siteOpts.port    ?: "8080";
+    var host     = siteOpts.host    ?: "localhost";
+    var rewrites = !siteOpts.keyExists( "no-rewrites" );
+    var minMem   = siteOpts[ "min-memory" ] ?: "512m";
+    var maxMem   = siteOpts[ "max-memory" ] ?: "512m";
+
+    printHeader( "Setting up BoxLang site: " & siteName );
+
+    var webRoot   = getsystemsetting( "user.dir", "./" );
+    if ( !webRoot.endsWith( SLASH ) && !webRoot.endsWith( "/" ) ) webRoot = webRoot & SLASH;
+    var configDir = webRoot & ".boxlang";
+
+    if ( !directoryExists( configDir ) ) directoryCreate( configDir );
+
+    var config = {
+        "host"            : host,
+        "port"            : val( port ),
+        "webroot"         : webRoot,
+        "debug"           : false,
+        "rewritesEnabled" : rewrites,
+        "jvmArgs"         : [ "-Xms" & minMem, "-Xmx" & maxMem ]
+    };
+    fileWrite( configDir & SLASH & "server.json", serializeJSON( config, true ) );
+    printSuccess( "Server config written to " & configDir & "/server.json" );
+
+    var indexFile = webRoot & "index.bxm";
+    if ( !fileExists( indexFile ) && !fileExists( webRoot & "index.cfm" ) ) {
+        fileWrite( indexFile, "<bx:output>Hello from BoxLang MiniServer!</bx:output>" & chr( 10 ) );
+        printSuccess( "Created index.bxm" );
+    }
+
+    printLine();
+    printSuccess( "Site '" & siteName & "' configured!" );
+    println( "" );
+    println( "Start your site:" );
+    println( GREEN & "  bvm miniserver --port " & port & " --host " & host & NORMAL );
+    println( "" );
+}
+
+// ─── Setup Subcommand (system-wide install) ──────────────────────────────────
+TOOLS_RELEASE_URL = "https://github.com/ortus-boxlang/boxlang-quick-installer/releases/latest/download";
+
+function setupSystem() {
+    printBanner( "BoxLang System Setup" );
+    println( "" );
+
+    var current = getCurrentVersionName();
+    if ( !len( current ) ) {
+        printError( "No BoxLang version is active. Run 'bvm install latest' and 'bvm use <version>' first." );
+        cliexit( 1 );
+    }
+
+    printInfo( "Setting up BoxLang " & current & " system-wide..." );
+
+    var versionDir = bvmVersions & SLASH & current;
+    var isRoot     = !IS_WINDOWS && getsystemsetting( "user.name", "" ) == "root";
+    var sysBin     = isRoot ? "/usr/local/bin" : HOME_DIR & SLASH & ".local" & SLASH & "bin";
+
+    if ( !directoryExists( sysBin ) ) directoryCreate( sysBin );
+
+    var binDir = versionDir & SLASH & "bin";
+    if ( !directoryExists( binDir ) ) {
+        printError( "BoxLang bin directory not found: " & binDir );
+        cliexit( 1 );
+    }
+
+    var sfx = IS_WINDOWS ? ".bat" : "";
+    var links = [ "boxlang", "bx", "boxlang-miniserver", "bx-miniserver" ];
+    for ( link in links ) {
+        var src = binDir & SLASH & link & sfx;
+        var dst = sysBin & SLASH & link;
+        if ( fileExists( src ) ) {
+            createLink( src, dst );
+            printSuccess( "Linked " & link & " → " & dst );
+        }
+    }
+
+    var toolBins = [ "bvm", "install-boxlang", "install-bx-module", "install-bx-site" ];
+    for ( tool in toolBins ) {
+        var src = bvmBin & SLASH & tool & sfx;
+        var dst = sysBin & SLASH & tool;
+        if ( fileExists( src ) ) {
+            createLink( src, dst );
+            printSuccess( "Linked " & tool & " → " & dst );
+        }
+    }
+
+    addToPath( sysBin, "BVM" );
+
+    println( "" );
+    printSuccess( "BoxLang " & current & " is now available system-wide!" );
+    printInfo( "Run 'boxlang --version' to verify (may need to restart terminal)." );
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -265,6 +567,47 @@ switch ( command ) {
         break;
     case "miniserver":
         execCurrentVersion( args.slice( 2 ), true );
+        break;
+    case "module":
+        if ( arrayLen( args ) < 2 ) {
+            printError( "Specify a module subcommand: install, remove, list" );
+            cliexit( 1 );
+        }
+        var moduleCmd = trim( args[ 2 ] );
+        switch ( moduleCmd ) {
+            case "install":
+                moduleInstall( arrayLen( args ) >= 3 ? trim( args[ 3 ] ) : "" );
+                break;
+            case "remove":
+            case "uninstall":
+                moduleRemove( arrayLen( args ) >= 3 ? trim( args[ 3 ] ) : "" );
+                break;
+            case "list":
+            case "ls":
+                moduleList();
+                break;
+            default:
+                printError( "Unknown module subcommand: " & moduleCmd );
+                println( "Available: install, remove, list" );
+                cliexit( 1 );
+        }
+        break;
+    case "site":
+        if ( arrayLen( args ) < 2 ) {
+            printError( "Specify a site subcommand: create" );
+            cliexit( 1 );
+        }
+        var siteCmd = trim( args[ 2 ] );
+        if ( siteCmd == "create" ) {
+            siteCreate( opts );
+        } else {
+            printError( "Unknown site subcommand: " & siteCmd );
+            println( "Available: create" );
+            cliexit( 1 );
+        }
+        break;
+    case "setup":
+        setupSystem();
         break;
     case "version":
         println( "BVM version: " & BVM_APP_VERSION );
