@@ -28,7 +28,7 @@ jobs:
       checks: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Read Version File
         id: version
@@ -130,7 +130,7 @@ jobs:
       checks: write
     steps:
       - name: Checkout Development Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: development
 
