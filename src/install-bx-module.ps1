@@ -238,6 +238,37 @@ function Show-Help {
     Write-Host "  - Requires PowerShell to be installed"
 }
 
+function Set-BoxJsonDependency {
+    param([string]$BoxJsonPath, [string]$ModuleName, [string]$ModuleVersion)
+
+    $boxJson = $null
+    if (Test-Path $BoxJsonPath) {
+        try { $boxJson = Get-Content $BoxJsonPath -Raw | ConvertFrom-Json } catch { $boxJson = $null }
+    }
+    if (-not $boxJson) { $boxJson = [PSCustomObject]@{} }
+
+    if (-not ($boxJson.PSObject.Properties.Name -contains 'dependencies') -or -not $boxJson.dependencies) {
+        $boxJson | Add-Member -MemberType NoteProperty -Name dependencies -Value ([PSCustomObject]@{}) -Force
+    }
+
+    $boxJson.dependencies | Add-Member -MemberType NoteProperty -Name $ModuleName -Value $ModuleVersion -Force
+    $boxJson | ConvertTo-Json -Depth 10 | Set-Content -Path $BoxJsonPath
+}
+
+function Remove-BoxJsonDependency {
+    param([string]$BoxJsonPath, [string]$ModuleName)
+
+    if (-not (Test-Path $BoxJsonPath)) { return }
+    try { $boxJson = Get-Content $BoxJsonPath -Raw | ConvertFrom-Json } catch { return }
+    if (-not $boxJson) { return }
+
+    if (($boxJson.PSObject.Properties.Name -contains 'dependencies') -and $boxJson.dependencies -and
+        ($boxJson.dependencies.PSObject.Properties.Name -contains $ModuleName)) {
+        $boxJson.dependencies.PSObject.Properties.Remove($ModuleName)
+    }
+    $boxJson | ConvertTo-Json -Depth 10 | Set-Content -Path $BoxJsonPath
+}
+
 function List-Modules {
     param(
         [string]$ModulesPath,
@@ -252,32 +283,48 @@ function List-Modules {
         return
     }
 
-    # List all directories in the modules folder
-    $moduleDirectories = Get-ChildItem -Path $ModulesPath -Directory -ErrorAction SilentlyContinue
+    $boxJsonPath = Join-Path $ModulesPath "box.json"
 
-    if (-not $moduleDirectories) {
-        Write-Host "📭 No modules installed" -ForegroundColor Yellow
-    } else {
-        # List modules with version information from box.json
+    # Backfill: generate the manifest from installed modules if it doesn't exist yet
+    # (e.g. modules installed before this feature existed, or by an older script version)
+    if (-not (Test-Path $boxJsonPath)) {
+        Write-Host "🛠️  No box.json manifest found, generating one from installed modules..." -ForegroundColor Yellow
+        $moduleDirectories = Get-ChildItem -Path $ModulesPath -Directory -ErrorAction SilentlyContinue
         foreach ($moduleDir in $moduleDirectories) {
             $moduleName = $moduleDir.Name
-            $boxJsonPath = Join-Path $moduleDir.FullName "box.json"
-
-            if (Test-Path $boxJsonPath) {
+            $moduleVersion = "unknown"
+            $moduleBoxJsonPath = Join-Path $moduleDir.FullName "box.json"
+            if (Test-Path $moduleBoxJsonPath) {
                 try {
-                    $boxJson = Get-Content $boxJsonPath | ConvertFrom-Json
-                    $version = $boxJson.version
-                    if ($version) {
-                        Write-Host "✓ $moduleName ($version)" -ForegroundColor Green
-                    } else {
-                        Write-Host "✓ $moduleName (version unknown)" -ForegroundColor Green
-                    }
-                } catch {
-                    Write-Host "✓ $moduleName (version unknown)" -ForegroundColor Green
-                }
-            } else {
-                Write-Host "✓ $moduleName (no box.json)" -ForegroundColor Green
+                    $moduleBoxJson = Get-Content $moduleBoxJsonPath -Raw | ConvertFrom-Json
+                    if ($moduleBoxJson.version) { $moduleVersion = $moduleBoxJson.version }
+                } catch { }
             }
+            Set-BoxJsonDependency $boxJsonPath $moduleName $moduleVersion
+        }
+        # Ensure the manifest exists even if there were no module directories to backfill
+        if (-not (Test-Path $boxJsonPath)) {
+            '{"dependencies": {}}' | Set-Content -Path $boxJsonPath
+        }
+    }
+
+    # Read installed modules from the manifest
+    $dependencies = $null
+    if (Test-Path $boxJsonPath) {
+        try {
+            $manifest = Get-Content $boxJsonPath -Raw | ConvertFrom-Json
+            if ($manifest.dependencies) { $dependencies = $manifest.dependencies }
+        } catch { }
+    }
+
+    $depCount = 0
+    if ($dependencies) { $depCount = ($dependencies.PSObject.Properties | Measure-Object).Count }
+
+    if ($depCount -eq 0) {
+        Write-Host "📭 No modules installed" -ForegroundColor Yellow
+    } else {
+        foreach ($prop in $dependencies.PSObject.Properties) {
+            Write-Host "✓ $($prop.Name) ($($prop.Value))" -ForegroundColor Green
         }
     }
 }
@@ -508,6 +555,9 @@ boxlang module:$moduleName %*
             }
         }
 
+        # Track this install in the modules manifest
+        Set-BoxJsonDependency (Join-Path $MODULES_HOME "box.json") $targetModule $targetVersion
+
         # Success message
         Write-Host ""
         Write-Host "✅ BoxLang® Module [$targetModule@$targetVersion] installed successfully!" -ForegroundColor Green
@@ -578,6 +628,8 @@ function Remove-Module {
     try {
         Remove-Item -Path $modulePath -Recurse -Force
         Write-Host "✅ Module '$ModuleName' removed successfully!" -ForegroundColor Green
+        # Untrack this module from the modules manifest
+        Remove-BoxJsonDependency (Join-Path $MODULES_HOME "box.json") $ModuleName
     } catch {
         Write-Host "❌ Error: Failed to remove module '$ModuleName': $($_.Exception.Message)" -ForegroundColor Red
         exit 1

@@ -107,6 +107,7 @@ show_help() {
 list_modules() {
 	local MODULES_PATH=${1}
 	local LOCATION_DESC=${2}
+	local BOX_JSON_PATH="${MODULES_PATH}/box.json"
 
 	printf "${YELLOW}📋 Installed BoxLang Modules (${LOCATION_DESC}):${NORMAL}\n"
 
@@ -116,28 +117,37 @@ list_modules() {
 		return 0
 	fi
 
-	# List all directories in the modules folder
-	if [ -z "$(ls -A "${MODULES_PATH}" 2>/dev/null)" ]; then
-		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
-	else
-		# List modules with version information from box.json
+	# Backfill: generate the manifest from installed modules if it doesn't exist yet
+	# (e.g. modules installed before this feature existed, or by an older script version)
+	if [ ! -f "${BOX_JSON_PATH}" ]; then
+		printf "${YELLOW}🛠️  No box.json manifest found, generating one from installed modules...${NORMAL}\n"
 		for module_dir in "${MODULES_PATH}"/*; do
 			if [ -d "$module_dir" ]; then
+				local module_name module_version module_box_json
 				module_name=$(basename "$module_dir")
-				box_json_path="$module_dir/box.json"
-
-				if [ -f "$box_json_path" ]; then
-					# Extract version from box.json
-					version=$(jq -r '.version // "unknown"' "$box_json_path" 2>/dev/null)
-					if [ "$version" != "null" ] && [ -n "$version" ]; then
-						printf -- "✓ %s (%s)\n" "$module_name" "$version"
-					else
-						printf -- "✓ %s (version unknown)\n" "$module_name"
-					fi
-				else
-					printf -- "✓ %s (no box.json)\n" "$module_name"
+				module_box_json="$module_dir/box.json"
+				module_version="unknown"
+				if [ -f "$module_box_json" ]; then
+					module_version=$(jq -r '.version // "unknown"' "$module_box_json" 2>/dev/null)
+					[ "$module_version" = "null" ] && module_version="unknown"
 				fi
+				box_json_set_dependency "${BOX_JSON_PATH}" "${module_name}" "${module_version}"
 			fi
+		done
+		# Ensure the manifest exists even if there were no module directories to backfill
+		[ -f "${BOX_JSON_PATH}" ] || echo '{"dependencies": {}}' > "${BOX_JSON_PATH}"
+	fi
+
+	# Read installed modules from the manifest
+	local DEP_COUNT
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null)
+
+	if [ -z "$DEP_COUNT" ] || [ "$DEP_COUNT" -eq 0 ]; then
+		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
+	else
+		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
+		while IFS=$'\t' read -r module_name module_version; do
+			printf -- "✓ %s (%s)\n" "$module_name" "$module_version"
 		done
 	fi
 }
@@ -470,6 +480,9 @@ EOF
 			fi
 		fi
 	fi
+	# Track this install in the modules manifest
+	box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
+
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
 }
@@ -528,9 +541,56 @@ remove_module() {
 	printf "${BLUE}🗑️  Removing module ${MODULE_NAME}...${NORMAL}\n"
 	if rm -rf "${MODULE_PATH}"; then
 		printf "${GREEN}✅ Module '${MODULE_NAME}' removed successfully!${NORMAL}\n"
+		# Untrack this module from the modules manifest
+		box_json_remove_dependency "${MODULES_HOME}/box.json" "${MODULE_NAME}"
 	else
 		printf "${RED}❌ Error: Failed to remove module '${MODULE_NAME}'${NORMAL}\n"
 		exit 1
+	fi
+}
+
+###########################################################################
+# box.json Manifest Helpers
+###########################################################################
+
+# Set (add or update) a dependency entry in the modules manifest box.json.
+# Creates the file (and/or the dependencies struct) if it doesn't already exist.
+box_json_set_dependency() {
+	local BOX_JSON_PATH=${1}
+	local MODULE_NAME=${2}
+	local MODULE_VERSION=${3}
+
+	[ -f "${BOX_JSON_PATH}" ] || echo '{}' > "${BOX_JSON_PATH}"
+
+	local TMP_FILE
+	TMP_FILE=$(mktemp)
+	if jq --arg name "${MODULE_NAME}" --arg version "${MODULE_VERSION}" \
+		'.dependencies = ((.dependencies // {}) + {($name): $version})' \
+		"${BOX_JSON_PATH}" > "${TMP_FILE}"; then
+		mv "${TMP_FILE}" "${BOX_JSON_PATH}"
+	else
+		rm -f "${TMP_FILE}"
+		printf "${YELLOW}⚠️  Warning: Failed to update box.json dependencies${NORMAL}\n"
+	fi
+}
+
+# Remove a dependency entry from the modules manifest box.json.
+# Creates the file (and/or the dependencies struct) if it doesn't already exist.
+box_json_remove_dependency() {
+	local BOX_JSON_PATH=${1}
+	local MODULE_NAME=${2}
+
+	[ -f "${BOX_JSON_PATH}" ] || echo '{}' > "${BOX_JSON_PATH}"
+
+	local TMP_FILE
+	TMP_FILE=$(mktemp)
+	if jq --arg name "${MODULE_NAME}" \
+		'.dependencies = (.dependencies // {}) | del(.dependencies[$name])' \
+		"${BOX_JSON_PATH}" > "${TMP_FILE}"; then
+		mv "${TMP_FILE}" "${BOX_JSON_PATH}"
+	else
+		rm -f "${TMP_FILE}"
+		printf "${YELLOW}⚠️  Warning: Failed to update box.json dependencies${NORMAL}\n"
 	fi
 }
 
