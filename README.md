@@ -306,9 +306,27 @@ install-bx-module bx-orm --directory ./modules
 # Install specific version
 install-bx-module bx-orm@1.0.0
 
+# List installed modules
+install-bx-module --list
+
+# Check for outdated modules
+install-bx-module --outdated
+
+# Update all outdated modules
+install-bx-module --update
+
+# Update without confirmation
+install-bx-module --update --force
+
+# Use the local boxlang_modules directory
+install-bx-module --outdated --local
+install-bx-module --update --force --local
+
 # Get help
 install-bx-module --help
 ```
+
+Module installations are tracked in a `box.json` dependencies manifest. Global modules use `~/.boxlang/modules/box.json`, while `--local` modules use `./boxlang_modules/box.json`. Installing and removing modules updates the manifest, and `--list` can generate a missing manifest from modules that were installed previously.
 
 ## 🌐 Running Applications
 

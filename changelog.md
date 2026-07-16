@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Track installed modules in a `box.json` dependencies manifest within the modules directory. Installs and removals update the manifest, while `--list` reads from it and backfills the manifest for modules installed before this change.
+- Added `--outdated` to report installed module versions against the latest ForgeBox versions and offer updates.
+- Added `--update` to update outdated module dependencies, with `--force` to bypass the confirmation prompt.
+
+### Fixed
+
+- Fixed explicit-version module installs and dependency updates using the correct ForgeBox version endpoint and falling back to the direct artifact URL when a download URL is unavailable.
+
 ## [1.29.0] - 2026-06-02
 
 ### Fixed
