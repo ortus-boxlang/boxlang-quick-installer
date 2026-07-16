@@ -204,6 +204,8 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]"
     Write-Host "  install-bx-module.ps1 --remove <module-name> [<module-name> ...] [--force] [--local]"
     Write-Host "  install-bx-module.ps1 --list [--local]"
+    Write-Host "  install-bx-module.ps1 --outdated [--local]"
+    Write-Host "  install-bx-module.ps1 --update [--force] [--local]"
     Write-Host "  install-bx-module.ps1 --help"
     Write-Host ""
     Write-Host "Arguments:" -ForegroundColor DarkYellow
@@ -213,8 +215,10 @@ function Show-Help {
     Write-Host "Options:" -ForegroundColor DarkYellow
     Write-Host "  --local           Install to/remove from local boxlang_modules folder instead of BoxLang HOME. The BoxLang HOME is the default."
     Write-Host "  --remove          Remove specified module(s)"
-    Write-Host "  --force           Skip confirmation when removing modules(s)(use with --remove)"
+    Write-Host "  --force           Skip confirmation when removing or updating module(s) (use with --remove or --update)"
     Write-Host "  --list            Show installed module(s)"
+    Write-Host "  --outdated        Check installed modules against FORGEBOX and report which are outdated"
+    Write-Host "  --update          Update all outdated module(s) to their latest FORGEBOX version"
     Write-Host "  --help, -h        Show this help message"
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor DarkYellow
@@ -228,6 +232,10 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 --remove `"bx-orm, bx-ai`" --local"
     Write-Host "  install-bx-module.ps1 --list"
     Write-Host "  install-bx-module.ps1 --list --local"
+    Write-Host "  install-bx-module.ps1 --outdated"
+    Write-Host "  install-bx-module.ps1 --outdated --local"
+    Write-Host "  install-bx-module.ps1 --update"
+    Write-Host "  install-bx-module.ps1 --update --force --local"
     Write-Host ""
     Write-Host "Notes:" -ForegroundColor DarkYellow
     Write-Host "  - If no version is specified, the latest version from FORGEBOX will be installed"
@@ -269,19 +277,8 @@ function Remove-BoxJsonDependency {
     $boxJson | ConvertTo-Json -Depth 10 | Set-Content -Path $BoxJsonPath
 }
 
-function List-Modules {
-    param(
-        [string]$ModulesPath,
-        [string]$LocationDesc
-    )
-
-    Write-Host "📋 Installed BoxLang Modules ($LocationDesc):" -ForegroundColor Yellow
-
-    # Check if modules directory exists
-    if (-not (Test-Path $ModulesPath)) {
-        Write-Host "📂 No modules directory found at $ModulesPath" -ForegroundColor Yellow
-        return
-    }
+function Get-ModulesManifestPath {
+    param([string]$ModulesPath)
 
     $boxJsonPath = Join-Path $ModulesPath "box.json"
 
@@ -308,6 +305,25 @@ function List-Modules {
         }
     }
 
+    return $boxJsonPath
+}
+
+function List-Modules {
+    param(
+        [string]$ModulesPath,
+        [string]$LocationDesc
+    )
+
+    Write-Host "📋 Installed BoxLang Modules ($LocationDesc):" -ForegroundColor Yellow
+
+    # Check if modules directory exists
+    if (-not (Test-Path $ModulesPath)) {
+        Write-Host "📂 No modules directory found at $ModulesPath" -ForegroundColor Yellow
+        return
+    }
+
+    $boxJsonPath = Get-ModulesManifestPath $ModulesPath
+
     # Read installed modules from the manifest
     $dependencies = $null
     if (Test-Path $boxJsonPath) {
@@ -327,6 +343,209 @@ function List-Modules {
             Write-Host "✓ $($prop.Name) ($($prop.Value))" -ForegroundColor Green
         }
     }
+}
+
+###########################################################################
+# Version Comparison Functions
+###########################################################################
+
+# Extract semantic version (Major.Minor.Patch) from a version string
+function Get-SemanticVersion {
+    param([string]$VersionString)
+
+    if ($VersionString -match '(\d+\.\d+\.\d+)') {
+        return $matches[1]
+    }
+    return $null
+}
+
+# Compare two semantic versions (Major.Minor.Patch)
+# Returns: 0 if equal, 1 if first > second, -1 if first < second
+function Compare-Versions {
+    param(
+        [string]$Version1,
+        [string]$Version2
+    )
+
+    $v1Parts = $Version1.Split('.')
+    $v2Parts = $Version2.Split('.')
+
+    for ($i = 0; $i -lt 3; $i++) {
+        $v1Part = if ($i -lt $v1Parts.Length) { [int]$v1Parts[$i] } else { 0 }
+        $v2Part = if ($i -lt $v2Parts.Length) { [int]$v2Parts[$i] } else { 0 }
+
+        if ($v1Part -gt $v2Part) { return 1 }
+        elseif ($v1Part -lt $v2Part) { return -1 }
+    }
+
+    return 0
+}
+
+###########################################################################
+# Outdated / Update Functions
+###########################################################################
+
+# Lean ForgeBox "latest version" lookup (no progress messages, no download URL resolution).
+function Get-ForgeboxLatestVersion {
+    param([string]$ModuleName)
+
+    try {
+        $entryJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$ModuleName/latest" -ErrorAction Stop
+        if ($entryJson -and $entryJson.data -and $entryJson.data.version) {
+            return $entryJson.data.version
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
+# Returns an array of [PSCustomObject]@{ Name; Current; Latest; Status } for every
+# dependency in the manifest. Status is one of: uptodate, ahead, outdated, unreachable.
+# Dependencies whose current version isn't a parseable semver are skipped entirely.
+function Get-OutdatedReport {
+    param([string]$ModulesPath)
+
+    $boxJsonPath = Get-ModulesManifestPath $ModulesPath
+    $dependencies = $null
+    try {
+        $manifest = Get-Content $boxJsonPath -Raw | ConvertFrom-Json
+        if ($manifest.dependencies) { $dependencies = $manifest.dependencies }
+    } catch { }
+
+    $report = @()
+    if (-not $dependencies) { return $report }
+
+    foreach ($prop in $dependencies.PSObject.Properties) {
+        $moduleName = $prop.Name
+        $currentVersion = $prop.Value
+
+        $currentSemver = Get-SemanticVersion $currentVersion
+        if (-not $currentSemver) { continue }
+
+        $latestVersion = Get-ForgeboxLatestVersion $moduleName
+        $status = $null
+        if (-not $latestVersion) {
+            $status = "unreachable"
+            $latestVersion = "?"
+        } else {
+            $latestSemver = Get-SemanticVersion $latestVersion
+            if (-not $latestSemver) {
+                $status = "unreachable"
+            } else {
+                $cmp = Compare-Versions -Version1 $currentSemver -Version2 $latestSemver
+                switch ($cmp) {
+                    0  { $status = "uptodate" }
+                    1  { $status = "ahead" }
+                    -1 { $status = "outdated" }
+                }
+            }
+        }
+
+        $report += [PSCustomObject]@{
+            Name = $moduleName
+            Current = $currentVersion
+            Latest = $latestVersion
+            Status = $status
+        }
+    }
+
+    return $report
+}
+
+function Show-Outdated {
+    param(
+        [string]$ModulesPath,
+        [string]$LocationDesc
+    )
+
+    Write-Host "🔎 Checking for outdated BoxLang Modules ($LocationDesc):" -ForegroundColor Yellow
+    Write-Host ""
+
+    if (-not (Test-Path $ModulesPath)) {
+        Write-Host "📂 No modules directory found at $ModulesPath" -ForegroundColor Yellow
+        return
+    }
+
+    $report = Get-OutdatedReport $ModulesPath
+
+    if ($report.Count -eq 0) {
+        Write-Host "📭 No modules to report on" -ForegroundColor Yellow
+        return
+    }
+
+    "{0,-25} {1,-15} {2,-15} {3}" -f "DEPENDENCY", "CURRENT", "FORGEBOX", "STATUS" | Write-Host
+    "{0,-25} {1,-15} {2,-15} {3}" -f "-------------------------", "---------------", "---------------", "--------------------" | Write-Host
+
+    $outdated = @()
+    foreach ($entry in $report) {
+        $statusLabel = switch ($entry.Status) {
+            "uptodate" { "✅ up to date" }
+            "ahead" { "🔄 ahead (dev/snapshot)" }
+            "outdated" { $outdated += $entry; "🆙 outdated" }
+            default { "⚠️  unable to check" }
+        }
+        "{0,-25} {1,-15} {2,-15} {3}" -f $entry.Name, $entry.Current, $entry.Latest, $statusLabel | Write-Host
+    }
+
+    Write-Host ""
+    if ($outdated.Count -eq 0) {
+        Write-Host "✅ All modules are up to date" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "⚠️  $($outdated.Count) module(s) outdated" -ForegroundColor Yellow
+    $confirmation = Read-Host "⬆️  Would you like to update $($outdated.Count) outdated module(s) now? [y/N]"
+    if ($confirmation -match "^[yY]([eE][sS])?$") {
+        foreach ($entry in $outdated) {
+            Install-Module "$($entry.Name)@$($entry.Latest)"
+        }
+    } else {
+        Write-Host "Skipping updates." -ForegroundColor Yellow
+    }
+}
+
+function Update-Modules {
+    param(
+        [string]$ModulesPath,
+        [string]$LocationDesc,
+        [bool]$ForceUpdate = $false
+    )
+
+    Write-Host "🔎 Checking for outdated BoxLang Modules ($LocationDesc):" -ForegroundColor Yellow
+    Write-Host ""
+
+    if (-not (Test-Path $ModulesPath)) {
+        Write-Host "📂 No modules directory found at $ModulesPath" -ForegroundColor Yellow
+        return
+    }
+
+    $report = Get-OutdatedReport $ModulesPath
+    $outdated = $report | Where-Object { $_.Status -eq "outdated" }
+
+    foreach ($entry in $outdated) {
+        Write-Host "🆙 $($entry.Name): $($entry.Current) → $($entry.Latest)"
+    }
+
+    if (-not $outdated -or $outdated.Count -eq 0) {
+        Write-Host "✅ All modules are up to date, nothing to update" -ForegroundColor Green
+        return
+    }
+
+    Write-Host ""
+    if (-not $ForceUpdate) {
+        $confirmation = Read-Host "⬆️  Update $($outdated.Count) outdated module(s)? [y/N]"
+        if ($confirmation -notmatch "^[yY]([eE][sS])?$") {
+            Write-Host "❌ Update cancelled" -ForegroundColor Yellow
+            return
+        }
+    }
+
+    foreach ($entry in $outdated) {
+        Install-Module "$($entry.Name)@$($entry.Latest)"
+    }
+
+    Write-Host "✅ Updated $($outdated.Count) module(s)!" -ForegroundColor Green
 }
 
 function Get-LatestVersionFromForgebox {
@@ -684,6 +903,82 @@ if ($args[0] -eq "--list") {
     }
 
     List-Modules $modulesPath $locationDesc
+    exit 0
+}
+
+# Handle --outdated command (can be used with --local)
+if ($args[0] -eq "--outdated") {
+    $remainingArgs = @()
+    if ($args.Count -gt 1) {
+        $remainingArgs = $args[1..($args.Count-1)]
+    }
+
+    $OUTDATED_LOCAL = $false
+    if ($remainingArgs -contains "--local") {
+        $OUTDATED_LOCAL = $true
+        $remainingArgs = $remainingArgs | Where-Object { $_ -ne "--local" }
+    }
+
+    if ($remainingArgs.Count -gt 0) {
+        Write-Host "❌ Error: --outdated command does not accept additional arguments" -ForegroundColor Red
+        Write-Host "💡 Usage: install-bx-module.ps1 --outdated [--local]" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $LOCAL_INSTALL = $OUTDATED_LOCAL
+    if ($OUTDATED_LOCAL) {
+        $MODULES_HOME = Join-Path (Get-Location) "boxlang_modules"
+        $locationDesc = "Local - $(Get-Location)\boxlang_modules"
+    } else {
+        if (-not $env:BOXLANG_HOME) {
+            $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
+        }
+        $MODULES_HOME = Join-Path $env:BOXLANG_HOME "modules"
+        $locationDesc = "Global - $($env:BOXLANG_HOME)\modules"
+    }
+
+    Show-Outdated $MODULES_HOME $locationDesc
+    exit 0
+}
+
+# Handle --update command (can be used with --force and --local, in any order)
+if ($args[0] -eq "--update") {
+    $remainingArgs = @()
+    if ($args.Count -gt 1) {
+        $remainingArgs = $args[1..($args.Count-1)]
+    }
+
+    $FORCE_UPDATE = $false
+    if ($remainingArgs -contains "--force") {
+        $FORCE_UPDATE = $true
+        $remainingArgs = $remainingArgs | Where-Object { $_ -ne "--force" }
+    }
+
+    $UPDATE_LOCAL = $false
+    if ($remainingArgs -contains "--local") {
+        $UPDATE_LOCAL = $true
+        $remainingArgs = $remainingArgs | Where-Object { $_ -ne "--local" }
+    }
+
+    if ($remainingArgs.Count -gt 0) {
+        Write-Host "❌ Error: --update command does not accept additional arguments" -ForegroundColor Red
+        Write-Host "💡 Usage: install-bx-module.ps1 --update [--force] [--local]" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $LOCAL_INSTALL = $UPDATE_LOCAL
+    if ($UPDATE_LOCAL) {
+        $MODULES_HOME = Join-Path (Get-Location) "boxlang_modules"
+        $locationDesc = "Local - $(Get-Location)\boxlang_modules"
+    } else {
+        if (-not $env:BOXLANG_HOME) {
+            $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
+        }
+        $MODULES_HOME = Join-Path $env:BOXLANG_HOME "modules"
+        $locationDesc = "Global - $($env:BOXLANG_HOME)\modules"
+    }
+
+    Update-Modules $MODULES_HOME $locationDesc $FORCE_UPDATE
     exit 0
 }
 
