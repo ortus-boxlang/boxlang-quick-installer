@@ -629,8 +629,8 @@ function Install-Module {
     } else {
         # We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
         try {
-            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$targetModule/$targetVersion" -ErrorAction Stop
-            if ($versionJson -and $versionJson.data) {
+            $versionJson = Invoke-RestMethod -Uri "$FORGEBOX_API_URL/entry/$targetModule/versions/$targetVersion" -ErrorAction Stop
+            if ($versionJson -and $versionJson.data -and $versionJson.data.downloadURL) {
                 $downloadUrlTemp = $versionJson.data.downloadURL
                 if ($downloadUrlTemp -eq "forgeboxStorage") {
                     $downloadUrl = Resolve-ForgeboxStorageUrl $targetModule $targetVersion

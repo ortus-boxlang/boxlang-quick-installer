@@ -347,14 +347,17 @@ install_module() {
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
 	else
 		# We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
-		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/${TARGET_VERSION}")
+		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/versions/${TARGET_VERSION}")
 		if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
 			local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
 			if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 				local DOWNLOAD_URL=$(resolve_forgebox_storage_url "$TARGET_MODULE" "$TARGET_VERSION")
-			else
+			elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
 				# Use the download URL from API if available
 				local DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
+			else
+				# Fallback: build the download URL from the artifacts directly
+				local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
 			fi
 		else
 			# Fallback: build the download URL from the artifacts directly
