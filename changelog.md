@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-07-16
+
 ### Added
 
 - Track installed modules in a `box.json` dependencies manifest within the modules directory. Installs and removals update the manifest, while `--list` reads from it and backfills the manifest for modules installed before this change.
@@ -453,7 +455,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.29.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.30.0...HEAD
+[1.30.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.29.0...v1.30.0
 [1.29.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.28.0...v1.29.0
 [1.28.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.27.0...v1.28.0
 [1.27.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.26.0...v1.27.0
