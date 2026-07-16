@@ -74,6 +74,8 @@ show_help() {
 	printf "  install-bx-module.sh <module-name>[@<version>] [<module-name>[@<version>] ...] [--local]\n"
 	printf "  install-bx-module.sh --remove <module-name> [<module-name> ...] [--force] [--local]\n"
 	printf "  install-bx-module.sh --list [--local]\n"
+	printf "  install-bx-module.sh --outdated [--local]\n"
+	printf "  install-bx-module.sh --update [--force] [--local]\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}ARGUMENTS:${NORMAL}\n"
 	printf "  <module-name>     The name(s) of the module(s) to install. (Comma or space delimmited)\n"
@@ -81,8 +83,10 @@ show_help() {
 	printf "${BOLD}OPTIONS:${NORMAL}\n"
 	printf "  --local           Install to/remove from local boxlang_modules folder instead of BoxLang HOME. The BoxLang HOME is the default.\n"
 	printf "  --remove          Remove specified module(s)\n"
-	printf "  --force           Skip confirmation when removing modules(s)(use with --remove)\n"
+	printf "  --force           Skip confirmation when removing or updating module(s) (use with --remove or --update)\n"
 	printf "  --list            Show installed module(s)\n"
+	printf "  --outdated        Check installed modules against FORGEBOX and report which are outdated\n"
+	printf "  --update          Update all outdated module(s) to their latest FORGEBOX version\n"
 	printf "  --help, -h        Show this help message\n\n"
 	printf "${BOLD}EXAMPLES:${NORMAL}\n"
 	printf "  install-bx-module bx-orm\n"
@@ -94,7 +98,11 @@ show_help() {
 	printf "  install-bx-module --remove bx-orm,bx-ai --force\n"
 	printf "  install-bx-module --remove \"bx-orm, bx-ai\" --local\n"
 	printf "  install-bx-module --list\n"
-	printf "  install-bx-module --list --local\n\n"
+	printf "  install-bx-module --list --local\n"
+	printf "  install-bx-module --outdated\n"
+	printf "  install-bx-module --outdated --local\n"
+	printf "  install-bx-module --update\n"
+	printf "  install-bx-module --update --force --local\n\n"
 	printf "${BOLD}NOTES:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
 	printf "  - Multiple modules can be specified, separated by spaces or commas\n"
@@ -107,6 +115,7 @@ show_help() {
 list_modules() {
 	local MODULES_PATH=${1}
 	local LOCATION_DESC=${2}
+	local BOX_JSON_PATH
 
 	printf "${YELLOW}📋 Installed BoxLang Modules (${LOCATION_DESC}):${NORMAL}\n"
 
@@ -116,28 +125,18 @@ list_modules() {
 		return 0
 	fi
 
-	# List all directories in the modules folder
-	if [ -z "$(ls -A "${MODULES_PATH}" 2>/dev/null)" ]; then
+	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
+
+	# Read installed modules from the manifest
+	local DEP_COUNT
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null)
+
+	if [ -z "$DEP_COUNT" ] || [ "$DEP_COUNT" -eq 0 ]; then
 		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
 	else
-		# List modules with version information from box.json
-		for module_dir in "${MODULES_PATH}"/*; do
-			if [ -d "$module_dir" ]; then
-				module_name=$(basename "$module_dir")
-				box_json_path="$module_dir/box.json"
-
-				if [ -f "$box_json_path" ]; then
-					# Extract version from box.json
-					version=$(jq -r '.version // "unknown"' "$box_json_path" 2>/dev/null)
-					if [ "$version" != "null" ] && [ -n "$version" ]; then
-						printf -- "✓ %s (%s)\n" "$module_name" "$version"
-					else
-						printf -- "✓ %s (version unknown)\n" "$module_name"
-					fi
-				else
-					printf -- "✓ %s (no box.json)\n" "$module_name"
-				fi
-			fi
+		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
+		while IFS=$'\t' read -r module_name module_version; do
+			printf -- "✓ %s (%s)\n" "$module_name" "$module_version"
 		done
 	fi
 }
@@ -348,14 +347,17 @@ install_module() {
 		local DOWNLOAD_URL="$DOWNLOAD_URL"
 	else
 		# We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
-		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/${TARGET_VERSION}")
+		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/versions/${TARGET_VERSION}")
 		if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
 			local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
 			if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 				local DOWNLOAD_URL=$(resolve_forgebox_storage_url "$TARGET_MODULE" "$TARGET_VERSION")
-			else
+			elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
 				# Use the download URL from API if available
 				local DOWNLOAD_URL="$DOWNLOAD_URL_TEMP"
+			else
+				# Fallback: build the download URL from the artifacts directly
+				local DOWNLOAD_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-modules/${TARGET_MODULE}/${TARGET_VERSION}/${TARGET_MODULE}-${TARGET_VERSION}.zip"
 			fi
 		else
 			# Fallback: build the download URL from the artifacts directly
@@ -470,6 +472,9 @@ EOF
 			fi
 		fi
 	fi
+	# Track this install in the modules manifest
+	box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
+
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
 }
@@ -528,10 +533,273 @@ remove_module() {
 	printf "${BLUE}🗑️  Removing module ${MODULE_NAME}...${NORMAL}\n"
 	if rm -rf "${MODULE_PATH}"; then
 		printf "${GREEN}✅ Module '${MODULE_NAME}' removed successfully!${NORMAL}\n"
+		# Untrack this module from the modules manifest
+		box_json_remove_dependency "${MODULES_HOME}/box.json" "${MODULE_NAME}"
 	else
 		printf "${RED}❌ Error: Failed to remove module '${MODULE_NAME}'${NORMAL}\n"
 		exit 1
 	fi
+}
+
+###########################################################################
+# box.json Manifest Helpers
+###########################################################################
+
+# Set (add or update) a dependency entry in the modules manifest box.json.
+# Creates the file (and/or the dependencies struct) if it doesn't already exist.
+box_json_set_dependency() {
+	local BOX_JSON_PATH=${1}
+	local MODULE_NAME=${2}
+	local MODULE_VERSION=${3}
+
+	[ -f "${BOX_JSON_PATH}" ] || echo '{}' > "${BOX_JSON_PATH}"
+
+	local TMP_FILE
+	TMP_FILE=$(mktemp)
+	if jq --arg name "${MODULE_NAME}" --arg version "${MODULE_VERSION}" \
+		'.dependencies = ((.dependencies // {}) + {($name): $version})' \
+		"${BOX_JSON_PATH}" > "${TMP_FILE}"; then
+		mv "${TMP_FILE}" "${BOX_JSON_PATH}"
+	else
+		rm -f "${TMP_FILE}"
+		printf "${YELLOW}⚠️  Warning: Failed to update box.json dependencies${NORMAL}\n" >&2
+	fi
+}
+
+# Remove a dependency entry from the modules manifest box.json.
+# Creates the file (and/or the dependencies struct) if it doesn't already exist.
+box_json_remove_dependency() {
+	local BOX_JSON_PATH=${1}
+	local MODULE_NAME=${2}
+
+	[ -f "${BOX_JSON_PATH}" ] || echo '{}' > "${BOX_JSON_PATH}"
+
+	local TMP_FILE
+	TMP_FILE=$(mktemp)
+	if jq --arg name "${MODULE_NAME}" \
+		'.dependencies = (.dependencies // {}) | del(.dependencies[$name])' \
+		"${BOX_JSON_PATH}" > "${TMP_FILE}"; then
+		mv "${TMP_FILE}" "${BOX_JSON_PATH}"
+	else
+		rm -f "${TMP_FILE}"
+		printf "${YELLOW}⚠️  Warning: Failed to update box.json dependencies${NORMAL}\n" >&2
+	fi
+}
+
+# Ensures ${MODULES_PATH}/box.json exists (backfilling it from installed module directories
+# if missing), and prints its path.
+ensure_modules_manifest() {
+	local MODULES_PATH=${1}
+	local BOX_JSON_PATH="${MODULES_PATH}/box.json"
+
+	if [ ! -f "${BOX_JSON_PATH}" ]; then
+		printf "${YELLOW}🛠️  No box.json manifest found, generating one from installed modules...${NORMAL}\n" >&2
+		for module_dir in "${MODULES_PATH}"/*; do
+			if [ -d "$module_dir" ]; then
+				local module_name module_version module_box_json
+				module_name=$(basename "$module_dir")
+				module_box_json="$module_dir/box.json"
+				module_version="unknown"
+				if [ -f "$module_box_json" ]; then
+					module_version=$(jq -r '.version // "unknown"' "$module_box_json" 2>/dev/null)
+					[ "$module_version" = "null" ] && module_version="unknown"
+				fi
+				box_json_set_dependency "${BOX_JSON_PATH}" "${module_name}" "${module_version}"
+			fi
+		done
+		# Ensure the manifest exists even if there were no module directories to backfill
+		[ -f "${BOX_JSON_PATH}" ] || echo '{"dependencies": {}}' > "${BOX_JSON_PATH}"
+	fi
+
+	echo "${BOX_JSON_PATH}"
+}
+
+###########################################################################
+# Outdated / Update Helpers
+###########################################################################
+
+# Lean ForgeBox "latest version" lookup (no progress messages, no download URL resolution).
+fetch_forgebox_latest_version() {
+	local MODULE_NAME=${1}
+	local ENTRY_JSON
+	ENTRY_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/latest" 2>/dev/null)
+	if [ -z "$ENTRY_JSON" ] || [ "$ENTRY_JSON" = "null" ]; then
+		return 1
+	fi
+
+	local VERSION
+	VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version // empty' 2>/dev/null)
+	if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+		return 1
+	fi
+
+	echo "$VERSION"
+}
+
+# Emits one tab-separated line per dependency: name<TAB>current<TAB>latest<TAB>status
+# status is one of: uptodate, ahead, outdated, unreachable
+# Dependencies whose current version isn't a parseable semver are skipped entirely.
+compute_outdated_report() {
+	local MODULES_PATH=${1}
+	local BOX_JSON_PATH
+	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
+
+	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
+	while IFS=$'\t' read -r module_name current_version; do
+		local current_semver
+		current_semver=$(extract_semantic_version "$current_version")
+		[ -z "$current_semver" ] && continue
+
+		local latest_version status latest_semver
+		# `|| true` keeps a failed lookup (e.g. module removed from FORGEBOX, network
+		# hiccup) from tripping `set -e` and silently truncating the rest of the report.
+		latest_version=$(fetch_forgebox_latest_version "$module_name") || true
+		if [ -z "$latest_version" ]; then
+			status="unreachable"
+			latest_version="?"
+		else
+			latest_semver=$(extract_semantic_version "$latest_version")
+			if [ -z "$latest_semver" ]; then
+				status="unreachable"
+			else
+				local cmp_result
+				compare_versions "$current_semver" "$latest_semver" && cmp_result=0 || cmp_result=$?
+				case "$cmp_result" in
+					0) status="uptodate" ;;
+					1) status="ahead" ;;
+					2) status="outdated" ;;
+				esac
+			fi
+		fi
+		printf '%s\t%s\t%s\t%s\n' "$module_name" "$current_version" "$latest_version" "$status"
+	done
+}
+
+outdated_modules() {
+	local MODULES_HOME=${1}
+	local LOCATION_DESC=${2}
+
+	printf "${YELLOW}🔎 Checking for outdated BoxLang Modules (${LOCATION_DESC}):${NORMAL}\n\n"
+
+	if [ ! -d "${MODULES_HOME}" ]; then
+		printf "${YELLOW}📂 No modules directory found at ${MODULES_HOME}${NORMAL}\n"
+		return 0
+	fi
+
+	command_exists curl || {
+		printf "${RED}❌ Error: curl is required but not installed${NORMAL}\n"
+		exit 1
+	}
+
+	local REPORT_FILE
+	REPORT_FILE=$(mktemp)
+	compute_outdated_report "${MODULES_HOME}" > "${REPORT_FILE}"
+
+	if [ ! -s "${REPORT_FILE}" ]; then
+		printf "${YELLOW}📭 No modules to report on${NORMAL}\n"
+		rm -f "${REPORT_FILE}"
+		return 0
+	fi
+
+	printf "%-25s %-15s %-15s %s\n" "DEPENDENCY" "CURRENT" "FORGEBOX" "STATUS"
+	printf "%-25s %-15s %-15s %s\n" "-------------------------" "---------------" "---------------" "--------------------"
+
+	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
+	while IFS=$'\t' read -r module_name current_version latest_version status; do
+		local status_label
+		case "$status" in
+			uptodate) status_label="✅ up to date" ;;
+			ahead) status_label="🔄 ahead (dev/snapshot)" ;;
+			outdated)
+				status_label="🆙 outdated"
+				OUTDATED_NAMES+=("$module_name")
+				OUTDATED_VERSIONS+=("$latest_version")
+				;;
+			*) status_label="⚠️  unable to check" ;;
+		esac
+		printf "%-25s %-15s %-15s %s\n" "$module_name" "$current_version" "$latest_version" "$status_label"
+	done < "${REPORT_FILE}"
+	rm -f "${REPORT_FILE}"
+
+	printf "\n"
+	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
+	if [ "$OUTDATED_COUNT" -eq 0 ]; then
+		printf "${GREEN}✅ All modules are up to date${NORMAL}\n"
+		return 0
+	fi
+
+	printf "${YELLOW}⚠️  %d module(s) outdated${NORMAL}\n" "$OUTDATED_COUNT"
+	printf "${RED}⬆️  Would you like to update ${OUTDATED_COUNT} outdated module(s) now? [y/N]: ${NORMAL}"
+	read -r confirmation < /dev/tty
+	case "$confirmation" in
+		[yY]|[yY][eE][sS])
+			local i
+			for (( i=0; i<OUTDATED_COUNT; i++ )); do
+				install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+			done
+			;;
+		*)
+			printf "${YELLOW}Skipping updates.${NORMAL}\n"
+			;;
+	esac
+}
+
+update_modules() {
+	local MODULES_HOME=${1}
+	local LOCATION_DESC=${2}
+	local FORCE_UPDATE=${3:-false}
+
+	printf "${YELLOW}🔎 Checking for outdated BoxLang Modules (${LOCATION_DESC}):${NORMAL}\n\n"
+
+	if [ ! -d "${MODULES_HOME}" ]; then
+		printf "${YELLOW}📂 No modules directory found at ${MODULES_HOME}${NORMAL}\n"
+		return 0
+	fi
+
+	command_exists curl || {
+		printf "${RED}❌ Error: curl is required but not installed${NORMAL}\n"
+		exit 1
+	}
+
+	local REPORT_FILE
+	REPORT_FILE=$(mktemp)
+	compute_outdated_report "${MODULES_HOME}" > "${REPORT_FILE}"
+
+	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
+	while IFS=$'\t' read -r module_name current_version latest_version status; do
+		if [ "$status" = "outdated" ]; then
+			printf -- "🆙 %s: %s → %s\n" "$module_name" "$current_version" "$latest_version"
+			OUTDATED_NAMES+=("$module_name")
+			OUTDATED_VERSIONS+=("$latest_version")
+		fi
+	done < "${REPORT_FILE}"
+	rm -f "${REPORT_FILE}"
+
+	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
+	if [ "$OUTDATED_COUNT" -eq 0 ]; then
+		printf "${GREEN}✅ All modules are up to date, nothing to update${NORMAL}\n"
+		return 0
+	fi
+
+	printf "\n"
+	if [ "$FORCE_UPDATE" != "true" ]; then
+		printf "${RED}⬆️  Update ${OUTDATED_COUNT} outdated module(s)? [y/N]: ${NORMAL}"
+		read -r confirmation < /dev/tty
+		case "$confirmation" in
+			[yY]|[yY][eE][sS]) ;;
+			*)
+				printf "${YELLOW}❌ Update cancelled${NORMAL}\n"
+				return 0
+				;;
+		esac
+	fi
+
+	local i
+	for (( i=0; i<OUTDATED_COUNT; i++ )); do
+		install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+	done
+
+	printf "${GREEN}✅ Updated ${OUTDATED_COUNT} module(s)!${NORMAL}\n"
 }
 
 main() {
@@ -584,6 +852,88 @@ main() {
 		fi
 
 		list_modules "$MODULES_PATH" "$LOCATION_DESC"
+		exit 0
+	fi
+
+	# Handle --outdated command (can be used with --local)
+	if [ "$1" = "--outdated" ]; then
+		shift # Remove --outdated from arguments
+
+		OUTDATED_LOCAL=false
+		if [ "$1" = "--local" ]; then
+			OUTDATED_LOCAL=true
+			shift # Remove --local from arguments
+		fi
+
+		# Ensure no other arguments after --outdated [--local]
+		if [ $# -gt 0 ]; then
+			printf "${RED}❌ Error: --outdated command does not accept additional arguments${NORMAL}\n"
+			printf "${YELLOW}💡 Usage: install-bx-module.sh --outdated [--local]${NORMAL}\n"
+			exit 1
+		fi
+
+		LOCAL_INSTALL=$OUTDATED_LOCAL
+		if [ "$OUTDATED_LOCAL" = true ]; then
+			MODULES_HOME="$(pwd)/boxlang_modules"
+			LOCATION_DESC="Local - $(pwd)/boxlang_modules"
+		else
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			MODULES_HOME="${BOXLANG_HOME}/modules"
+			LOCATION_DESC="Global - ${BOXLANG_HOME}/modules"
+		fi
+
+		outdated_modules "$MODULES_HOME" "$LOCATION_DESC"
+		exit 0
+	fi
+
+	# Handle --update command (can be used with --force and --local, in any order)
+	if [ "$1" = "--update" ]; then
+		shift # Remove --update from arguments
+
+		FORCE_UPDATE=false
+		for arg in "$@"; do
+			if [ "$arg" = "--force" ]; then
+				FORCE_UPDATE=true
+				break
+			fi
+		done
+		if [ "$FORCE_UPDATE" = true ]; then
+			set -- $(printf '%s\n' "$@" | grep -v '^--force$')
+		fi
+
+		UPDATE_LOCAL=false
+		for arg in "$@"; do
+			if [ "$arg" = "--local" ]; then
+				UPDATE_LOCAL=true
+				break
+			fi
+		done
+		if [ "$UPDATE_LOCAL" = true ]; then
+			set -- $(printf '%s\n' "$@" | grep -v '^--local$')
+		fi
+
+		# Ensure no other arguments remain
+		if [ $# -gt 0 ]; then
+			printf "${RED}❌ Error: --update command does not accept additional arguments${NORMAL}\n"
+			printf "${YELLOW}💡 Usage: install-bx-module.sh --update [--force] [--local]${NORMAL}\n"
+			exit 1
+		fi
+
+		LOCAL_INSTALL=$UPDATE_LOCAL
+		if [ "$UPDATE_LOCAL" = true ]; then
+			MODULES_HOME="$(pwd)/boxlang_modules"
+			LOCATION_DESC="Local - $(pwd)/boxlang_modules"
+		else
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			MODULES_HOME="${BOXLANG_HOME}/modules"
+			LOCATION_DESC="Global - ${BOXLANG_HOME}/modules"
+		fi
+
+		update_modules "$MODULES_HOME" "$LOCATION_DESC" "$FORCE_UPDATE"
 		exit 0
 	fi
 
