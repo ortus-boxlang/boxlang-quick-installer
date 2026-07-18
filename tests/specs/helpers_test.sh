@@ -102,19 +102,19 @@ test_print_functions() {
 
     # Test print_info
     local info_output=$(print_info "test message" 2>&1)
-    assert_contains "ℹ️ test message" "$info_output" "print_info() outputs correct format"
+    assert_contains "test message" "$info_output" "print_info() outputs correct format"
 
     # Test print_success
     local success_output=$(print_success "test success" 2>&1)
-    assert_contains "✅ test success" "$success_output" "print_success() outputs correct format"
+    assert_contains "✓ test success" "$success_output" "print_success() outputs correct format"
 
     # Test print_warning
     local warning_output=$(print_warning "test warning" 2>&1)
-    assert_contains "⚠️  test warning" "$warning_output" "print_warning() outputs correct format"
+    assert_contains "test warning" "$warning_output" "print_warning() outputs correct format"
 
     # Test print_error
     local error_output=$(print_error "test error" 2>&1)
-    assert_contains "🔴 test error" "$error_output" "print_error() outputs correct format"
+    assert_contains "✗ test error" "$error_output" "print_error() outputs correct format"
 
     # Test print_header
     local header_output=$(print_header "Test Header" 2>&1)

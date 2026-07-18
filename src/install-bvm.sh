@@ -35,15 +35,14 @@ elif [ -f "${BVM_HOME}/scripts/helpers.sh" ]; then
 	source "${BVM_HOME}/scripts/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
-	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
-	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+	printf "Downloading helper functions...\n"
 	helpers_url="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
 	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
 		source "$helpers_file"
 	else
-		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
+		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n" >&2
 		exit 1
 	fi
 fi
@@ -136,7 +135,8 @@ setup_path() {
     print_info "Setting up PATH for BVM..."
 
     # Use helper function to detect shell profile file
-    local profile_file=$(get_shell_profile_file)
+    # Intentionally not `local` - show_help() reads this after we return
+    profile_file=$(get_shell_profile_file)
 
     # Check if BVM is already in PATH
     if echo "$PATH" | grep -q "$bvm_bin"; then
@@ -224,7 +224,7 @@ show_help() {
 main() {
 	setup_colors
 
-    print_header "📦 BVM (BoxLang Version Manager) Installer"
+    print_header "BVM (BoxLang Version Manager) Installer"
     printf "\n"
 
 	# Pre-flight Checks
@@ -242,9 +242,9 @@ main() {
         exit 1
     fi
 
-	printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
-    print_success "❤️‍🔥 BVM has been installed successfully"
-    printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
+    printf "\n"
+    print_success "BVM was installed successfully."
+    printf "\n"
 
     # Show instructions
     show_help

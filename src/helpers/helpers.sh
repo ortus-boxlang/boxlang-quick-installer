@@ -11,23 +11,23 @@
 ###########################################################################
 
 print_info() {
-    printf "${BLUE}ℹ️  $1${NORMAL}\n"
+    printf "%s\n" "$1"
 }
 
 print_success() {
-    printf "${GREEN}✅ $1${NORMAL}\n"
+    printf "${GREEN}✓${NORMAL} %s\n" "$1"
 }
 
 print_warning() {
-    printf "${YELLOW}⚠️  $1${NORMAL}\n"
+    printf "${YELLOW}%s${NORMAL}\n" "$1"
 }
 
 print_error() {
-    printf "${RED}🔴  $1${NORMAL}\n"
+    printf "${RED}✗ %s${NORMAL}\n" "$1" >&2
 }
 
 print_header() {
-    printf "${BOLD}${CYAN}$1${NORMAL}\n"
+    printf "${BOLD}%s${NORMAL}\n" "$1"
 }
 
 ###########################################################################
@@ -78,16 +78,16 @@ setup_colors() {
 # Verifies required dependencies are installed: curl, unzip and jq
 preflight_check() {
 	local auto_install="${1:-false}"
-	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
+	print_info "Checking system requirements..."
 	local missing_deps=()
 
 	# Check required commands dependencies
 	if [ "$(uname)" = "Darwin" ]; then
 		# If brew is not installed, then quit, but only if we are on macOS
 		if ! command_exists brew; then
-			printf "${RED}❌ Homebrew is not installed. Please install Homebrew first.${NORMAL}\n"
-			printf "${BLUE}💡 You can install Homebrew with:${NORMAL}\n"
-			printf "${GREEN}   /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'\n"
+			print_error "Homebrew is not installed. Please install Homebrew first."
+			printf "Install it with:\n"
+			printf "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n"
 			return 1
 		fi
 	fi
@@ -97,80 +97,73 @@ preflight_check() {
 	command_exists jq || missing_deps+=( "jq" )
 
 	if [ ${#missing_deps[@]} -ne 0 ]; then
-		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"
+		print_warning "Missing required dependencies: ${missing_deps[*]}"
 
 		if [ "$(uname)" = "Darwin" ]; then
 			# Install the dependencies using Homebrew
-			printf "${BLUE}💡 Installing missing dependencies using Homebrew...${NORMAL}\n"
+			print_info "Installing missing dependencies with Homebrew..."
 			for dep in "${missing_deps[@]}"; do
-				printf "${BLUE}   Installing ${dep}...${NORMAL}\n"
+				print_info "Installing ${dep}..."
 				if ! brew install "$dep"; then
-					printf "${RED}❌ Failed to install ${dep}. Please install it manually.${NORMAL}\n"
+					print_error "Failed to install ${dep}. Please install it manually."
 					return 1
 				fi
 			done
-			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
+			print_success "All dependencies installed"
 		elif [ "$(uname)" = "Linux" ]; then
-			printf "${BLUE}💡 Installing missing dependencies using system package manager...${NORMAL}\n"
+			print_info "Installing missing dependencies with the system package manager..."
 
 			# Determine if we need sudo based on current user privileges
 			local use_sudo=""
 			if [ "$EUID" -ne 0 ]; then
 				use_sudo="sudo"
-				printf "${BLUE}🔐 Running as user (EUID=$EUID), will use sudo${NORMAL}\n"
-			else
-				printf "${BLUE}👑 Running as root (EUID=$EUID), no sudo needed${NORMAL}\n"
 			fi
 
 			if command_exists apt-get; then
-				printf "${BLUE}   Updating package list...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apt update${NORMAL}\n"
+				print_info "Updating package list..."
 				if ! $use_sudo apt update; then
-					printf "${RED}❌ Failed to update package list with apt.${NORMAL}\n"
+					print_error "Failed to update package list with apt."
 					return 1
 				fi
-				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apt install -y ${missing_deps[*]}${NORMAL}\n"
+				print_info "Installing dependencies: ${missing_deps[*]}..."
 				if ! $use_sudo apt install -y ${missing_deps[*]}; then
-					printf "${RED}❌ Failed to install dependencies with apt. Please install them manually.${NORMAL}\n"
+					print_error "Failed to install dependencies with apt. Please install them manually."
 					return 1
 				fi
 			elif command_exists apk; then
-				printf "${BLUE}   Updating package list...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apk update${NORMAL}\n"
+				print_info "Updating package list..."
 				if ! $use_sudo apk update; then
-					printf "${RED}❌ Failed to update package list with apk.${NORMAL}\n"
+					print_error "Failed to update package list with apk."
 					return 1
 				fi
-				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apk add ${missing_deps[*]}${NORMAL}\n"
+				print_info "Installing dependencies: ${missing_deps[*]}..."
 				if ! $use_sudo apk add ${missing_deps[*]}; then
-					printf "${RED}❌ Failed to install dependencies with apk. Please install them manually.${NORMAL}\n"
+					print_error "Failed to install dependencies with apk. Please install them manually."
 					return 1
 				fi
 			elif command_exists yum; then
-				printf "${BLUE}   Installing dependencies with yum...${NORMAL}\n"
+				print_info "Installing dependencies with yum..."
 				if ! $use_sudo yum install -y ${missing_deps[*]}; then
-					printf "${RED}❌ Failed to install dependencies with yum. Please install them manually.${NORMAL}\n"
+					print_error "Failed to install dependencies with yum. Please install them manually."
 					return 1
 				fi
 			elif command_exists dnf; then
-				printf "${BLUE}   Installing dependencies with dnf...${NORMAL}\n"
+				print_info "Installing dependencies with dnf..."
 				if ! $use_sudo dnf install -y ${missing_deps[*]}; then
-					printf "${RED}❌ Failed to install dependencies with dnf. Please install them manually.${NORMAL}\n"
+					print_error "Failed to install dependencies with dnf. Please install them manually."
 					return 1
 				fi
 			elif command_exists pacman; then
-				printf "${BLUE}   Installing dependencies with pacman...${NORMAL}\n"
+				print_info "Installing dependencies with pacman..."
 				if ! $use_sudo pacman -S --noconfirm ${missing_deps[*]}; then
-					printf "${RED}❌ Failed to install dependencies with pacman. Please install them manually.${NORMAL}\n"
+					print_error "Failed to install dependencies with pacman. Please install them manually."
 					return 1
 				fi
 			else
-				printf "${RED}❌ No supported package manager found. Please install dependencies manually: ${missing_deps[*]}${NORMAL}\n"
+				print_error "No supported package manager found. Please install dependencies manually: ${missing_deps[*]}"
 				return 1
 			fi
-			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
+			print_success "All dependencies installed"
 		fi
 	fi
 
@@ -178,24 +171,24 @@ preflight_check() {
 	# Java Version Check
 	###########################################################################
 	if ! check_java_version "$auto_install"; then
-		printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
+		print_error "Java 21 or higher is required to run BoxLang"
 
 		# Otherwise, prompt user for manual installation choice
-		printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
+		printf "Install it automatically now? (y/N) "
 		read -r response
 		case "$response" in
 			[yY][eE][sS]|[yY])
-				printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
+				print_info "Installing Java..."
 				if install_java; then
-					printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+					print_success "Java installed"
 					return 0
 				else
-					printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+					print_error "Automatic Java installation failed."
 					return 1
 				fi
 				;;
 			*)
-				printf "${YELLOW}💡 You can install Java manually using:${NORMAL}\n"
+				printf "Install Java manually with:\n"
 				if [ "$(uname)" = "Darwin" ]; then
 					printf "   brew install openjdk@21\n"
 					printf "   or download from: https://adoptium.net/\n"
@@ -229,7 +222,7 @@ preflight_check() {
 ###########################################################################
 check_java_version() {
 	local auto_install="${1:-false}"
-	printf "${BLUE}🔍 Checking Java 21 installation...${NORMAL}\n"
+	print_info "Checking for Java 21..."
 	local JAVA_CMD=""
 	local JAVA_VERSION=""
 
@@ -253,7 +246,7 @@ check_java_version() {
 
 	# If running under sudo, try to get the original user's environment
 	if [ -n "${SUDO_USER}" ]; then
-		printf "${YELLOW}🛡️ Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
+		print_info "Detected sudo execution, checking Java from original user context..."
 
 		# Try to get Java from the original user's environment
 		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
@@ -279,7 +272,7 @@ check_java_version() {
 						JAVA_VERSION=$(extract_java_version "$version_output")
 						if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
 							JAVA_CMD="$expanded_path"
-							printf "${GREEN}✅ Found Java ${JAVA_VERSION} at: ${JAVA_CMD}${NORMAL}\n"
+							print_success "Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
 							return 0
 						fi
 					fi
@@ -292,10 +285,10 @@ check_java_version() {
 					JAVA_VERSION=$(extract_java_version "$version_output")
 					if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
 						JAVA_CMD="$candidate"
-						printf "${GREEN}✅ Found Java ${JAVA_VERSION} at: ${JAVA_CMD}${NORMAL}\n"
+						print_success "Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
 						return 0
 					elif [ -n "$JAVA_VERSION" ]; then
-						printf "${YELLOW}⚠️  Found Java ${JAVA_VERSION} at ${candidate}, but Java 21+ is required${NORMAL}\n"
+						print_warning "Found Java ${JAVA_VERSION} at ${candidate}, but Java 21+ is required"
 					fi
 				fi
 			fi
@@ -304,12 +297,12 @@ check_java_version() {
 
 	# If auto_install is true, attempt automatic installation
 	if [ "$auto_install" = "true" ]; then
-		printf "${YELLOW}Java 21+ not found. Attempting automatic installation...${NORMAL}\n"
+		print_info "Java 21+ not found, installing automatically..."
 		if install_java; then
-			printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+			print_success "Java installed"
 			return 0
 		else
-			printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+			print_error "Automatic Java installation failed."
 			return 1
 		fi
 	fi
@@ -331,7 +324,7 @@ install_java() {
 	local JRE_FILENAME=""
 	local JAVA_INSTALL_DIR=""
 
-	printf "${BLUE}☕ Installing Java ${JRE_VERSION} ...${NORMAL}\n"
+	print_info "Installing Java ${JRE_VERSION}..."
 
 	# Normalize architecture names
 	case "$ARCH" in
@@ -368,10 +361,10 @@ install_java() {
 			local LIBC_TYPE="glibc"
 			if [ -f /etc/alpine-release ]; then
 				LIBC_TYPE="musl"
-				printf "${BLUE}🏔️  Detected Alpine Linux (musl libc)${NORMAL}\n"
+				print_info "Detected Alpine Linux (musl libc)"
 			elif command_exists ldd && ldd --version 2>&1 | grep -q musl; then
 				LIBC_TYPE="musl"
-				printf "${BLUE}🔍 Detected musl libc${NORMAL}\n"
+				print_info "Detected musl libc"
 			fi
 
 			# Set JRE URLs based on architecture and libc
@@ -400,28 +393,21 @@ install_java() {
 			;;
 	esac
 
-	printf "%s📍 Detected: %s (%s)%s\n" "${BLUE}" "${OS}" "${ARCH}" "${NORMAL}"
-	printf "📥 JRE URL [%s]\n" "${JRE_URL}"
-	printf "📦 JRE Filename [%s]\n" "${JRE_FILENAME}"
-	printf "📂 Installing to [%s]\n" "${JAVA_INSTALL_DIR}"
-	printf "${NORMAL}\n"
+	print_info "Detected: ${OS} (${ARCH}), installing to ${JAVA_INSTALL_DIR}"
 
 	# Create temporary directory
 	local TEMP_DIR=$(mktemp -d)
 	local DOWNLOAD_PATH="$TEMP_DIR/$JRE_FILENAME"
 
 	# Download JRE
-	printf "${BLUE}📥 Downloading JRE...${NORMAL}\n"
+	print_info "Downloading JRE..."
 	if ! curl -L --progress-bar "$JRE_URL" -o "$DOWNLOAD_PATH"; then
 		print_error "Failed to download JRE"
 		rm -rf "$TEMP_DIR"
 		return 1
 	fi
 
-	printf "${GREEN}✅ Downloaded JRE successfully${NORMAL}\n"
-
 	# Create installation directory (requires elevated privileges on most systems)
-	printf "${BLUE}📁 Creating installation directory: $JAVA_INSTALL_DIR${NORMAL}\n"
 	if [ "$OS" = "Darwin" ] || [ "$OS" = "Linux" ]; then
 		# Check if we need sudo or if running as root
 		local use_sudo=""
@@ -437,7 +423,7 @@ install_java() {
 	fi
 
 	# Extract JRE
-	printf "${BLUE}📦 Extracting JRE...${NORMAL}\n"
+	print_info "Extracting JRE..."
 	if ! tar -xzf "$DOWNLOAD_PATH" -C "$TEMP_DIR"; then
 		print_error "Failed to extract JRE archive"
 		rm -rf "$TEMP_DIR"
@@ -454,12 +440,10 @@ install_java() {
 
 	# Remove existing installation if it exists
 	if [ -d "$JAVA_INSTALL_DIR" ]; then
-		printf "${BLUE}🧹 Removing existing Java installation...${NORMAL}\n"
 		$use_sudo rm -rf "$JAVA_INSTALL_DIR"
 	fi
 
 	# Move extracted content to final location
-	printf "${BLUE}📋 Installing JRE to $JAVA_INSTALL_DIR...${NORMAL}\n"
 	if ! $use_sudo mv "$EXTRACTED_DIR" "$JAVA_INSTALL_DIR"; then
 		print_error "Failed to move JRE to installation directory"
 		rm -rf "$TEMP_DIR"
@@ -477,17 +461,15 @@ install_java() {
 	local PROFILE_FILE=$(get_shell_profile_file)
 
 	if [ -n "$PROFILE_FILE" ]; then
-		printf "${BLUE}⚙️  Updating shell profile: $PROFILE_FILE${NORMAL}\n"
-
 		# Add new environment variables
 		echo "" >> "$PROFILE_FILE"
 		echo "# Java JRE installed by BoxLang installer" >> "$PROFILE_FILE"
 		echo "export JAVA_HOME=\"$JAVA_INSTALL_DIR\"" >> "$PROFILE_FILE"
 		echo "export PATH=\"\$JAVA_HOME/bin:\$PATH\"" >> "$PROFILE_FILE"
-		printf "${GREEN}✅ Updated shell profile${NORMAL}\n"
-		printf "${YELLOW}⚠️  Please run 'source $PROFILE_FILE' or restart your terminal to use the new Java installation${NORMAL}\n"
+		print_success "Updated shell profile: $PROFILE_FILE"
+		print_warning "Run 'source $PROFILE_FILE' or restart your terminal to use the new Java installation"
 	else
-		printf "${YELLOW}⚠️  Could not determine shell profile file. Please manually add:${NORMAL}\n"
+		print_warning "Could not determine shell profile file. Please manually add:"
 		printf "   export JAVA_HOME=\"$JAVA_INSTALL_DIR\"\n"
 		printf "   export PATH=\"\$JAVA_HOME/bin:\$PATH\"\n"
 	fi
@@ -497,12 +479,8 @@ install_java() {
 	export PATH="$JAVA_HOME/bin:$PATH"
 
 	# Verify installation
-	printf "${BLUE}🔍 Verifying Java installation...${NORMAL}\n"
 	if "$JAVA_BIN/java" -version >/dev/null 2>&1; then
-		local java_version_output=$("$JAVA_BIN/java" -version 2>&1)
-		printf "${GREEN}✅ Java JRE installed successfully!${NORMAL}\n"
-		printf "${BLUE}📋 Version info:${NORMAL}\n"
-		echo "$java_version_output" | head -3
+		print_success "Java JRE installed"
 		return 0
 	else
 		print_error "Java installation verification failed"
@@ -524,7 +502,7 @@ get_shell_profile_file() {
 	local is_wsl=false
 	if [ -f /proc/version ] && grep -q Microsoft /proc/version; then
 		is_wsl=true
-		printf "${BLUE}💡 WSL environment detected${NORMAL}\n"
+		print_info "WSL environment detected" >&2
 	fi
 
 	# Determine the profile file based on shell and system

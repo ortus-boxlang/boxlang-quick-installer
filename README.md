@@ -205,54 +205,39 @@ C:\BoxLang\  # Installation directory (Windows)
 Always make sure to run the `--help` command to get the latest and greatest command usage.
 
 ```bash
-📦 BoxLang® Quick Installer v@build.version@
-
-This script installs the BoxLang® runtime, MiniServer and tools on your system.
+BoxLang® Quick Installer v@build.version@
+Installs the BoxLang® runtime, MiniServer, and tools.
 
 Usage:
   install-boxlang [version] [options]
-  install-boxlang --help
 
 Arguments:
-  [version]         (Optional) Specify which version to install
-                    - 'latest' (default): Install the latest stable release
-                    - 'snapshot': Install the latest development snapshot
-                    - '1.2.0': Install a specific version number
+  [version]              'latest' (default), 'snapshot', or a specific version like '1.2.0'
 
 Options:
-  --help, -h            Show this help message
-  --uninstall           Remove BoxLang from the system
-  --check-update        Check if a newer version is available
-  --system              Force system-wide installation (requires sudo)
-  --force               Force reinstallation even if already installed
-  --with-commandbox     Install CommandBox without prompting
-  --without-commandbox  Skip CommandBox installation
-  --with-jre            ✨ Automatically install Java 21 JRE if not found
-  --without-jre         ✨ Skip Java installation (manual installation required)
-  --yes, -y             Use defaults for all prompts (installs CommandBox and Java)
+  --help, -h             Show this help message
+  --uninstall            Remove BoxLang from the system
+  --check-update         Check if a newer version is available
+  --system               Force system-wide installation (requires sudo)
+  --force                Force reinstallation even if already installed
+  --with-commandbox      Install CommandBox without prompting
+  --without-commandbox   Skip CommandBox installation
+  --with-jre             Automatically install Java 21 JRE if not found
+  --without-jre          Skip Java installation (manual installation required)
+  --yes, -y              Use defaults for all prompts (installs CommandBox and Java)
 
 Examples:
   install-boxlang
-  install-boxlang latest
   install-boxlang snapshot
-  install-boxlang 1.2.0
-  install-boxlang --force
-  install-boxlang --with-commandbox
-  install-boxlang --without-commandbox
-  install-boxlang --with-jre
-  install-boxlang --without-jre
-  install-boxlang --with-commandbox --with-jre
+  install-boxlang 1.2.0 --force
   install-boxlang --yes
   install-boxlang --uninstall
   install-boxlang --check-update
   sudo install-boxlang --system
 
-Non-Interactive Usage:
-  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox
-  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox
-  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre
-  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
-  🌐 Install with defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
+Non-interactive:
+  curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
+  curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre --with-commandbox
 ```
 
 ## 🎯 Detailed Usage
