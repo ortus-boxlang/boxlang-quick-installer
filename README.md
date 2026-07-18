@@ -205,7 +205,7 @@ C:\BoxLang\  # Installation directory (Windows)
 Always make sure to run the `--help` command to get the latest and greatest command usage.
 
 ```bash
-BoxLang® Quick Installer v@build.version@
+📦 BoxLang® Quick Installer v@build.version@
 Installs the BoxLang® runtime, MiniServer, and tools.
 
 Usage:

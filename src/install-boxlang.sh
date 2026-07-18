@@ -488,7 +488,7 @@ uninstall_boxlang() {
 # Help Function
 ###########################################################################
 show_help() {
-	printf "${BOLD}BoxLang® Quick Installer${NORMAL} v${INSTALLER_VERSION}\n"
+	printf "${BOLD}📦 BoxLang® Quick Installer${NORMAL} v${INSTALLER_VERSION}\n"
 	printf "Installs the BoxLang® runtime, MiniServer, and tools.\n\n"
 	printf "${BOLD}Usage:${NORMAL}\n"
 	printf "  install-boxlang [version] [options]\n\n"
