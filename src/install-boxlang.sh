@@ -234,7 +234,7 @@ check_or_set_path() {
 	fi
 
 	# Check if BOXLANG_INSTALL_HOME is already set in the profile
-	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file" ]; then
+	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file"; then
 		install_home_exists=true
 	fi
 
