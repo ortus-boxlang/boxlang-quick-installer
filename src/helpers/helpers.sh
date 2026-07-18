@@ -14,6 +14,12 @@ print_info() {
     printf "%s\n" "$1"
 }
 
+# Only prints when VERBOSE=true - use for routine step-by-step narration
+print_verbose() {
+    [ "${VERBOSE:-false}" = "true" ] && printf "%s\n" "$1"
+    return 0
+}
+
 print_success() {
     printf "${GREEN}✓${NORMAL} %s\n" "$1"
 }
@@ -57,6 +63,13 @@ setup_colors() {
 		WHITE="$(tput setaf 7)"
 		BLACK="$(tput setaf 0)"
 		UNDERLINE="$(tput smul)"
+		DIM="$(tput dim)"
+		# BoxLang brand teal - use a truer teal on 256-color terminals, cyan otherwise
+		if [ "$ncolors" -ge 256 ]; then
+			TEAL="$(tput setaf 37)"
+		else
+			TEAL="$CYAN"
+		fi
 	else
 		RED=""
 		GREEN=""
@@ -69,7 +82,121 @@ setup_colors() {
 		WHITE=""
 		BLACK=""
 		UNDERLINE=""
+		DIM=""
+		TEAL=""
 	fi
+}
+
+###########################################################################
+# BoxLang Logo
+###########################################################################
+BOXLANG_LOGO=' ██████   ██████  ██   ██ ██       █████  ███    ██  ██████
+ ██   ██ ██    ██  ██ ██  ██      ██   ██ ████   ██ ██
+ ██████  ██    ██   ███   ██      ███████ ██ ██  ██ ██   ███
+ ██   ██ ██    ██  ██ ██  ██      ██   ██ ██  ██ ██ ██    ██
+ ██████   ██████  ██   ██ ███████ ██   ██ ██   ████  ██████'
+
+# Prints the teal BoxLang wordmark on real, unicode-capable terminals.
+# Silently does nothing on dumb terminals or piped/redirected output.
+print_logo() {
+	if [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && terminal_supports_unicode; then
+		printf "${TEAL}${BOLD}%s${NORMAL}\n\n" "$BOXLANG_LOGO"
+	fi
+}
+
+###########################################################################
+# Spinner / animated progress bar (non-verbose mode on a real terminal)
+###########################################################################
+terminal_supports_unicode() {
+	local locale="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+	case "$locale" in
+		*UTF-8*|*utf-8*|*UTF8*|*utf8*) return 0 ;;
+	esac
+	case "${TERM_PROGRAM:-}" in
+		Apple_Terminal|iTerm.app|vscode|WezTerm) return 0 ;;
+	esac
+	return 1
+}
+
+spinner_frame() {
+	local step="$1"
+	if terminal_supports_unicode; then
+		case $((step % 10)) in
+			0) printf '⠋' ;; 1) printf '⠙' ;; 2) printf '⠹' ;; 3) printf '⠸' ;; 4) printf '⠼' ;;
+			5) printf '⠴' ;; 6) printf '⠦' ;; 7) printf '⠧' ;; 8) printf '⠇' ;; *) printf '⠏' ;;
+		esac
+	else
+		case $((step % 4)) in
+			0) printf -- '-' ;; 1) printf '\\' ;; 2) printf '|' ;; *) printf '/' ;;
+		esac
+	fi
+}
+
+# run_step "<label>" -- command [args...]
+# On a real, non-verbose terminal: runs the command in the background behind
+# an animated spinner + progress bar, then prints a single "✓ <label>" line.
+# In --verbose mode, or when not attached to a real terminal (piped installs,
+# CI logs): runs the command directly with no animation - the command's own
+# print_verbose() calls (if any) provide the detail instead.
+run_step() {
+	local label="$1"; shift
+	[ "${1:-}" = "--" ] && shift
+
+	if [ "${VERBOSE:-false}" = "true" ] || [ ! -t 1 ] || [ "${TERM:-}" = "dumb" ]; then
+		"$@"
+		local status=$?
+		if [ $status -eq 0 ]; then
+			print_success "$label"
+		fi
+		return $status
+	fi
+
+	_run_step_animated "$label" "$@"
+}
+
+_run_step_animated() {
+	local label="$1"; shift
+	local log_file
+	log_file="$(mktemp)"
+
+	"$@" >"$log_file" 2>&1 &
+	local cmd_pid=$!
+
+	local full empty
+	if terminal_supports_unicode; then full="█"; empty="░"; else full="#"; empty="-"; fi
+
+	printf '\033[?25l'
+	local step=0 width=22 trail=6
+	while kill -0 "$cmd_pid" 2>/dev/null; do
+		local frame
+		frame=$(spinner_frame "$step")
+		local head=$(( step % (width + trail) )) bar="" i=0
+		while [ "$i" -lt "$width" ]; do
+			local age=$(( head - i ))
+			if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
+				bar="${bar}${TEAL}${full}${NORMAL}"
+			else
+				bar="${bar}${DIM}${empty}${NORMAL}"
+			fi
+			i=$((i + 1))
+		done
+		printf '\r\033[K  %s %s  %s' "$frame" "$bar" "$label"
+		step=$((step + 1))
+		sleep 0.08
+	done
+
+	local status=0
+	wait "$cmd_pid" || status=$?
+	printf '\r\033[K\033[?25h'
+
+	if [ "$status" -eq 0 ]; then
+		print_success "$label"
+	else
+		print_error "${label} - failed"
+		cat "$log_file" >&2
+	fi
+	rm -f "$log_file"
+	return "$status"
 }
 
 ###########################################################################
@@ -78,7 +205,7 @@ setup_colors() {
 # Verifies required dependencies are installed: curl, unzip and jq
 preflight_check() {
 	local auto_install="${1:-false}"
-	print_info "Checking system requirements..."
+	print_verbose "Checking system requirements..."
 	local missing_deps=()
 
 	# Check required commands dependencies
@@ -174,13 +301,11 @@ preflight_check() {
 		print_error "Java 21 or higher is required to run BoxLang"
 
 		# Otherwise, prompt user for manual installation choice
-		printf "Install it automatically now? (y/N) "
+		printf "☕ Install it automatically now? (y/N) "
 		read -r response
 		case "$response" in
 			[yY][eE][sS]|[yY])
-				print_info "Installing Java..."
 				if install_java; then
-					print_success "Java installed"
 					return 0
 				else
 					print_error "Automatic Java installation failed."
@@ -222,7 +347,7 @@ preflight_check() {
 ###########################################################################
 check_java_version() {
 	local auto_install="${1:-false}"
-	print_info "Checking for Java 21..."
+	print_verbose "Checking for Java 21..."
 	local JAVA_CMD=""
 	local JAVA_VERSION=""
 
@@ -246,7 +371,7 @@ check_java_version() {
 
 	# If running under sudo, try to get the original user's environment
 	if [ -n "${SUDO_USER}" ]; then
-		print_info "Detected sudo execution, checking Java from original user context..."
+		print_verbose "Detected sudo execution, checking Java from original user context..."
 
 		# Try to get Java from the original user's environment
 		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
@@ -272,7 +397,7 @@ check_java_version() {
 						JAVA_VERSION=$(extract_java_version "$version_output")
 						if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
 							JAVA_CMD="$expanded_path"
-							print_success "Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
+							print_verbose "${GREEN}✓${NORMAL} ☕ Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
 							return 0
 						fi
 					fi
@@ -285,7 +410,7 @@ check_java_version() {
 					JAVA_VERSION=$(extract_java_version "$version_output")
 					if [ -n "$JAVA_VERSION" ] && [ "$JAVA_VERSION" -ge 21 ] 2>/dev/null; then
 						JAVA_CMD="$candidate"
-						print_success "Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
+						print_verbose "${GREEN}✓${NORMAL} ☕ Found Java ${JAVA_VERSION} at ${JAVA_CMD}"
 						return 0
 					elif [ -n "$JAVA_VERSION" ]; then
 						print_warning "Found Java ${JAVA_VERSION} at ${candidate}, but Java 21+ is required"
@@ -297,9 +422,8 @@ check_java_version() {
 
 	# If auto_install is true, attempt automatic installation
 	if [ "$auto_install" = "true" ]; then
-		print_info "Java 21+ not found, installing automatically..."
+		print_verbose "Java 21+ not found, installing automatically..."
 		if install_java; then
-			print_success "Java installed"
 			return 0
 		else
 			print_error "Automatic Java installation failed."
@@ -324,7 +448,7 @@ install_java() {
 	local JRE_FILENAME=""
 	local JAVA_INSTALL_DIR=""
 
-	print_info "Installing Java ${JRE_VERSION}..."
+	print_verbose "Installing Java ${JRE_VERSION}..."
 
 	# Normalize architecture names
 	case "$ARCH" in
@@ -361,10 +485,10 @@ install_java() {
 			local LIBC_TYPE="glibc"
 			if [ -f /etc/alpine-release ]; then
 				LIBC_TYPE="musl"
-				print_info "Detected Alpine Linux (musl libc)"
+				print_verbose "Detected Alpine Linux (musl libc)"
 			elif command_exists ldd && ldd --version 2>&1 | grep -q musl; then
 				LIBC_TYPE="musl"
-				print_info "Detected musl libc"
+				print_verbose "Detected musl libc"
 			fi
 
 			# Set JRE URLs based on architecture and libc
@@ -393,15 +517,14 @@ install_java() {
 			;;
 	esac
 
-	print_info "Detected: ${OS} (${ARCH}), installing to ${JAVA_INSTALL_DIR}"
+	print_verbose "Detected: ${OS} (${ARCH}), installing to ${JAVA_INSTALL_DIR}"
 
 	# Create temporary directory
 	local TEMP_DIR=$(mktemp -d)
 	local DOWNLOAD_PATH="$TEMP_DIR/$JRE_FILENAME"
 
 	# Download JRE
-	print_info "Downloading JRE..."
-	if ! curl -L --progress-bar "$JRE_URL" -o "$DOWNLOAD_PATH"; then
+	if ! run_step "☕ Downloaded Java ${JRE_VERSION}" -- curl -fsSL "$JRE_URL" -o "$DOWNLOAD_PATH"; then
 		print_error "Failed to download JRE"
 		rm -rf "$TEMP_DIR"
 		return 1
@@ -423,8 +546,7 @@ install_java() {
 	fi
 
 	# Extract JRE
-	print_info "Extracting JRE..."
-	if ! tar -xzf "$DOWNLOAD_PATH" -C "$TEMP_DIR"; then
+	if ! run_step "Extracted Java runtime" -- tar -xzf "$DOWNLOAD_PATH" -C "$TEMP_DIR"; then
 		print_error "Failed to extract JRE archive"
 		rm -rf "$TEMP_DIR"
 		return 1
@@ -502,7 +624,7 @@ get_shell_profile_file() {
 	local is_wsl=false
 	if [ -f /proc/version ] && grep -q Microsoft /proc/version; then
 		is_wsl=true
-		print_info "WSL environment detected" >&2
+		print_verbose "WSL environment detected" >&2
 	fi
 
 	# Determine the profile file based on shell and system

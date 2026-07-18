@@ -26,6 +26,9 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
 INSTALL_JRE=""
+# Non-verbose by default: routine step-by-step narration is hidden behind an
+# animated progress indicator. --verbose/-v shows every step as plain text.
+VERBOSE=false
 
 ###########################################################################
 # Get current BoxLang install home
@@ -143,6 +146,7 @@ get_latest_version() {
 # Check for updates and optionally prompt for installation
 ###########################################################################
 check_for_updates() {
+	print_logo
 	print_info "Checking for BoxLang updates..."
 
 	# Get current version
@@ -179,7 +183,7 @@ check_for_updates() {
 			return 0
 			;;
 		2)
-			print_info "A newer version of BoxLang is available."
+			print_info "🔄 A newer version of BoxLang is available."
 			printf "Update to version ${latest_version}? [Y/n] "
 			read -r response < /dev/tty
 			case "$response" in
@@ -241,14 +245,14 @@ check_or_set_path() {
 	# If all entries exist, we're done
 	if [ "$path_exists" = true ] && [ "$install_home_exists" = true ]; then
 		if [ -z "$boxlang_home_bin" ] || [ "$boxlang_home_bin_exists" = true ]; then
-			print_success "PATH entry and BOXLANG_INSTALL_HOME already exist in $profile_file"
+			print_verbose "${GREEN}✓${NORMAL} PATH entry and BOXLANG_INSTALL_HOME already exist in $profile_file"
 			return 0
 		fi
 	fi
 
 	# If PATH exists but BOXLANG_INSTALL_HOME doesn't, add only the install home
 	if [ "$path_exists" = true ] && [ "$install_home_exists" = false ]; then
-		print_info "Adding BOXLANG_INSTALL_HOME to $profile_file (upgrade from older installation)..."
+		print_verbose "Adding BOXLANG_INSTALL_HOME to $profile_file (upgrade from older installation)..."
 		{
 			echo ""
 			echo "# BoxLang installation environment setup - added on $(date)"
@@ -265,11 +269,11 @@ check_or_set_path() {
 
 	# Add PATH to the profile file
 	if [ -n "$boxlang_home_bin" ]; then
-		print_info "Adding [$bin_dir] and [$boxlang_home_bin] to PATH in [$profile_file]..."
+		print_verbose "Adding [$bin_dir] and [$boxlang_home_bin] to PATH in [$profile_file]..."
 	else
-		print_info "Adding [$bin_dir] to PATH in [$profile_file]..."
+		print_verbose "Adding [$bin_dir] to PATH in [$profile_file]..."
 	fi
-	print_info "Adding BOXLANG_INSTALL_HOME [$install_home] in [$profile_file]..."
+	print_verbose "Adding BOXLANG_INSTALL_HOME [$install_home] in [$profile_file]..."
 
 	{
 		echo ""
@@ -310,33 +314,43 @@ check_or_set_path() {
 }
 
 ###########################################################################
+# Downloads, extracts, and links the CommandBox binary (run via run_step)
+###########################################################################
+_install_commandbox_binary() {
+	local system_bin="$1" boxlang_bin="$2" commandbox_url="$3" commandbox_filename="$4" temp_dir="$5"
+	curl -fsSL -o "${temp_dir}/${commandbox_filename}" "${commandbox_url}"
+	unzip -q -o "${temp_dir}/${commandbox_filename}" -d "${temp_dir}/commandbox/"
+	mv "${temp_dir}/commandbox/box" "${boxlang_bin}/box"
+	chmod 755 "${boxlang_bin}/box"
+	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
+	rm -rf "${temp_dir}/${commandbox_filename}" "${temp_dir}/commandbox/"
+}
+
+###########################################################################
 # CommandBox Installation Check and Install Function
 ###########################################################################
 check_and_install_commandbox() {
 	local system_bin="$1"
 	local boxlang_bin="$2"
 
-	print_info "Checking for CommandBox..."
+	print_verbose "Checking for CommandBox..."
 
 	# Check if CommandBox is already available
 	if command_exists box; then
-		print_success "CommandBox is already installed and available"
+		print_verbose "${GREEN}✓${NORMAL} CommandBox is already installed and available"
 		return 0
 	fi
-
-	print_warning "CommandBox is not installed"
-	print_info "CommandBox is the package manager for BoxLang®, used to manage modules, dependencies, and servlet containers."
 
 	# Determine if we should install CommandBox based on flags
 	local should_install=""
 	if [ "$INSTALL_COMMANDBOX" = "true" ]; then
 		should_install="yes"
-		print_info "Installing CommandBox (auto-install enabled)..."
 	elif [ "$INSTALL_COMMANDBOX" = "false" ]; then
 		should_install="no"
-		print_info "Skipping CommandBox installation (--without-commandbox specified)"
+		print_verbose "Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
+		print_info "CommandBox is the package manager for BoxLang®, used to manage modules, dependencies, and servlet containers."
 		printf "Install CommandBox? [Y/n] "
 		read -r response < /dev/tty
 		case "$response" in
@@ -354,40 +368,15 @@ check_and_install_commandbox() {
 		return 0
 	fi
 
-	print_info "Installing CommandBox..."
-
 	# The universal binary for mac/linux is available at the following URL
 	local commandbox_url="https://www.ortussolutions.com/parent/download/commandbox/type/bin"
 	local commandbox_filename="commandbox.zip"
 
-	# Download CommandBox
-	print_info "Downloading CommandBox from ${commandbox_url}..."
-	if ! env curl -L --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
-		print_error "Failed to download CommandBox"
+	if ! run_step "📦 CommandBox installed" -- _install_commandbox_binary "$system_bin" "$boxlang_bin" "$commandbox_url" "$commandbox_filename" "$TEMP_DIR"; then
+		print_error "Failed to install CommandBox"
 		print_info "Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation"
 		return 1
 	fi
-
-	# Extract CommandBox
-	print_info "Extracting CommandBox..."
-	if ! unzip -o "${TEMP_DIR}/${commandbox_filename}" -d "${TEMP_DIR}/commandbox/"; then
-		print_error "Failed to extract CommandBox"
-		return 1
-	fi
-
-	# Install CommandBox to BoxLang bin directory
-	print_info "Installing CommandBox to ${boxlang_bin}/box..."
-	mv "${TEMP_DIR}/commandbox/box" "${boxlang_bin}/box"
-	chmod 755 "${boxlang_bin}/box"
-
-	# Create symbolic link in system bin directory
-	print_info "Creating CommandBox symbolic link in ${system_bin}..."
-	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
-
-	# Cleanup
-	rm -rf "${TEMP_DIR}/${commandbox_filename}" "${TEMP_DIR}/commandbox/"
-
-	print_success "CommandBox installed successfully"
 	return 0
 }
 
@@ -397,7 +386,7 @@ check_and_install_commandbox() {
 verify_installation() {
 	local bin_dir="$1"
 	local system_bin="$2"
-	print_info "Verifying installation..."
+	print_verbose "Verifying installation..."
 
 	# Make sure BoxLang binary can emit version information
 	if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
@@ -435,11 +424,11 @@ verify_installation() {
 		if [ ! -L "${system_bin}/box" ]; then
 			print_warning "CommandBox symbolic link was not created properly"
 		else
-			print_success "CommandBox is installed and linked"
+			print_verbose "${GREEN}✓${NORMAL} CommandBox is installed and linked"
 		fi
 	fi
 
-	print_success "Installation verified"
+	print_verbose "${GREEN}✓${NORMAL} Installation verified"
 	return 0
 }
 
@@ -447,10 +436,11 @@ verify_installation() {
 # Uninstall BoxLang
 ###########################################################################
 uninstall_boxlang() {
-	print_warning "Uninstalling BoxLang..."
+	print_logo
+	print_warning "🗑️  Uninstalling BoxLang..."
 
 	# Remove symbolic links from system bin directories
-	print_info "Removing system symbolic links..."
+	print_verbose "Removing system symbolic links..."
 	rm -fv /usr/local/bin/boxlang
 	rm -fv /usr/local/bin/bx
 	rm -fv /usr/local/bin/boxlang-miniserver
@@ -460,16 +450,16 @@ uninstall_boxlang() {
 	rm -fv /usr/local/bin/install-bvm
 
 	# Remove BoxLang installation directory
-	print_info "Removing previous BoxLang installation directory..."
+	print_verbose "Removing previous BoxLang installation directory..."
 	rm -rfv /usr/local/boxlang
 
 	# Remove legacy JAR files if they exist
-	print_info "Removing legacy JAR files (if any)..."
+	print_verbose "Removing legacy JAR files (if any)..."
 	rm -fv /usr/local/lib/boxlang-*.jar
 
 	# Also check user-local installation
 	if [ -d "$HOME/.local/bin" ]; then
-		print_info "Checking user-local installation..."
+		print_verbose "Checking user-local installation..."
 		rm -fv "$HOME/.local/bin/boxlang"
 		rm -fv "$HOME/.local/bin/bx"
 		rm -fv "$HOME/.local/bin/boxlang-miniserver"
@@ -481,7 +471,7 @@ uninstall_boxlang() {
 
 	# Remove user-local BoxLang installation directory
 	if [ -d "$HOME/.local/boxlang" ]; then
-		print_info "Removing user-local BoxLang installation directory..."
+		print_verbose "Removing user-local BoxLang installation directory..."
 		rm -rfv "$HOME/.local/boxlang"
 	fi
 
@@ -514,7 +504,8 @@ show_help() {
 	printf "  --without-commandbox   Skip CommandBox installation\n"
 	printf "  --with-jre             Automatically install Java 21 JRE if not found\n"
 	printf "  --without-jre          Skip Java installation (manual installation required)\n"
-	printf "  --yes, -y              Use defaults for all prompts (installs CommandBox and Java)\n\n"
+	printf "  --yes, -y              Use defaults for all prompts (installs CommandBox and Java)\n"
+	printf "  --verbose, -v          Show every step instead of the progress indicator\n\n"
 	printf "${BOLD}Examples:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang snapshot\n"
@@ -554,6 +545,49 @@ remove_previous_installation() {
 }
 
 ###########################################################################
+# Downloads the BoxLang runtime, MiniServer, and installer bundle (run via run_step)
+###########################################################################
+_download_boxlang_assets() {
+	local temp_dir="$1" download_url="$2" download_url_miniserver="$3" installer_url="$4"
+	rm -f "${temp_dir}/boxlang.zip"
+	curl -fsSL -o "${temp_dir}/boxlang.zip" "${download_url}"
+	rm -f "${temp_dir}/boxlang-miniserver.zip"
+	curl -fsSL -o "${temp_dir}/boxlang-miniserver.zip" "${download_url_miniserver}"
+	rm -f "${temp_dir}/boxlang-installer.zip"
+	curl -fsSL -o "${temp_dir}/boxlang-installer.zip" "${installer_url}"
+}
+
+###########################################################################
+# Unzips assets, sets permissions, and links binaries (run via run_step)
+###########################################################################
+_setup_boxlang_assets() {
+	local system_home="$1" system_bin="$2" destination_bin="$3" destination_scripts="$4" temp_dir="$5"
+	unzip -q -o "${temp_dir}/boxlang.zip" -d "${system_home}"
+	unzip -q -o "${temp_dir}/boxlang-miniserver.zip" -d "${system_home}"
+	unzip -q -o "${temp_dir}/boxlang-installer.zip" -d "${system_home}/scripts"
+	chmod -R 755 "${system_home}"
+
+	# BoxLang binaries with aliases
+	ln -sf "${destination_bin}/boxlang" "${system_bin}/boxlang"
+	ln -sf "${system_bin}/boxlang" "${system_bin}/bx"
+	# MiniServer binaries with aliases
+	ln -sf "${destination_bin}/boxlang-miniserver" "${system_bin}/boxlang-miniserver"
+	ln -sf "${system_bin}/boxlang-miniserver" "${system_bin}/bx-miniserver"
+	# Helper scripts
+	ln -sf "${destination_scripts}/install-boxlang.sh" "${system_bin}/install-boxlang"
+	ln -sf "${destination_scripts}/install-bx-module.sh" "${system_bin}/install-bx-module"
+	ln -sf "${destination_scripts}/install-bx-site.sh" "${system_bin}/install-bx-site"
+	ln -sf "${destination_scripts}/install-bvm.sh" "${system_bin}/install-bvm"
+	ln -sf "${destination_scripts}/bvm.sh" "${system_bin}/bvm"
+
+	# Cleanup
+	rm -f "${temp_dir}"/boxlang*.zip
+	# Remove Windows-specific files that may have been downloaded
+	rm -f "${destination_bin}"/*.bat "${destination_bin}"/*.ps1
+	rm -f "${destination_scripts}"/*.bat "${destination_scripts}"/*.ps1
+}
+
+###########################################################################
 # Handle the main installation
 ###########################################################################
 install_boxlang() {
@@ -579,6 +613,8 @@ install_boxlang() {
 		FORCE_INSTALL=true
 	fi
 
+	print_logo
+
 	###########################################################################
 	# Pre-flight Checks
 	# This function checks for necessary tools and environment
@@ -601,14 +637,14 @@ install_boxlang() {
 	###########################################################################
 
 	if [ "$FORCE_INSTALL" = false ]; then
-		print_info "Checking for existing BoxLang installation..."
+		print_verbose "Checking for existing BoxLang installation..."
 		local CURRENT_VERSION=$(get_current_version)
 		if [ $? -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
 			print_warning "BoxLang is already installed at [${SYSTEM_HOME}] with version [${CURRENT_VERSION}]"
 			printf "Use 'install-boxlang --uninstall' to remove it, '--force' to reinstall, or '--help' for more options.\n"
 			exit 0;
 		else
-			print_success "No previous BoxLang installation found, proceeding with fresh install..."
+			print_verbose "${GREEN}✓${NORMAL} No previous BoxLang installation found, proceeding with fresh install..."
 		fi
 	else
 		print_warning "Forcing reinstallation of BoxLang..."
@@ -665,69 +701,22 @@ install_boxlang() {
 	# Start the installation
 	###########################################################################
 	print_info "Installing BoxLang® [${TARGET_VERSION}] to [${SYSTEM_HOME}]"
-	print_info "Downloading, please wait..."
 
-	###########################################################################
-	# Download BoxLang
-	###########################################################################
-	rm -f "${TEMP_DIR}"/boxlang.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
-		print_error "Download of BoxLang® binary failed"
+	# Download the runtime, MiniServer, and installer bundle
+	if ! run_step "Downloaded BoxLang®" -- _download_boxlang_assets "$TEMP_DIR" "$DOWNLOAD_URL" "$DOWNLOAD_URL_MINISERVER" "$INSTALLER_URL"; then
+		print_error "Download of BoxLang® failed"
 		exit 1
-	}
-	# Download BoxLang MiniServer
-	rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
-		print_error "Download of BoxLang® MiniServer binary failed"
+	fi
+
+	# Unzip, set permissions, and link binaries
+	if ! run_step "BoxLang® is set up" -- _setup_boxlang_assets "$SYSTEM_HOME" "$SYSTEM_BIN" "$DESTINATION_BIN" "$DESTINATION_SCRIPTS" "$TEMP_DIR"; then
+		print_error "Setting up BoxLang® failed"
 		exit 1
-	}
-	# Download BoxLang Installer Bundle
-	rm -f "${TEMP_DIR}"/boxlang-installer.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		print_error "Download of BoxLang® Installer bundle failed"
-		exit 1
-	}
-
-	###########################################################################
-	# Inflate them
-	###########################################################################
-	print_info "Unzipping assets to ${SYSTEM_HOME}..."
-	unzip -q -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
-	unzip -q -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
-	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
-
-	###########################################################################
-	# Make them executable
-	###########################################################################
-	chmod -R 755 "${SYSTEM_HOME}"
-
-	###########################################################################
-	# Add internal links within BoxLang home
-	###########################################################################
-	print_info "Adding system symbolic links..."
-	# BoxLang Binaries with aliases
-	ln -sf "${DESTINATION_BIN}/boxlang" "${SYSTEM_BIN}/boxlang"
-	ln -sf "${SYSTEM_BIN}/boxlang" "${SYSTEM_BIN}/bx"
-	# MiniServer Binaries with aliases
-	ln -sf "${DESTINATION_BIN}/boxlang-miniserver" "${SYSTEM_BIN}/boxlang-miniserver"
-	ln -sf "${SYSTEM_BIN}/boxlang-miniserver" "${SYSTEM_BIN}/bx-miniserver"
-	# Helper scripts
-	ln -sf "${DESTINATION_SCRIPTS}/install-boxlang.sh" "${SYSTEM_BIN}/install-boxlang"
-	ln -sf "${DESTINATION_SCRIPTS}/install-bx-module.sh" "${SYSTEM_BIN}/install-bx-module"
-	ln -sf "${DESTINATION_SCRIPTS}/install-bx-site.sh" "${SYSTEM_BIN}/install-bx-site"
-	ln -sf "${DESTINATION_SCRIPTS}/install-bvm.sh" "${SYSTEM_BIN}/install-bvm"
-	ln -sf "${DESTINATION_SCRIPTS}/bvm.sh" "${SYSTEM_BIN}/bvm"
+	fi
 
 	# CommandBox Installation
 	# In the future this will be part of BoxLang
 	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
-
-	# Cleanup
-	print_info "Cleaning up..."
-	rm -f "${TEMP_DIR}"/boxlang*.zip
-	# Remove Windows-specific files that may have been downloaded
-	rm -f "${DESTINATION_BIN}"/*.bat "${DESTINATION_BIN}"/*.ps1
-	rm -f "${DESTINATION_SCRIPTS}"/*.bat "${DESTINATION_SCRIPTS}"/*.ps1
 
 	# Verify installation
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
@@ -740,7 +729,7 @@ install_boxlang() {
 	check_or_set_path "$SYSTEM_BIN" "$SYSTEM_HOME" "$BOXLANG_HOME_BIN"
 
 	printf "\n"
-	print_success "BoxLang® was installed successfully."
+	print_success "🎉 BoxLang® was installed successfully."
 	printf "\n"
 	printf "Installed to:  ${BOLD}${SYSTEM_HOME}${NORMAL}\n"
 	printf "System links:  ${BOLD}${SYSTEM_BIN}${NORMAL}\n"
@@ -778,7 +767,7 @@ main() {
 				command="check-update"
 				break
 				;;
-			"--version"|"-v")
+			"--version")
 				command="version"
 				break
 				;;
@@ -793,6 +782,9 @@ main() {
 				;;
 			"--without-jre")
 				INSTALL_JRE=false
+				;;
+			"--verbose"|"-v")
+				VERBOSE=true
 				;;
 			"--yes"|"-y")
 				# Setup all defaults here.

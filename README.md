@@ -225,6 +225,7 @@ Options:
   --with-jre             Automatically install Java 21 JRE if not found
   --without-jre          Skip Java installation (manual installation required)
   --yes, -y              Use defaults for all prompts (installs CommandBox and Java)
+  --verbose, -v          Show every step instead of the progress indicator
 
 Examples:
   install-boxlang

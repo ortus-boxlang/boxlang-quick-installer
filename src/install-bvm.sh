@@ -25,6 +25,9 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
 BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.sh"
 INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
+# Non-verbose by default: routine step-by-step narration is hidden behind an
+# animated progress indicator. --verbose/-v shows every step as plain text.
+VERBOSE=false
 
 # Helpers
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
@@ -48,81 +51,69 @@ else
 fi
 
 ###########################################################################
-# Install BVM
+# Downloads the installer bundle and lays out BVM's directory structure
+# (run via run_step)
 ###########################################################################
-install_bvm() {
-    # Create BVM directory
-    print_info "Creating BVM directory at [$BVM_HOME]"
-    mkdir -p "$BVM_HOME/bin" "$BVM_HOME/versions" "$BVM_HOME/cache" "$BVM_HOME/scripts"
-    local bvm_script="$BVM_HOME/bin/bvm"
-	local scripts_dir="$BVM_HOME/scripts"
+_install_bvm_bundle() {
+	local bvm_home="$1" temp_dir="$2" installer_url="$3"
+	local scripts_dir="$bvm_home/scripts"
 
-	###########################################################################
-	# Download BoxLang Installer Scripts
-	###########################################################################
-    print_info "Downloading BVM from [${INSTALLER_URL}]"
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		print_error "Error: Download of BoxLang® Installer bundle failed"
-		exit 1
-	}
+	print_verbose "Creating BVM directory at [$bvm_home]"
+	mkdir -p "$bvm_home/bin" "$bvm_home/versions" "$bvm_home/cache" "$scripts_dir"
 
-	###########################################################################
-	# Inflate them
-	###########################################################################
-	print_info "Inflating BoxLang installer scripts..."
-	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${scripts_dir}"
+	print_verbose "Downloading BVM from [${installer_url}]"
+	curl -fsSL -o "${temp_dir}/boxlang-installer.zip" "${installer_url}"
 
-	###########################################################################
-	# Make them executable
-	###########################################################################
-	print_info "Making BoxLang installer scripts executable..."
+	print_verbose "Inflating BoxLang installer scripts..."
+	unzip -q -o "${temp_dir}/boxlang-installer.zip" -d "${scripts_dir}"
 	chmod -R 755 "${scripts_dir}"
 
-	###########################################################################
-	# Add internal links within BoxLang home
-	###########################################################################
-
-	print_info "Creating internal links for BoxLang scripts..."
+	print_verbose "Creating internal links for BoxLang scripts..."
 	# Create symlinks for install-bx-module, install-bx-site, bvm
-	ln -sf "$scripts_dir/install-bx-module.sh" "$BVM_HOME/bin/install-bx-module"
-	ln -sf "$scripts_dir/install-bx-site.sh" "$BVM_HOME/bin/install-bx-site"
-	ln -sf "$scripts_dir/install-bvm.sh" "$BVM_HOME/bin/install-bvm"
-	ln -sf "$scripts_dir/bvm.sh" "$BVM_HOME/bin/bvm"
+	ln -sf "$scripts_dir/install-bx-module.sh" "$bvm_home/bin/install-bx-module"
+	ln -sf "$scripts_dir/install-bx-site.sh" "$bvm_home/bin/install-bx-site"
+	ln -sf "$scripts_dir/install-bvm.sh" "$bvm_home/bin/install-bvm"
+	ln -sf "$scripts_dir/bvm.sh" "$bvm_home/bin/bvm"
 
-    # Create convenience wrapper scripts for direct access to BoxLang tools
-    print_info "Creating convenience wrapper scripts..."
+	print_verbose "Creating convenience wrapper scripts..."
 
-    # Create boxlang wrapper
-    cat > "$BVM_HOME/bin/boxlang" << 'EOF'
+	# Create boxlang wrapper
+	cat > "$bvm_home/bin/boxlang" << 'EOF'
 #!/bin/bash
 # BoxLang wrapper script for BVM
 exec "$(dirname "$0")/bvm" exec "$@"
 EOF
 
-    # Create bx wrapper
-    cat > "$BVM_HOME/bin/bx" << 'EOF'
+	# Create bx wrapper
+	cat > "$bvm_home/bin/bx" << 'EOF'
 #!/bin/bash
 # BoxLang (bx) wrapper script for BVM
 exec "$(dirname "$0")/bvm" exec "$@"
 EOF
 
-    # Create boxlang-miniserver wrapper
-    cat > "$BVM_HOME/bin/boxlang-miniserver" << 'EOF'
+	# Create boxlang-miniserver wrapper
+	cat > "$bvm_home/bin/boxlang-miniserver" << 'EOF'
 #!/bin/bash
 # BoxLang MiniServer wrapper script for BVM
 exec "$(dirname "$0")/bvm" miniserver "$@"
 EOF
 
-    # Create bx-miniserver wrapper
-    cat > "$BVM_HOME/bin/bx-miniserver" << 'EOF'
+	# Create bx-miniserver wrapper
+	cat > "$bvm_home/bin/bx-miniserver" << 'EOF'
 #!/bin/bash
 # BoxLang MiniServer (bx-miniserver) wrapper script for BVM
 exec "$(dirname "$0")/bvm" miniserver "$@"
 EOF
 
-    # Make all wrapper scripts executable
-    chmod -R 755 "$BVM_HOME/bin"/*
-    print_success "BVM script and wrappers installed to [$BVM_HOME]"
+	# Make all wrapper scripts executable
+	chmod -R 755 "$bvm_home/bin"/*
+}
+
+###########################################################################
+# Install BVM
+###########################################################################
+install_bvm() {
+	run_step "BVM installed to [$BVM_HOME]" -- _install_bvm_bundle "$BVM_HOME" "$TEMP_DIR" "$INSTALLER_URL"
 }
 
 ###########################################################################
@@ -132,7 +123,7 @@ setup_path() {
     local bvm_bin="$BVM_HOME/bin"
     local shell_name="${SHELL##*/}"
 
-    print_info "Setting up PATH for BVM..."
+    print_verbose "Setting up PATH for BVM..."
 
     # Use helper function to detect shell profile file
     # Intentionally not `local` - show_help() reads this after we return
@@ -140,17 +131,17 @@ setup_path() {
 
     # Check if BVM is already in PATH
     if echo "$PATH" | grep -q "$bvm_bin"; then
-        print_success "BVM is already in PATH"
+        print_verbose "${GREEN}✓${NORMAL} BVM is already in PATH"
         return 0
     fi
 
     # Check if BVM path is already in profile
     if grep -q "$bvm_bin" "$profile_file" 2>/dev/null; then
-        print_success "BVM path already configured in $profile_file"
+        print_verbose "${GREEN}✓${NORMAL} BVM path already configured in $profile_file"
         return 0
     fi
 
-    print_info "Adding BVM to PATH in $profile_file"
+    print_verbose "Adding BVM to PATH in $profile_file"
 
     # Add BVM to PATH
     {
@@ -224,30 +215,40 @@ show_help() {
 main() {
 	setup_colors
 
-    print_header "BVM (BoxLang Version Manager) Installer"
-    printf "\n"
+	# Parse arguments
+	for arg in "$@"; do
+		case "$arg" in
+			"--verbose"|"-v")
+				VERBOSE=true
+				;;
+		esac
+	done
+
+	print_logo
+	print_header "BVM (BoxLang Version Manager) Installer"
+	printf "\n"
 
 	# Pre-flight Checks
 	if ! preflight_check; then
 		exit 1
 	fi
 
-    # Install BVM
-    if ! install_bvm; then
-        exit 1
-    fi
+	# Install BVM
+	if ! install_bvm; then
+		exit 1
+	fi
 
-    # Setup PATH
-    if ! setup_path; then
-        exit 1
-    fi
+	# Setup PATH
+	if ! setup_path; then
+		exit 1
+	fi
 
-    printf "\n"
-    print_success "BVM was installed successfully."
-    printf "\n"
+	printf "\n"
+	print_success "🎉 BVM was installed successfully."
+	printf "\n"
 
-    # Show instructions
-    show_help
+	# Show instructions
+	show_help
 }
 
 # Run main function
