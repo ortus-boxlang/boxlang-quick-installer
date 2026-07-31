@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated the BVM installer banner to display the current installer version.
+- Updated the build process to replace the installer version token in all generated artifacts, including BVM and Windows installers.
+
+### Added
+
+- Added automatic CloudFront cache invalidation for stable installer files after successful releases to `main`.
+
+### Fixed
+
+- Fixed the first BVM installation so the first successfully installed version is activated automatically.
+- Fixed Java prerequisite prompts when installers are executed through a piped `curl` command by reading responses from the terminal.
 
 ## [1.31.0] - 2026-07-31
 

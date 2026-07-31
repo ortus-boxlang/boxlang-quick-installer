@@ -95,6 +95,7 @@ jobs:
 
       - name: Invalidate CloudFront Cache
         if: github.ref == 'refs/heads/main'
+        continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ACCESS_SECRET }}
