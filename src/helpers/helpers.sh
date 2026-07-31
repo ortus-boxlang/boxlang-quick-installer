@@ -182,7 +182,11 @@ preflight_check() {
 
 		# Otherwise, prompt user for manual installation choice
 		printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
-		read -r response
+		if [ -r /dev/tty ]; then
+			read -r response < /dev/tty
+		else
+			response=""
+		fi
 		case "$response" in
 			[yY][eE][sS]|[yY])
 				printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
