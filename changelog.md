@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the BVM installer banner to display the current installer version.
+
 ## [1.31.0] - 2026-07-31
 
 ### Added

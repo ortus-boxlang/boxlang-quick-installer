@@ -23,6 +23,7 @@ fi
 # Global variables
 TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
+BVM_VERSION="@build.version@"
 BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.sh"
 INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
 BVM_INIT_FILE="$BVM_HOME/scripts/bvm-init.sh"
@@ -220,7 +221,7 @@ main() {
         LOCAL_INSTALL=true
     fi
 
-    print_header "📦 BVM (BoxLang Version Manager) Installer"
+    print_header "📦 BVM (BoxLang Version Manager) Installer v${BVM_VERSION}"
     printf "\n"
 
 	# Pre-flight Checks
