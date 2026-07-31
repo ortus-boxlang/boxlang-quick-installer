@@ -41,7 +41,12 @@ The only difference is that BVM adds version management capabilities on top.
 - 🔗 **Seamless integration** - wrapper scripts make all tools available in PATH
 - ⚡ **Command aliases** - convenient short aliases for all major commands
 - 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
+- 📦 **Module dependency tracking** - module installs and removals maintain a `box.json` manifest
+- 🔄 **Module updates** - find outdated modules with `--outdated` and update them with `--update`
 - 🎯 **Smart version detection** - automatically detects actual version numbers from installations
+- 🚀 **First-install activation** - automatically activates the first BoxLang version you install
+- 🐚 **Shell initialization** - centralizes BVM and BoxLang PATH setup for Bash, Zsh, and Fish
+- ⌨️ **Command completion** - provides BVM command and version completion for Bash and Zsh
 - 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
 - ☕ **Automatic Java installation** - installs Java 21 JRE if needed with `--with-jre` option
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
@@ -133,7 +138,7 @@ After installation, **restart your terminal** (or refresh your PATH), then:
 
 ```powershell
 bvm install latest
-bvm use latest
+# The first installed version is activated automatically
 boxlang --version
 ```
 
@@ -194,6 +199,7 @@ boxlang --version
 ```bash
 # Install the latest stable BoxLang version
 bvm install latest
+# If this is the first installed version, BVM activates it automatically
 
 # Switch to the latest version
 bvm use latest
@@ -219,6 +225,31 @@ bvm help
 # or use aliases
 bvm --help
 bvm -h
+```
+
+## 🐚 Shell Initialization
+
+The Unix installer creates a single initialization hook at
+`~/.bvm/scripts/bvm-init.sh` and adds it to the detected shell profile. The
+Fish equivalent is `~/.bvm/scripts/bvm-init.fish`.
+
+The initialization hook:
+
+- Exports `BVM_HOME` and `BOXLANG_HOME` with defaults of `~/.bvm` and `~/.boxlang`.
+- Adds the BVM wrapper directory, active version, and BoxLang home `bin` directory to `PATH`.
+- Loads BVM command and installed-version completions for Bash and Zsh.
+
+For an existing terminal, reload the profile path printed by the installer or
+open a new terminal session:
+
+```bash
+source ~/.bashrc  # or ~/.zshrc
+```
+
+Fish users can reload their configuration with:
+
+```fish
+source ~/.config/fish/config.fish
 ```
 
 ## 📂 What BVM Installs
@@ -312,6 +343,12 @@ boxlang-miniserver --port 8080
 
 # Install a BoxLang module (using helper script)
 install-bx-module bx-orm
+
+# Track and update installed module dependencies
+install-bx-module --list
+install-bx-module --outdated
+install-bx-module --update
+install-bx-module --update --force  # Update without confirmation
 
 # Install a BoxLang site template (using helper script)
 install-bx-site mysite
