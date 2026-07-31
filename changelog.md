@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed the BVM installer instructions displaying an empty `source` command after installation.
 - Fixed BVM version switching and diagnostics modifying shell profiles; PATH setup is now owned by the BVM initialization files.
+- Fixed the first `bvm install` not automatically activating the installed BoxLang version.
 
 ## [1.30.0] - 2026-07-16
 
