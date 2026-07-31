@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-07-31
+
 ### Added
 
 - Added BVM shell initialization files for bash, zsh, and fish so shell profiles source a stable init hook instead of embedding BVM environment setup directly.
@@ -454,7 +456,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.30.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.31.0...HEAD
+[1.31.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.30.0...v1.31.0
 [1.30.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.29.0...v1.30.0
 [1.29.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.28.0...v1.29.0
 [1.28.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.27.0...v1.28.0
