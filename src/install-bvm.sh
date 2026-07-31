@@ -25,6 +25,10 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 BVM_HOME="${BVM_HOME:-$HOME/.bvm}"
 BVM_SOURCE_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/bvm.sh"
 INSTALLER_URL="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/boxlang-installer.zip"
+BVM_INIT_FILE="$BVM_HOME/scripts/bvm-init.sh"
+BVM_FISH_INIT_FILE="$BVM_HOME/scripts/bvm-init.fish"
+BVM_PROFILE_FILE=""
+LOCAL_INSTALL=false
 
 # Helpers
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
@@ -61,17 +65,39 @@ install_bvm() {
 	###########################################################################
 	# Download BoxLang Installer Scripts
 	###########################################################################
-    print_info "Downloading BVM from [${INSTALLER_URL}]"
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		print_error "Error: Download of BoxLang® Installer bundle failed"
-		exit 1
-	}
+    local installer_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ "$LOCAL_INSTALL" = true ]; then
+        print_info "Installing BVM scripts locally from [$installer_dir]"
+        cp -R "$installer_dir"/. "$scripts_dir"/
+    else
+        print_info "Downloading BVM from [${INSTALLER_URL}]"
+        env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
+            print_error "Error: Download of BoxLang® Installer bundle failed"
+            exit 1
+        }
 
-	###########################################################################
-	# Inflate them
-	###########################################################################
-	print_info "Inflating BoxLang installer scripts..."
-	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${scripts_dir}"
+        #######################################################################
+        # Inflate them
+        #######################################################################
+        print_info "Inflating BoxLang installer scripts..."
+        unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${scripts_dir}"
+    fi
+
+    # Local installs copy the initialization files directly from the source directory.
+    if [ -f "$installer_dir/bvm-init.sh" ]; then
+        cp "$installer_dir/bvm-init.sh" "$BVM_INIT_FILE"
+    fi
+    if [ ! -f "$BVM_INIT_FILE" ]; then
+        print_error "BVM initialization file was not found in the installer bundle"
+        exit 1
+    fi
+    if [ -f "$installer_dir/bvm-init.fish" ]; then
+        cp "$installer_dir/bvm-init.fish" "$BVM_FISH_INIT_FILE"
+    fi
+    if [ ! -f "$BVM_FISH_INIT_FILE" ]; then
+        print_error "BVM fish initialization file was not found in the installer bundle"
+        exit 1
+    fi
 
 	###########################################################################
 	# Make them executable
@@ -130,66 +156,32 @@ EOF
 # Setup PATH
 ###########################################################################
 setup_path() {
-    local bvm_bin="$BVM_HOME/bin"
     local shell_name="${SHELL##*/}"
-
-    print_info "Setting up PATH for BVM..."
+    local profile_init_marker="BVM (BoxLang Version Manager) shell initialization"
 
     # Use helper function to detect shell profile file
-    local profile_file=$(get_shell_profile_file)
+    BVM_PROFILE_FILE=$(get_shell_profile_file)
 
-    # Check if BVM is already in PATH
-    if echo "$PATH" | grep -q "$bvm_bin"; then
-        print_success "BVM is already in PATH"
-        return 0
+    if [ "$shell_name" = "fish" ]; then
+        if ! grep -Fq "$profile_init_marker" "$BVM_PROFILE_FILE" 2>/dev/null; then
+            {
+                printf "\n# BVM (BoxLang Version Manager) shell initialization\n"
+                printf "set -q BVM_HOME; or set -gx BVM_HOME \$HOME/.bvm\n"
+                printf "test -s \"\$BVM_HOME/scripts/bvm-init.fish\"; and source \"\$BVM_HOME/scripts/bvm-init.fish\"\n"
+            } >> "$BVM_PROFILE_FILE"
+        fi
+    elif ! grep -Fq "$profile_init_marker" "$BVM_PROFILE_FILE" 2>/dev/null; then
+        {
+            printf "\n# BVM (BoxLang Version Manager) shell initialization\n"
+            printf "export BVM_HOME=\"\${BVM_HOME:-\$HOME/.bvm}\"\n"
+            printf "[ -s \"\$BVM_HOME/scripts/bvm-init.sh\" ] && . \"\$BVM_HOME/scripts/bvm-init.sh\"\n"
+        } >> "$BVM_PROFILE_FILE"
     fi
 
-    # Check if BVM path is already in profile
-    if grep -q "$bvm_bin" "$profile_file" 2>/dev/null; then
-        print_success "BVM path already configured in $profile_file"
-        return 0
-    fi
+    print_success "Added BVM initialization to $BVM_PROFILE_FILE"
 
-    print_info "Adding BVM to PATH in $profile_file"
-
-    # Add BVM to PATH
-    {
-        echo ""
-        echo "# Added by BVM (BoxLang Version Manager) installer"
-        if [ "$shell_name" = "fish" ]; then
-            echo "set -gx PATH $bvm_bin \$PATH"
-        else
-            echo "export PATH=\"$bvm_bin:\$PATH\""
-        fi
-        echo ""
-        echo "# BVM environment setup"
-        if [ "$shell_name" = "fish" ]; then
-            echo "set -gx BVM_HOME $BVM_HOME"
-        else
-            echo "export BVM_HOME=\"$BVM_HOME\""
-        fi
-        echo ""
-        echo "# BVM provides BoxLang binaries through wrappers when no version is active"
-        echo "# Current version takes precedence when available"
-        if [ "$shell_name" = "fish" ]; then
-            echo "if test -L \"\$BVM_HOME/current\""
-            echo "    set -gx PATH \"\$BVM_HOME/current/bin\" \$PATH"
-            echo "end"
-        else
-            echo "if [ -L \"\$BVM_HOME/current\" ]; then"
-            echo "    export PATH=\"\$BVM_HOME/current/bin:\$PATH\""
-            echo "fi"
-        fi
-    } >> "$profile_file"
-
-    print_success "Added BVM to PATH in $profile_file"
-
-    # Update current session PATH
-    export PATH="$bvm_bin:$PATH"
-    export BVM_HOME="$BVM_HOME"
-    if [ -L "$BVM_HOME/current" ]; then
-        export PATH="$BVM_HOME/current/bin:$PATH"
-    fi
+    # Update the current installer process as well.
+    . "$BVM_INIT_FILE"
 }
 
 ###########################################################################
@@ -198,7 +190,7 @@ setup_path() {
 show_help() {
     print_info "To start using BVM, either:"
     printf "  1. Restart your terminal, or\n"
-    printf "  2. Run: source %s\n" "$profile_file"
+    printf "  2. Run: source \"%s\"\n" "$BVM_PROFILE_FILE"
     printf "\n"
     print_info "Common BVM commands:"
     printf "  ${GREEN}bvm install latest${NORMAL}      # Install latest BoxLang\n"
@@ -223,6 +215,10 @@ show_help() {
 ###########################################################################
 main() {
 	setup_colors
+
+    if [ "${1:-}" = "--local" ]; then
+        LOCAL_INSTALL=true
+    fi
 
     print_header "📦 BVM (BoxLang Version Manager) Installer"
     printf "\n"

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added BVM shell initialization files for bash, zsh, and fish so shell profiles source a stable init hook instead of embedding BVM environment setup directly.
+- Added `BVM_HOME`, `BOXLANG_HOME`, and the default `~/.boxlang/bin` directory to the centralized BVM initialization flow.
+- Added Bash and Zsh completion support for BVM commands and installed BoxLang versions.
+
+### Fixed
+
+- Fixed the BVM installer instructions displaying an empty `source` command after installation.
+- Fixed BVM version switching and diagnostics modifying shell profiles; PATH setup is now owned by the BVM initialization files.
+
 ## [1.30.0] - 2026-07-16
 
 ### Added
