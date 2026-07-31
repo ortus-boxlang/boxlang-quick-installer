@@ -93,6 +93,17 @@ jobs:
           SOURCE_DIR: "build/"
           DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
+      - name: Invalidate CloudFront Cache
+        if: github.ref == 'refs/heads/main'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ACCESS_SECRET }}
+          CLOUDFRONT_DISTRIBUTION_DOWNLOADS: ${{ secrets.CLOUDFRONT_DISTRIBUTION_DOWNLOADS }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_DOWNLOADS" \
+            --paths "/ortussolutions/boxlang-quick-installer/*"
+
       - name: Create Github Release
         uses: taiki-e/create-gh-release-action@v1.11.0
         if: env.SNAPSHOT == 'false'
