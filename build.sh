@@ -183,14 +183,10 @@ main() {
 	log_info "Replacing @build.version@ to [$version]"
 	if [[ "$OSTYPE" == "darwin"* ]]; then
 		# macOS requires empty string after -i
-		sed -i "" "s|@build.version@|${version}|g" build/bvm.sh
-		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.sh
-		sed -i "" "s|@build.version@|${version}|g" build/install-boxlang.ps1
+        find build -type f ! -name "*.md5" ! -name "*.sha256" -exec env LC_ALL=C sed -i "" "s|@build.version@|${version}|g" {} +
 	else
 		# Linux doesn't use empty string after -i
-		sed -i "s|@build.version@|${version}|g" build/bvm.sh
-		sed -i "s|@build.version@|${version}|g" build/install-boxlang.sh
-		sed -i "s|@build.version@|${version}|g" build/install-boxlang.ps1
+        find build -type f ! -name "*.md5" ! -name "*.sha256" -exec env LC_ALL=C sed -i "s|@build.version@|${version}|g" {} +
 	fi
 
     # Generate checksums (excluding checksum files themselves)
