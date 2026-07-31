@@ -386,6 +386,14 @@ install_version() {
 
     ensure_bvm_dirs
 
+    local has_installed_versions=false
+    for installed_version_dir in "$BVM_VERSIONS_DIR"/*; do
+        if [ -d "$installed_version_dir" ]; then
+            has_installed_versions=true
+            break
+        fi
+    done
+
     local version_dir="$BVM_VERSIONS_DIR/$version"
 
     # Check if version is already installed (unless force is used)
@@ -584,7 +592,13 @@ install_version() {
     # Clear installation tracking
     print_success "BoxLang $version installed successfully"
     unset INSTALLING_VERSION
-    print_info "Use 'bvm use $version' to switch to this version"
+
+    if [ "$has_installed_versions" = false ]; then
+        print_info "No BoxLang versions were installed, activating $version as the default"
+        use_version "$version"
+    else
+        print_info "Use 'bvm use $version' to switch to this version"
+    fi
 }
 
 # Use a specific BoxLang version
