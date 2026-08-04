@@ -158,16 +158,18 @@ Here are the available options for the install command.
 | `--force` | | Force reinstallation even if already installed |
 | `--with-commandbox` | | Install CommandBox without prompting |
 | `--without-commandbox` | | Skip CommandBox installation |
+| `--non-interactive` | | Never prompt for input; automatically enabled when input is redirected |
 | `--with-jre` | | ✨ Automatically install Java 21 JRE if not found |
 | `--without-jre` | | ✨ Skip Java installation (manual installation required) |
-| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox and Java) |
+| `--yes` | `-y` | Answer yes to all prompts and automatically install CommandBox and Java |
 
 ### Notes
 
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
-- `--yes` automatically accepts all defaults, including installing CommandBox and Java
+- `--yes` answers yes to all prompts and automatically installs CommandBox and Java when needed
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
+- `--non-interactive` skips all prompts and uses each prompt's existing default answer; it is also enabled automatically when standard input is redirected
 - ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
 - ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
 - ✨ The installer can detect your OS (macOS/Linux/Alpine) and architecture (x64/ARM64) for Java installation
@@ -227,9 +229,10 @@ Options:
   --force               Force reinstallation even if already installed
   --with-commandbox     Install CommandBox without prompting
   --without-commandbox  Skip CommandBox installation
+  --non-interactive     Never prompt for input (also enabled when input is redirected)
   --with-jre            ✨ Automatically install Java 21 JRE if not found
   --without-jre         ✨ Skip Java installation (manual installation required)
-  --yes, -y             Use defaults for all prompts (installs CommandBox and Java)
+  --yes, -y             Answer yes to all prompts and install CommandBox and Java
 
 Examples:
   install-boxlang
@@ -239,6 +242,7 @@ Examples:
   install-boxlang --force
   install-boxlang --with-commandbox
   install-boxlang --without-commandbox
+  install-boxlang --non-interactive
   install-boxlang --with-jre
   install-boxlang --without-jre
   install-boxlang --with-commandbox --with-jre
@@ -248,11 +252,11 @@ Examples:
   sudo install-boxlang --system
 
 Non-Interactive Usage:
-  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox
-  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox
-  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre
+  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox --non-interactive
+  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox --non-interactive
+  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre --non-interactive
   🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
-  🌐 Install with defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
+  🌐 Install with existing prompt defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --non-interactive
 ```
 
 ## 🎯 Detailed Usage

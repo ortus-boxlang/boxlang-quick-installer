@@ -180,12 +180,16 @@ preflight_check() {
 	if ! check_java_version "$auto_install"; then
 		printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
 
-		# Otherwise, prompt user for manual installation choice
-		printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
-		if [ -r /dev/tty ]; then
-			read -r response < /dev/tty
-		else
+		# Otherwise, use the prompt's default answer in non-interactive mode.
+		if [ "${NON_INTERACTIVE:-false}" = true ]; then
 			response=""
+		else
+			printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
+			if [ -r /dev/tty ]; then
+				read -r response < /dev/tty
+			else
+				response=""
+			fi
 		fi
 		case "$response" in
 			[yY][eE][sS]|[yY])

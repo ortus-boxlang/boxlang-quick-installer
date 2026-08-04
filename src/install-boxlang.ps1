@@ -13,6 +13,13 @@ $installerVersion = "@build.version@"
 $INSTALL_COMMANDBOX = ""
 $NON_INTERACTIVE = $false
 
+if ([Console]::IsInputRedirected) {
+    $NON_INTERACTIVE = $true
+}
+if ($args -contains "--non-interactive") {
+    $NON_INTERACTIVE = $true
+}
+
 ###########################################################################
 # Help Function
 ###########################################################################
@@ -44,6 +51,7 @@ function Show-Help {
     Write-Host "  --force           Force reinstallation even if already installed"
     Write-Host "  --with-commandbox Install CommandBox without prompting"
     Write-Host "  --without-commandbox Skip CommandBox installation"
+    Write-Host "  --non-interactive  Never prompt for input (also enabled when input is redirected)"
     Write-Host "  --yes, -y         Use defaults for all prompts (installs CommandBox)"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
@@ -333,7 +341,11 @@ function Test-ForUpdates {
         }
         -1 {
             Write-Host -ForegroundColor Yellow "🆙 A newer version of BoxLang is available!"
-            $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            if ($NON_INTERACTIVE) {
+                $response = ""
+            } else {
+                $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            }
             if ($response -notmatch "^[nN]") {
                 Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
                 # Call the script again with latest version
@@ -373,6 +385,9 @@ foreach ($arg in $args) {
         { $_ -eq "--yes" -or $_ -eq "-y" } {
             # Setup all defaults here - install CommandBox by default
             $INSTALL_COMMANDBOX = $true
+            $NON_INTERACTIVE = $true
+        }
+        "--non-interactive" {
             $NON_INTERACTIVE = $true
         }
         default {
@@ -494,7 +509,7 @@ function Update-PathVariable {
         Write-Host -ForegroundColor Yellow "⚠️  $dir is not in your PATH"
     }
 
-    # If non-interactive mode (--yes flag was used), auto-update PATH
+    # If non-interactive mode is enabled, auto-update PATH
     if ($NON_INTERACTIVE) {
         Write-Host -ForegroundColor Green "Adding directories to PATH (automatic mode)..."
     } else {
@@ -629,6 +644,9 @@ function Check-And-Install-CommandBox {
     # If flag is explicitly set to true, install without prompting
     if ($INSTALL_COMMANDBOX -eq $true) {
         Write-Host -ForegroundColor Green "Installing CommandBox (automatic mode)..."
+    } elseif ($NON_INTERACTIVE) {
+        # Use the prompt's default answer without reading input.
+        $response = ""
     } else {
         # Ask user if they want to install CommandBox
         $response = Read-Host "Would you like to install CommandBox? [Y/n]"

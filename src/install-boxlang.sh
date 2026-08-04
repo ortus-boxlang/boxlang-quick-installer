@@ -26,6 +26,17 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 # empty = prompt, true = install, false = skip
 INSTALL_COMMANDBOX=""
 INSTALL_JRE=""
+NON_INTERACTIVE=false
+
+if [ ! -t 0 ]; then
+	NON_INTERACTIVE=true
+fi
+
+for arg in "$@"; do
+	if [ "$arg" = "--non-interactive" ]; then
+		NON_INTERACTIVE=true
+	fi
+done
 
 ###########################################################################
 # Get current BoxLang install home
@@ -183,8 +194,12 @@ check_for_updates() {
 			;;
 		2)
 			print_warning "🆙 A newer version of BoxLang is available!"
-			print_info "Would you like to update to version ${latest_version}? [Y/n]"
-			read -r response < /dev/tty
+			if [ "$NON_INTERACTIVE" = true ]; then
+				response=""
+			else
+				print_info "Would you like to update to version ${latest_version}? [Y/n]"
+				read -r response < /dev/tty
+			fi
 			case "$response" in
 				[nN][oO]|[nN])
 					print_warning "Update cancelled"
@@ -359,8 +374,12 @@ check_and_install_commandbox() {
 		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
-		print_info "❓ Would you like to install CommandBox? [Y/n]"
-		read -r response < /dev/tty
+		if [ "$NON_INTERACTIVE" = true ]; then
+			response=""
+		else
+			print_info "❓ Would you like to install CommandBox? [Y/n]"
+			read -r response < /dev/tty
+		fi
 		case "$response" in
 			[nN][oO]|[nN])
 				should_install="no"
@@ -539,6 +558,7 @@ show_help() {
 	printf "  --force           	Force reinstallation even if already installed\n"
 	printf "  --with-commandbox 	Install CommandBox without prompting\n"
 	printf "  --without-commandbox 	Skip CommandBox installation\n"
+	printf "  --non-interactive 	Never prompt for input (also enabled when input is redirected)\n"
 	printf "  --with-jre        	Automatically install Java 21 JRE if not found\n"
 	printf "  --without-jre     	Skip Java installation (manual installation required)\n"
 	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n\n"
@@ -854,6 +874,9 @@ main() {
 				# Setup all defaults here.
 				INSTALL_COMMANDBOX=true
 				INSTALL_JRE=true
+				;;
+			"--non-interactive")
+				NON_INTERACTIVE=true
 				;;
 			*)
 				args+=("$1")
