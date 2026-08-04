@@ -8,6 +8,16 @@ $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
 $installerVersion = "@build.version@"
+$INSTALLATION_FOLDER = if ([string]::IsNullOrWhiteSpace($env:BOXLANG_INSTALL_HOME)) {
+    "C:\boxlang"
+} else {
+    $env:BOXLANG_INSTALL_HOME
+}
+$DESTINATION_LIB = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "lib"
+$DESTINATION_BIN = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "bin"
+$DESTINATION_HOME = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "home"
+$DESTINATION_SCRIPTS = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "scripts"
+$BOXLANG_HOME_BIN = Join-Path -Path $env:USERPROFILE -ChildPath ".boxlang\bin"
 
 # Command line flags - empty = prompt, true = install, false = skip
 $INSTALL_COMMANDBOX = ""
@@ -89,9 +99,9 @@ function Show-Help {
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Installation Paths:"
     Write-Host ""
-    Write-Host "  📁 Binaries: C:\boxlang\bin\"
-    Write-Host "  📁 Libraries: C:\boxlang\lib\"
-    Write-Host "  📁 BoxLang Home: C:\boxlang\home\"
+    Write-Host "  📁 Binaries: $DESTINATION_BIN\"
+    Write-Host "  📁 Libraries: $DESTINATION_LIB\"
+    Write-Host "  📁 BoxLang Home: $DESTINATION_HOME\"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "After Installation:"
     Write-Host ""
@@ -117,7 +127,7 @@ function Show-Help {
     Write-Host ""
     Write-Host -NoNewline "  - Run as Administrator for best results: "
     Write-Host -ForegroundColor Green "Run as Administrator"
-    Write-Host "  - Installation adds C:\boxlang\bin to your PATH"
+    Write-Host "  - Installation adds $DESTINATION_BIN to your PATH"
     Write-Host "  - Java detection works in various PowerShell contexts"
     Write-Host "  - Previous versions are automatically removed before installation"
     Write-Host "  - BoxLang® is open-source under Apache 2.0 License"
@@ -144,12 +154,15 @@ function Uninstall-BoxLang {
 
     # Remove from standard Windows program locations
     Write-Host -ForegroundColor Blue "Removing binaries and scripts..."
-    Remove-Item -Path "C:\boxlang" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $INSTALLATION_FOLDER -Recurse -Force -ErrorAction SilentlyContinue
 
     # Remove from PATH
     Write-Host -ForegroundColor Blue "Removing from PATH..."
     $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
-    $newPath = ($currentPath -split ";" | Where-Object { $_ -notlike "*boxlang*" }) -join ";"
+    $pathsToRemove = @($DESTINATION_BIN, $BOXLANG_HOME_BIN)
+    $newPath = ($currentPath -split ";" | Where-Object {
+        $pathsToRemove -notcontains $_
+    }) -join ";"
     [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
 
     # Remove environment variables
@@ -224,7 +237,7 @@ function Get-CurrentBoxLangVersion {
     # Try to find BoxLang in common locations
     $boxlangCandidates = @(
         "boxlang",                                    # In PATH
-        "C:\boxlang\bin\boxlang.bat",                # Standard Windows install
+        (Join-Path -Path $DESTINATION_BIN -ChildPath "boxlang.bat"), # Standard Windows install
         "$env:USERPROFILE\.local\bin\boxlang.bat"    # User install
     )
 
@@ -415,12 +428,6 @@ $LATEST_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxla
 $LATEST_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-latest.zip"
 $VERSIONED_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/${TARGET_VERSION}/boxlang-${TARGET_VERSION}.zip"
 $VERSIONED_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/${TARGET_VERSION}/boxlang-miniserver-${TARGET_VERSION}.zip"
-$INSTALLATION_FOLDER = "c:\boxlang"
-$DESTINATION_LIB = "$INSTALLATION_FOLDER\lib"
-$DESTINATION_BIN = "$INSTALLATION_FOLDER\bin"
-$DESTINATION_HOME = "$INSTALLATION_FOLDER\home"
-$DESTINATION_SCRIPTS = "$INSTALLATION_FOLDER\scripts"
-
 # Set the progress preference to silently continue to avoid cluttering the console
 $ProgressPreference = 'SilentlyContinue'
 
@@ -760,7 +767,7 @@ if (-not $FORCE_INSTALL) {
 
     $currentVersion = Get-CurrentBoxLangVersion
     if ($currentVersion) {
-        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [C:\boxlang] with version [$currentVersion]"
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [$INSTALLATION_FOLDER] with version [$currentVersion]"
         Write-Host -ForegroundColor Blue "💡 Use '.\install-boxlang.ps1 --uninstall' to remove the existing version before reinstalling."
         Write-Host -ForegroundColor Blue "💡 Or use '--force' to do a forced reinstall."
         exit 0
@@ -785,7 +792,6 @@ if (-not $FORCE_INSTALL) {
 # Prepare directories for installation
 Write-Host -ForegroundColor Blue "📁 Creating installation folders..."
 $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "/boxlang"
-$INSTALLATION_FOLDER = "c:\boxlang"
 New-Item -Type Directory -Path $tmp -Force | Out-Null
 New-Item -Type Directory -Path $INSTALLATION_FOLDER -Force | Out-Null
 New-Item -Type Directory -Path $DESTINATION_HOME -Force | Out-Null
@@ -858,11 +864,16 @@ catch {
 # Create Aliases
 Write-Host -ForegroundColor Blue "🔗 Creating symbolic links for executables..."
 try {
-    Remove-Item -Force -ErrorAction SilentlyContinue -Path $INSTALLATION_FOLDER\bin\bx.bat | Out-Null
-    New-Item -ItemType SymbolicLink -Target $INSTALLATION_FOLDER\bin\boxlang.bat -Path $INSTALLATION_FOLDER\bin\bx.bat | Out-Null
+    $boxLangBin = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "bin"
+    $boxLangPath = Join-Path -Path $boxLangBin -ChildPath "boxlang.bat"
+    $boxLangAliasPath = Join-Path -Path $boxLangBin -ChildPath "bx.bat"
+    Remove-Item -Force -ErrorAction SilentlyContinue -Path $boxLangAliasPath | Out-Null
+    New-Item -ItemType SymbolicLink -Target $boxLangPath -Path $boxLangAliasPath | Out-Null
 
-    Remove-Item -Force -ErrorAction SilentlyContinue -Path $INSTALLATION_FOLDER\bin\bx-miniserver.bat | Out-Null
-    New-Item -ItemType SymbolicLink -Target $INSTALLATION_FOLDER\bin\boxlang-miniserver.bat -Path $INSTALLATION_FOLDER\bin\bx-miniserver.bat | Out-Null
+    $miniServerPath = Join-Path -Path $boxLangBin -ChildPath "boxlang-miniserver.bat"
+    $miniServerAliasPath = Join-Path -Path $boxLangBin -ChildPath "bx-miniserver.bat"
+    Remove-Item -Force -ErrorAction SilentlyContinue -Path $miniServerAliasPath | Out-Null
+    New-Item -ItemType SymbolicLink -Target $miniServerPath -Path $miniServerAliasPath | Out-Null
 }
 catch {
     Write-Host -ForegroundColor Red "Oh no! We weren't able to setup symlinks for the executables."
@@ -873,7 +884,6 @@ catch {
 Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
 # Create bin directory in BoxLang home for module executables
-$BOXLANG_HOME_BIN = Join-Path $env:USERPROFILE ".boxlang\bin"
 Write-Host -ForegroundColor Blue "📁 Creating BoxLang home bin directory..."
 if (-not (Test-Path $BOXLANG_HOME_BIN)) {
     New-Item -Path $BOXLANG_HOME_BIN -ItemType Directory -Force | Out-Null

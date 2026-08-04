@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `--non-interactive` to the BoxLang installers. It skips prompts using their existing defaults and is enabled automatically when standard input is redirected.
 
+### Fixed
+
+- Fixed the Windows installer to honor `BOXLANG_INSTALL_HOME` for custom installation paths, while retaining `C:\boxlang` as the default.
+
 ## [1.32.0] - 2026-07-31
 
 ### Changed

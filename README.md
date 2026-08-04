@@ -41,6 +41,10 @@ curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
 ```powershell
 # Single version (simple)
 powershell -NoExit -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://install-windows.boxlang.io'))"
+
+# Install to a custom location (default: C:\boxlang)
+$env:BOXLANG_INSTALL_HOME = "D:\Tools\BoxLang"
+powershell -NoExit -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://install-windows.boxlang.io'))"
 ```
 
 ### Verify Installation
