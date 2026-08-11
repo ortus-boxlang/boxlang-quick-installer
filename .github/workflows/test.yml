@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  sh:
-    name: POSIX sh tests (${{ matrix.distro }})
+  linux:
+    name: Linux tests (${{ matrix.distro }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,196 +20,76 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Run POSIX sh test suite in container
-        id: run-posix
+      - name: Run Linux tests
+        id: run-linux
         continue-on-error: true
-        shell: pwsh
+        shell: sh
         run: |
-          $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
-          New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
-          $logPath = Join-Path $logDirectory 'posix-${{ matrix.distro }}.log'
-          & ./tests/run-linux-containers.ps1 -Distro ${{ matrix.distro }} *> $logPath
-          $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
-          Set-Content -Path "$logPath.exitcode" -Value $exitCode
+          log_directory="$RUNNER_TEMP/installer-test-logs"
+          mkdir -p "$log_directory"
+          log_path="$log_directory/linux-${{ matrix.distro }}.log"
+          set +e
+          sh ./tests/run-all.sh ${{ matrix.distro }} >"$log_path" 2>&1
+          exit_code=$?
+          printf '%s\n' "$exit_code" >"$log_path.exitcode"
 
-      - name: Report POSIX sh test result
+      - name: Report Linux test results
         if: always()
         continue-on-error: true
         shell: pwsh
         run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/posix-${{ matrix.distro }}.log'
+          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/linux-${{ matrix.distro }}.log'
           $exitCode = [int](Get-Content "$logPath.exitcode")
-          & ./tests/ci-report.ps1 -Name 'POSIX sh (${{ matrix.distro }})' -LogPath $logPath -ExitCode $exitCode
+          & ./tests/ci-report.ps1 -Name 'Linux tests (${{ matrix.distro }})' -LogPath $logPath -ExitCode $exitCode
 
-      - name: Upload POSIX sh test log
+      - name: Upload Linux test log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-log-posix-${{ matrix.distro }}
-          path: ${{ runner.temp }}/installer-test-logs/posix-${{ matrix.distro }}.log
+          name: test-log-linux-${{ matrix.distro }}
+          path: ${{ runner.temp }}/installer-test-logs/linux-${{ matrix.distro }}.log
 
-      - name: Finalize POSIX sh test result
+      - name: Finalize Linux test results
         if: always()
-        shell: pwsh
-        run: exit [int](Get-Content "$env:RUNNER_TEMP/installer-test-logs/posix-${{ matrix.distro }}.log.exitcode")
+        shell: sh
+        run: exit "$(cat "$RUNNER_TEMP/installer-test-logs/linux-${{ matrix.distro }}.log.exitcode")"
 
-  offline-linux:
-    name: Offline non-root test suites (Linux)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Run all suites without network access as a non-root user
-        id: run-offline-linux
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
-          New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
-          $logPath = Join-Path $logDirectory 'offline-linux.log'
-          & ./tests/run-offline-container-tests.ps1 -Platform Linux *> $logPath
-          $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
-          Set-Content -Path "$logPath.exitcode" -Value $exitCode
-
-      - name: Report offline Linux test result
-        if: always()
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/offline-linux.log'
-          $exitCode = [int](Get-Content "$logPath.exitcode")
-          & ./tests/ci-report.ps1 -Name 'Offline non-root Linux suites' -LogPath $logPath -ExitCode $exitCode
-
-      - name: Upload offline Linux test log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-log-offline-linux
-          path: ${{ runner.temp }}/installer-test-logs/offline-linux.log
-
-      - name: Finalize offline Linux test result
-        if: always()
-        shell: pwsh
-        run: exit [int](Get-Content "$env:RUNNER_TEMP/installer-test-logs/offline-linux.log.exitcode")
-
-  powershell:
-    name: PowerShell tests
+  windows:
+    name: Test suite (Windows)
     runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Run PowerShell test suite
-        id: run-powershell-host
+      - name: Run Windows test suite
+        id: run-windows
         continue-on-error: true
         shell: powershell
         run: |
           $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
           New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
-          $logPath = Join-Path $logDirectory 'powershell-host.log'
-          & .\tests\powershell\run.ps1 *> $logPath
+          $logPath = Join-Path $logDirectory 'windows.log'
+          & .\tests\run-all.ps1 *> $logPath
           $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
           Set-Content -Path "$logPath.exitcode" -Value $exitCode
 
-      - name: Report PowerShell host test result
+      - name: Report Windows test result
         if: always()
         continue-on-error: true
         shell: powershell
         run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/powershell-host.log'
+          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/windows.log'
           $exitCode = [int](Get-Content "$logPath.exitcode")
-          & .\tests\ci-report.ps1 -Name 'PowerShell host suites' -LogPath $logPath -ExitCode $exitCode
+          & .\tests\ci-report.ps1 -Name 'Windows test suite' -LogPath $logPath -ExitCode $exitCode
 
-      - name: Verify Windows container runtime
-        if: always()
-        shell: powershell
-        run: |
-          if ((docker info --format '{{.OSType}}') -ne 'windows') {
-            throw 'The hosted runner Docker daemon is not in Windows container mode.'
-          }
-
-      - name: Run installer tests as ContainerUser
-        id: run-powershell-container-user
-        if: always()
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/powershell-container-user.log'
-          docker run --rm --isolation=process --user ContainerUser `
-            -e BOXLANG_EXPECT_STANDARD_USER=true `
-            -v "${{ github.workspace }}:C:\workspace:ro" -w C:\workspace `
-            mcr.microsoft.com/windows/servercore:ltsc2022 `
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& .\tests\powershell\run.ps1 -TestName InstallBoxLang" *> $logPath
-          $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
-          Set-Content -Path "$logPath.exitcode" -Value $exitCode
-
-      - name: Report non-admin Windows test result
-        if: always()
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/powershell-container-user.log'
-          $exitCode = [int](Get-Content "$logPath.exitcode")
-          & .\tests\ci-report.ps1 -Name 'Windows non-admin installer suite' -LogPath $logPath -ExitCode $exitCode
-
-      - name: Upload Windows test logs
+      - name: Upload Windows test log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-windows-host-and-non-admin
-          path: ${{ runner.temp }}/installer-test-logs/*.log
+          name: test-log-windows
+          path: ${{ runner.temp }}/installer-test-logs/windows.log
 
-      - name: Finalize Windows test results
+      - name: Finalize Windows test result
         if: always()
         shell: powershell
-        run: |
-          $exitCodes = Get-ChildItem "$env:RUNNER_TEMP/installer-test-logs/powershell-*.log.exitcode" | ForEach-Object { [int](Get-Content $_) }
-          if ($exitCodes | Where-Object { $_ -ne 0 }) { exit 1 }
-
-  offline-windows:
-    name: Pristine offline installer tests (Windows)
-    runs-on: windows-2022
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Verify Windows container runtime
-        shell: powershell
-        run: |
-          if ((docker info --format '{{.OSType}}') -ne 'windows') {
-            throw 'The hosted runner Docker daemon is not in Windows container mode.'
-          }
-
-      - name: Install from local artifacts without network access
-        id: run-offline-windows
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
-          New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
-          $logPath = Join-Path $logDirectory 'offline-windows.log'
-          & .\tests\run-offline-container-tests.ps1 -Platform Windows -WindowsIsolation process *> $logPath
-          $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
-          Set-Content -Path "$logPath.exitcode" -Value $exitCode
-
-      - name: Report offline Windows test result
-        if: always()
-        continue-on-error: true
-        shell: powershell
-        run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/offline-windows.log'
-          $exitCode = [int](Get-Content "$logPath.exitcode")
-          & .\tests\ci-report.ps1 -Name 'Offline Windows non-admin suites' -LogPath $logPath -ExitCode $exitCode
-
-      - name: Upload offline Windows test log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-log-offline-windows
-          path: ${{ runner.temp }}/installer-test-logs/offline-windows.log
-
-      - name: Finalize offline Windows test result
-        if: always()
-        shell: powershell
-        run: exit [int](Get-Content "$env:RUNNER_TEMP/installer-test-logs/offline-windows.log.exitcode")
+        run: exit [int](Get-Content "$env:RUNNER_TEMP/installer-test-logs/windows.log.exitcode")

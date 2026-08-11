@@ -27,11 +27,11 @@ if ($Distro) {
 
 $repository = (Split-Path -Parent $PSScriptRoot)
 foreach ($distribution in $distributions) {
-    Write-Host "`nRunning POSIX sh tests in $($distribution.Name)" -ForegroundColor Cyan
+    Write-Host "`nRunning Linux tests in $($distribution.Name)" -ForegroundColor Cyan
     $command = "$($distribution.Setup) && sh tests/run.sh"
     & docker run --rm -v "${repository}:/workspace:ro" -w /workspace $distribution.Image sh -c $command
     if ($LASTEXITCODE -ne 0) {
-        throw "POSIX sh tests failed in $($distribution.Name)."
+        throw "Linux tests failed in $($distribution.Name)."
     }
 }
 

@@ -22,7 +22,7 @@ The test suite discovers Unix specifications in `specs/*_test.sh` and Windows sp
 
 ## Test Layout
 
-- `specs/` contains POSIX `sh` test suites. Files named `*_test.sh` are discovered automatically and run in alphabetical order.
+- `specs/` contains shell test suites. Files named `*_test.sh` are discovered automatically and run in alphabetical order.
 - `powershell/` contains Windows PowerShell test suites. Files named `*.Tests.ps1` are discovered automatically.
 - `run-all.sh` is the Unix-like host entry point.
 - `run-all.ps1` is the Windows host entry point.
@@ -31,7 +31,7 @@ The test suite discovers Unix specifications in `specs/*_test.sh` and Windows sp
 
 The suite covers helper output and version handling, Java detection, preflight dependencies, local JAR/ZIP/script artifacts, unprivileged installation, BVM behavior, and Windows PowerShell installers.
 
-The Linux matrix runs Alpine, Debian, Ubuntu, Fedora, and Arch. It includes offline local-artifact installation coverage. The Windows matrix runs the PowerShell suites and an offline Windows Server Core installer test.
+The Linux matrix runs Alpine, Debian, Ubuntu, Fedora, and Arch. CI runs offline suites and non-root suites as separate checks. The Windows matrix runs the PowerShell suites, a standard-user installer suite, and a separate offline PowerShell suite. GitHub Actions creates a disposable local account for the standard-user suite and uses an account-scoped outbound firewall rule for the offline suite; it does not require Windows containers.
 
 ## Requirements
 
@@ -49,7 +49,7 @@ Each runner exits nonzero on a failed suite and is suitable for CI. Linux covera
 
 When changing behavior, add or update a focused test in the matching test directory:
 
-1. Add POSIX shell tests under `specs/` using the `*_test.sh` naming convention, or PowerShell tests under `powershell/` using the `*.Tests.ps1` convention.
+1. Add shell tests under `specs/` using the `*_test.sh` naming convention, or PowerShell tests under `powershell/` using the `*.Tests.ps1` convention.
 2. Keep tests self-contained: use temporary paths and mocks rather than host state.
 3. Run the appropriate single host entry point before submitting changes.
 

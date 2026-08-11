@@ -3,6 +3,7 @@
 set -u
 
 repository=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+requested_distribution=${1:-}
 failed_distributions=""
 docker_path_conversion=""
 
@@ -67,11 +68,24 @@ if [ "$(docker info --format '{{.OSType}}')" != "linux" ]; then
 	exit 1
 fi
 
-run_offline_test Alpine alpine:3.20 'apk add --no-cache zip unzip >/dev/null'
-run_offline_test Debian debian:12 'apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y zip unzip >/dev/null'
-run_offline_test Ubuntu ubuntu:24.04 'apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y zip unzip >/dev/null'
-run_offline_test Fedora fedora:40 'dnf install -y util-linux zip unzip >/dev/null'
-run_offline_test Arch archlinux:latest 'pacman -Sy --noconfirm util-linux zip unzip >/dev/null'
+run_distribution() {
+	case "$1" in
+		alpine) run_offline_test Alpine alpine:3.20 'apk add --no-cache zip unzip >/dev/null' ;;
+		debian) run_offline_test Debian debian:12 'apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y zip unzip >/dev/null' ;;
+		ubuntu) run_offline_test Ubuntu ubuntu:24.04 'apt-get update >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y zip unzip >/dev/null' ;;
+		fedora) run_offline_test Fedora fedora:40 'dnf install -y util-linux zip unzip >/dev/null' ;;
+		arch) run_offline_test Arch archlinux:latest 'pacman -Sy --noconfirm util-linux zip unzip >/dev/null' ;;
+		*) printf 'Unknown Linux distribution: %s\n' "$1" >&2; exit 1 ;;
+	esac
+}
+
+if [ -n "$requested_distribution" ]; then
+	run_distribution "$requested_distribution"
+else
+	for distribution in alpine debian ubuntu fedora arch; do
+		run_distribution "$distribution"
+	done
+fi
 
 if [ -n "$failed_distributions" ]; then
 	printf 'Offline test suite failed in: %s.\n' "$failed_distributions" >&2
