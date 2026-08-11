@@ -922,6 +922,14 @@ if ($INSTALLER_SCRIPTS_PATH -and (Test-Path $INSTALLER_SCRIPTS_PATH -PathType Co
     Expand-Archive -Path $tmp\boxlang-installer.zip -DestinationPath $DESTINATION_BIN -Force -ErrorAction Stop
 }
 
+# Local JARs need launchers because they do not contain the ZIP runtime scripts.
+if ([System.IO.Path]::GetExtension($BOXLANG_PATH) -ieq ".jar") {
+    Set-Content -Path (Join-Path $DESTINATION_BIN "boxlang.bat") -Encoding ASCII -Value "@echo off`r`njava -jar `"$DESTINATION_LIB\boxlang.jar`" %*"
+}
+if ([System.IO.Path]::GetExtension($MINISERVER_PATH) -ieq ".jar") {
+    Set-Content -Path (Join-Path $DESTINATION_BIN "boxlang-miniserver.bat") -Encoding ASCII -Value "@echo off`r`njava -jar `"$DESTINATION_LIB\boxlang-miniserver.jar`" %*"
+}
+
 # Create Aliases
 Write-Host -ForegroundColor Blue "🔗 Creating symbolic links for executables..."
 try {
@@ -972,7 +980,9 @@ Write-Host -ForegroundColor Green "🧹 Cleaning up..."
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp -Recurse | Out-Null
 
 ## Verify installation
-Test-Installation -BinDir $DESTINATION_BIN
+if (-not (Test-Installation -BinDir $DESTINATION_BIN)) {
+    exit 1
+}
 
 ## Finalization
 Write-Host -ForegroundColor Green ''

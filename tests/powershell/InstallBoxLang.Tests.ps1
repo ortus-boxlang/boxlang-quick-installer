@@ -24,7 +24,8 @@ function New-TestJava {
 
     $javaDirectory = Join-Path $Root 'java'
     New-Item -ItemType Directory -Path $javaDirectory -Force | Out-Null
-    Set-Content -Path (Join-Path $javaDirectory 'java.cmd') -Value "@echo off`r`necho openjdk version `"21.0.1`" 1>&2" -Encoding ASCII
+    $javaScript = "@echo off`r`nif `"%1`"==`"-jar`" (`r`n  echo BoxLang 1.0.0`r`n  exit /b 0`r`n)`r`necho openjdk version `"21.0.1`" 1>&2"
+    Set-Content -Path (Join-Path $javaDirectory 'java.cmd') -Value $javaScript -Encoding ASCII
     return $javaDirectory
 }
 
@@ -127,7 +128,21 @@ Invoke-Test 'installs local JAR artifacts and a script directory without downloa
 
         Assert-True (Test-Path (Join-Path $result.Home 'lib\boxlang.jar')) 'Local BoxLang JAR was not copied'
         Assert-True (Test-Path (Join-Path $result.Home 'lib\boxlang-miniserver.jar')) 'Local MiniServer JAR was not copied'
-        Assert-True (Test-Path (Join-Path $result.Home 'bin\boxlang.bat')) 'Local installer scripts were not copied'
+        $boxlangLauncher = Join-Path $result.Home 'bin\boxlang.bat'
+        $miniServerLauncher = Join-Path $result.Home 'bin\boxlang-miniserver.bat'
+        Assert-True (Test-Path $boxlangLauncher) 'Local BoxLang JAR launcher was not created'
+        Assert-True (Test-Path $miniServerLauncher) 'Local MiniServer JAR launcher was not created'
+        Assert-Match ([regex]::Escape((Join-Path $result.Home 'lib\boxlang.jar'))) (Get-Content $boxlangLauncher -Raw) 'BoxLang JAR launcher has the wrong JAR path'
+        Assert-Match ([regex]::Escape((Join-Path $result.Home 'lib\boxlang-miniserver.jar'))) (Get-Content $miniServerLauncher -Raw) 'MiniServer JAR launcher has the wrong JAR path'
+        $previousPath = $env:PATH
+        try {
+            $env:PATH = "$(New-TestJava -Root $root);$previousPath"
+            Assert-Match 'BoxLang 1.0.0' (& $boxlangLauncher --version | Out-String) 'Local BoxLang JAR launcher did not run'
+            Assert-Match 'BoxLang 1.0.0' (& $miniServerLauncher --version | Out-String) 'Local MiniServer JAR launcher did not run'
+        }
+        finally {
+            $env:PATH = $previousPath
+        }
         Assert-Match 'Installation verified successfully' $result.Output 'Local JAR installation was not verified'
     }
     finally {
