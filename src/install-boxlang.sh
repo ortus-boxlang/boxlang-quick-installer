@@ -693,7 +693,9 @@ install_boxlang() {
 			print_success "No previous BoxLang installation found, proceeding with fresh install..."
 		fi
 	else
-		print_warning "🔄 Forcing reinstallation of BoxLang..."
+		if [ -d "${SYSTEM_HOME}" ]; then
+			print_warning "🔄 Forcing reinstallation of BoxLang..."
+		fi
 		remove_previous_installation || {
 			print_error "❌ Failed to remove previous installation, please see log for more information"
 			exit 1
