@@ -210,6 +210,11 @@ check_or_set_path() {
 	local bin_dir="$1"
 	local install_home="$2"
 	local boxlang_home_bin="${3:-}"
+	local current_shell="${SHELL##*/}"
+	local is_wsl=false
+	if [ -f /proc/version ] && grep -qi microsoft /proc/version; then
+		is_wsl=true
+	fi
 	# Detect the appropriate shell profile file using helper function
 	local profile_file=$(get_shell_profile_file)
 
@@ -239,7 +244,7 @@ check_or_set_path() {
 	fi
 
 	# Check if BOXLANG_INSTALL_HOME is already set in the profile
-	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file" ]; then
+	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file"; then
 		install_home_exists=true
 	fi
 
@@ -339,6 +344,11 @@ check_and_install_commandbox() {
 	local system_bin="$1"
 	local boxlang_bin="$2"
 
+	if [ "$INSTALL_COMMANDBOX" = "false" ]; then
+		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
+		return 0
+	fi
+
 	print_info "🔍 Checking for CommandBox..."
 
 	# Check if CommandBox is already available
@@ -356,9 +366,6 @@ check_and_install_commandbox() {
 	if [ "$INSTALL_COMMANDBOX" = "true" ]; then
 		should_install="yes"
 		print_info "📦 Installing CommandBox (auto-install enabled)..."
-	elif [ "$INSTALL_COMMANDBOX" = "false" ]; then
-		should_install="no"
-		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
 		if [ "$NON_INTERACTIVE" = true ]; then
@@ -432,7 +439,13 @@ verify_installation() {
 		print_error "BoxLang installation verification failed"
 		return 1
 	fi
-	if [ "$JAVA_INSTALL_MODE" != "skip" ] || [[ "$BOXLANG_PATH" != *.jar ]]; then
+	local verify_binary=true
+	if [ "$JAVA_INSTALL_MODE" = "skip" ]; then
+		case "$BOXLANG_PATH" in
+			*.jar) verify_binary=false ;;
+		esac
+	fi
+	if [ "$verify_binary" = true ]; then
 		if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
 			print_error "BoxLang installation verification failed"
 			return 1
@@ -813,10 +826,12 @@ install_boxlang() {
 	fi
 
 	###########################################################################
-	# Inflate them
+	# Extract locally supplied ZIP artifacts when present.
 	###########################################################################
-	printf "\n"
-	print_info "🛺 Unzipping Assets to ${SYSTEM_HOME}..."
+	if [ -f "${TEMP_DIR}/boxlang.zip" ] || [ -f "${TEMP_DIR}/boxlang-miniserver.zip" ] || { [ -z "$INSTALLER_SCRIPTS_PATH" ] || [ ! -d "$INSTALLER_SCRIPTS_PATH" ]; }; then
+		printf "\n"
+		print_info "🛺 Unzipping Assets to ${SYSTEM_HOME}..."
+	fi
 	if [ -f "${TEMP_DIR}/boxlang.zip" ]; then
 		unzip -q -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
 	fi
@@ -898,7 +913,7 @@ EOF
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "🥊 BoxLang® Installation Directory: [${SYSTEM_HOME}]"
 	echo "🔗 System Links: [${SYSTEM_BIN}]"
-	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
+	echo "🏠 Module executable directory: [${BOXLANG_HOME_BIN}]"
 	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"

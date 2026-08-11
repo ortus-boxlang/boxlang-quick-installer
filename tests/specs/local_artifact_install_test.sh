@@ -172,12 +172,20 @@ test_local_jars_are_copied_without_extraction() {
 	echo 'miniserver jar' > "$miniserver_jar"
 	echo '#!/bin/sh' > "$scripts_dir/install-bvm.sh"
 
-	HOME="$boxlang_home" BOXLANG_INSTALL_HOME="$sandbox/install-boxlang" TERM="xterm-256color" \
+	local output
+	output=$(HOME="$boxlang_home" BOXLANG_INSTALL_HOME="$sandbox/install-boxlang" TERM="xterm-256color" \
 		sh "$INSTALLER_SCRIPT" --force --without-commandbox --without-jre \
 			--boxlang-path "$boxlang_jar" \
-			--miniserver-path "$miniserver_zip" \
-			--installer-scripts-path "$scripts_dir" >/dev/null 2>&1
+			--miniserver-path "$miniserver_jar" \
+			--installer-scripts-path "$scripts_dir" 2>&1)
 	assert_true "[ -f '$boxlang_install_home/lib/boxlang.jar' ]" "local BoxLang JAR is copied directly"
+	assert_true "[ -f '$boxlang_install_home/lib/boxlang-miniserver.jar' ]" "local MiniServer JAR is copied directly"
+	assert_not_contains "Unzipping Assets" "$output" "local JAR artifacts are not reported as unzipped"
+	assert_not_contains "Checking for CommandBox" "$output" "CommandBox is not checked when disabled"
+	assert_contains "Skipping CommandBox installation" "$output" "CommandBox skip is reported when disabled"
+	assert_contains "Module executable directory: [$boxlang_home/.boxlang/bin]" "$output" "module executable directory reports its actual location"
+	assert_not_contains "[[: not found" "$output" "local JAR verification is POSIX-shell compatible"
+	assert_not_contains "grep: ]" "$output" "profile update does not pass a malformed grep argument"
 
 	HOME="$miniserver_home" BOXLANG_INSTALL_HOME="$sandbox/install-miniserver" TERM="xterm-256color" \
 		sh "$INSTALLER_SCRIPT" --force --without-commandbox --without-jre \
