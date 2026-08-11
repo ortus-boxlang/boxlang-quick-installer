@@ -128,6 +128,33 @@ EOF
     rm -rf "$sandbox"
 }
 
+test_checksum_verifies_zip_under_posix_sh() {
+    run_test_group "BVM ZIP verification under POSIX sh"
+
+    local sandbox
+    sandbox="$(mktemp -d)"
+    local fixture_dir="$sandbox/bvm"
+    local fixture_script="$fixture_dir/bvm.sh"
+    local archive="$sandbox/runtime.zip"
+    local output
+    local exit_code=0
+    mkdir -p "$fixture_dir/helpers"
+    sed '$d' "$BVM_SCRIPT" > "$fixture_script"
+    cp "$PROJECT_ROOT/src/helpers/helpers.sh" "$fixture_dir/helpers/helpers.sh"
+    printf 'test archive\n' > "$sandbox/archive-content"
+    zip -q "$archive" "$sandbox/archive-content"
+
+    printf '\nverify_download_with_checksum "%s" "https://invalid.example" 1\n' "$archive" >> "$fixture_script"
+    output=$(BVM_HOME="$sandbox/home" sh "$fixture_script" 2>&1) || exit_code=$?
+    assert_return_code 0 "$exit_code" "BVM ZIP checksum verification runs under POSIX sh"
+    case "$output" in
+        *"[[: not found"*) assert_true false "BVM ZIP verification does not use Bash conditionals" ;;
+        *) assert_true true "BVM ZIP verification does not use Bash conditionals" ;;
+    esac
+
+    rm -rf "$sandbox"
+}
+
 print_test_summary() {
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
@@ -156,6 +183,7 @@ main() {
     echo "═══════════════════════════════════════════════════════════════"
 
     test_use_replaces_directory_current_on_windows_shell
+    test_checksum_verifies_zip_under_posix_sh
 
     print_test_summary
 }

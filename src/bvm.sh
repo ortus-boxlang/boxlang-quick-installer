@@ -1186,12 +1186,14 @@ verify_download_with_checksum() {
     fi
 
     # Basic ZIP file validation
-    if [[ "$file_path" == *.zip ]]; then
-        if ! unzip -t "$file_path" >/dev/null 2>&1; then
-            print_error "Downloaded ZIP file is corrupted"
-            return 1
-        fi
-    fi
+    case "$file_path" in
+        *.zip)
+            if ! unzip -t "$file_path" >/dev/null 2>&1; then
+                print_error "Downloaded ZIP file is corrupted"
+                return 1
+            fi
+            ;;
+    esac
 
     # Try to download and verify SHA-256 checksum
     local filename=$(basename "$file_path")

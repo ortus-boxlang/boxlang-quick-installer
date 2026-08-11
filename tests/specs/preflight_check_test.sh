@@ -439,6 +439,56 @@ exit 1' > "$ISOLATED_MOCK_DIR/apt"
         return 1
     fi
 }
+
+test_preflight_check_works_without_euid() {
+    echo ""
+    echo "🧪 Testing: preflight_check() without EUID"
+    echo "─────────────────────────────────────────────────────────────"
+
+    local sandbox
+    sandbox="$(mktemp -d)"
+    local output
+    local exit_code=0
+    mkdir -p "$sandbox/bin"
+    cat > "$sandbox/bin/uname" <<'EOF'
+#!/bin/sh
+printf '%s\n' Linux
+EOF
+    cat > "$sandbox/bin/apt-get" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    cat > "$sandbox/bin/apt" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    cat > "$sandbox/bin/sudo" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "$sandbox/bin/uname" "$sandbox/bin/apt-get" "$sandbox/bin/apt" "$sandbox/bin/sudo"
+
+    output=$(env -u EUID PATH="$sandbox/bin:/bin:/usr/bin" sh -c '. "$1"; command_exists() { [ "$1" = curl ] && return 1; command -v "$1" >/dev/null 2>&1; }; preflight_check skip curl' sh "$HELPERS_FILE" 2>&1) || exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
+        echo "✅ PASS: preflight_check() works when EUID is unset"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        echo "❌ FAIL: preflight_check() works when EUID is unset"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+    case "$output" in
+        *"integer expression expected"*)
+            echo "❌ FAIL: preflight_check() does not require Bash EUID"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            ;;
+        *)
+            echo "✅ PASS: preflight_check() does not require Bash EUID"
+            TESTS_PASSED=$((TESTS_PASSED + 1))
+            ;;
+    esac
+
+    rm -rf "$sandbox"
+}
 test_preflight_check_java_failure() {
     echo ""
     echo "🧪 Testing: preflight_check() with Java check failure"
@@ -571,6 +621,7 @@ run_preflight_tests() {
     test_preflight_check_missing_sha_tools_auto_install
     test_preflight_check_truly_missing_deps
     test_preflight_check_failed_auto_install
+    test_preflight_check_works_without_euid
     test_preflight_check_macos_missing_brew
     test_preflight_check_java_failure
     test_preflight_check_uses_caller_dependencies

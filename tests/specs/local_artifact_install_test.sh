@@ -300,11 +300,29 @@ EOF
 	rm -rf "$sandbox"
 }
 
+test_module_installer_parses_versions_with_posix_sh() {
+	local sandbox
+	sandbox="$(mktemp -d)"
+	local module_library="$sandbox/install-bx-module-lib.sh"
+	local output
+	local exit_code=0
+
+	sed '$d' "$MODULE_INSTALLER_SCRIPT" > "$module_library"
+	mkdir -p "$sandbox/helpers"
+	cp "$PROJECT_ROOT/src/helpers/helpers.sh" "$sandbox/helpers/helpers.sh"
+	printf '\ninstall_module "@"\n' >> "$module_library"
+	output=$(TERM="xterm-256color" sh "$module_library" 2>&1) || exit_code=$?
+	assert_true "[ $exit_code -ne 0 ]" "module installer rejects a missing module name under POSIX sh"
+	assert_contains "You must specify a BoxLang module" "$output" "module version parsing works under POSIX sh"
+	rm -rf "$sandbox"
+}
+
 test_local_zip_artifacts_install_without_curl
 test_local_script_directory_is_copied
 test_local_jars_are_copied_without_extraction
 test_non_root_install_uses_user_local_paths
 test_module_preflight_skips_java_and_requires_jq
+test_module_installer_parses_versions_with_posix_sh
 
 echo "Passed: $TESTS_PASSED"
 echo "Failed: $TESTS_FAILED"

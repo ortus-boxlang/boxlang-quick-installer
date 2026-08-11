@@ -310,12 +310,13 @@ install_module() {
 	local TARGET_MODULE=""
 	local TARGET_VERSION=""
 
-	if [[ "$INPUT" =~ @ ]]; then
-		TARGET_MODULE=$(echo "$INPUT" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]')
-		TARGET_VERSION=$(echo "$INPUT" | cut -d'@' -f2)
-	else
-		TARGET_MODULE=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]')
-	fi
+	case "$INPUT" in
+		*@*)
+			TARGET_MODULE=$(echo "$INPUT" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]')
+			TARGET_VERSION=$(echo "$INPUT" | cut -d'@' -f2)
+			;;
+		*) TARGET_MODULE=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]') ;;
+	esac
 
 	# Validate module name
 	if [ -z "$TARGET_MODULE" ]; then
