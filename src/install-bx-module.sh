@@ -162,7 +162,7 @@ resolve_forgebox_storage_url() {
 		exit 1
 	fi
 
-	local SECURE_URL=$(echo "${STORAGE_JSON}" | jq -r '.data')
+	local SECURE_URL=$(printf '%s\n' "${STORAGE_JSON}" | jq -r '.data')
 
 	if [ "$SECURE_URL" = "null" ] || [ -z "$SECURE_URL" ]; then
 		printf "${RED}❌ Error: Invalid response from ForgeBox storage${NORMAL}\n" >&2
@@ -186,8 +186,8 @@ get_latest_version_from_forgebox() {
 		exit 1
 	fi
 
-	local VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version')
-	local DOWNLOAD_URL_TEMP=$(echo "${ENTRY_JSON}" | jq -r '.data.downloadURL')
+	local VERSION=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.version')
+	local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.downloadURL')
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -226,7 +226,7 @@ get_be_version_from_forgebox() {
 
 	# Take the first (latest) version regardless of stable/pre-release status
 	# The ForgeBox API returns versions in newest-first order
-	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[0].version')
+	local VERSION=$(printf '%s\n' "${VERSIONS_JSON}" | jq -r '.data[0].version')
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -237,7 +237,7 @@ get_be_version_from_forgebox() {
 	# Get the full entry info for this version to check for forgeboxStorage
 	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions/${VERSION}")
 	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
 		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -274,7 +274,7 @@ get_snapshot_version_from_forgebox() {
 	fi
 
 	# Find the first version with "-snapshot" in the versions array
-	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[] | select(.version | contains("-snapshot")) | .version' | head -n 1)
+	local VERSION=$(printf '%s\n' "${VERSIONS_JSON}" | jq -r '.data[] | select(.version | contains("-snapshot")) | .version' | head -n 1)
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -285,7 +285,7 @@ get_snapshot_version_from_forgebox() {
 	# Get the full entry info for this version to check for forgeboxStorage
 	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/${VERSION}")
 	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
 		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -348,7 +348,7 @@ install_module() {
 		# We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
 		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/versions/${TARGET_VERSION}")
 		if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-			local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+			local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 			if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 				local DOWNLOAD_URL=$(resolve_forgebox_storage_url "$TARGET_MODULE" "$TARGET_VERSION")
 			elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -627,7 +627,7 @@ fetch_forgebox_latest_version() {
 	fi
 
 	local VERSION
-	VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version // empty' 2>/dev/null)
+	VERSION=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.version // empty' 2>/dev/null)
 	if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
 		return 1
 	fi

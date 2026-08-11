@@ -317,12 +317,35 @@ test_module_installer_parses_versions_with_posix_sh() {
 	rm -rf "$sandbox"
 }
 
+test_module_installer_preserves_escaped_json_control_characters() {
+	local sandbox
+	sandbox="$(mktemp -d)"
+	local module_library="$sandbox/install-bx-module-lib.sh"
+	local mock_bin="$sandbox/mock-bin"
+	local output
+
+	sed '$d' "$MODULE_INSTALLER_SCRIPT" > "$module_library"
+	mkdir -p "$sandbox/helpers" "$mock_bin"
+	cp "$PROJECT_ROOT/src/helpers/helpers.sh" "$sandbox/helpers/helpers.sh"
+	cat > "$mock_bin/curl" <<'EOF'
+#!/bin/sh
+printf '%s\n' '{"data":{"version":"1.2.3","downloadURL":"https://example.test/module.zip","description":"line one\r\nline two"}}'
+EOF
+	chmod +x "$mock_bin/curl"
+	printf '\nget_latest_version_from_forgebox bx-cli\nprintf "%%s|%%s\\n" "$TARGET_VERSION" "$DOWNLOAD_URL"\n' >> "$module_library"
+	output=$(PATH="$mock_bin:$PATH" TERM="xterm-256color" sh "$module_library")
+	assert_contains "1.2.3|https://example.test/module.zip" "$output" "module installer preserves escaped JSON control characters under POSIX sh"
+	assert_not_contains "jq: parse error" "$output" "module installer does not corrupt JSON before jq under POSIX sh"
+	rm -rf "$sandbox"
+}
+
 test_local_zip_artifacts_install_without_curl
 test_local_script_directory_is_copied
 test_local_jars_are_copied_without_extraction
 test_non_root_install_uses_user_local_paths
 test_module_preflight_skips_java_and_requires_jq
 test_module_installer_parses_versions_with_posix_sh
+test_module_installer_preserves_escaped_json_control_characters
 
 echo "Passed: $TESTS_PASSED"
 echo "Failed: $TESTS_FAILED"
