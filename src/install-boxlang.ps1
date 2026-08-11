@@ -678,6 +678,10 @@ function Check-And-Install-CommandBox {
         [string]$BinDir
     )
 
+	if ($INSTALL_COMMANDBOX -eq $false) {
+		return $false
+	}
+
     Write-Host -ForegroundColor Blue "🔍 Checking for CommandBox..."
 
     # Check if CommandBox is already available
@@ -685,13 +689,6 @@ function Check-And-Install-CommandBox {
     if ($boxCommand) {
         Write-Host -ForegroundColor Green "✅ CommandBox is already installed and available"
         return $true
-    }
-
-    # Check command line flags first
-    if ($INSTALL_COMMANDBOX -eq $false) {
-        Write-Host -ForegroundColor Yellow "Skipping CommandBox installation (--without-commandbox specified)"
-        Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
-        return $false
     }
 
     Write-Host -ForegroundColor Yellow "⚠️  CommandBox is not installed"
@@ -950,7 +947,7 @@ catch {
 }
 
 # Install CommandBox
-Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
+$null = Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
 # Create bin directory in BoxLang home for module executables
 Write-Host -ForegroundColor Blue "📁 Creating BoxLang home bin directory..."

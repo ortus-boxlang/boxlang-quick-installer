@@ -134,6 +134,10 @@ Invoke-Test 'installs local JAR artifacts and a script directory without downloa
         Assert-True (Test-Path $miniServerLauncher) 'Local MiniServer JAR launcher was not created'
         Assert-Match ([regex]::Escape((Join-Path $result.Home 'lib\boxlang.jar'))) (Get-Content $boxlangLauncher -Raw) 'BoxLang JAR launcher has the wrong JAR path'
         Assert-Match ([regex]::Escape((Join-Path $result.Home 'lib\boxlang-miniserver.jar'))) (Get-Content $miniServerLauncher -Raw) 'MiniServer JAR launcher has the wrong JAR path'
+        Assert-True ($result.Output -notmatch 'Checking for CommandBox') 'CommandBox should not be checked when disabled'
+        Assert-True ($result.Output -notmatch 'Skipping CommandBox installation') 'CommandBox skip should not be reported when disabled'
+        Assert-True ($result.Output -notmatch 'You can install CommandBox later') 'CommandBox installation advice should not be reported when disabled'
+		Assert-True ($result.Output -notmatch '(?m)^False$') 'Disabled CommandBox handling should not write False'
         $previousPath = $env:PATH
         try {
             $env:PATH = "$(New-TestJava -Root $root);$previousPath"
