@@ -751,7 +751,11 @@ install_boxlang() {
 	###########################################################################
 	# Start the installation
 	###########################################################################
-	print_info "🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]"
+	local installation_message="🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]"
+	if [ -n "$BOXLANG_PATH" ] || [ -n "$MINISERVER_PATH" ]; then
+		installation_message="🎯 Installing BoxLang® from local artifacts to ${GREEN}[${SYSTEM_HOME}]"
+	fi
+	print_info "$installation_message"
 
 	###########################################################################
 	# Get BoxLang (local path or download)

@@ -181,6 +181,8 @@ test_local_jars_are_copied_without_extraction() {
 			--installer-scripts-path "$scripts_dir" 2>&1)
 	assert_true "[ -f '$boxlang_install_home/lib/boxlang.jar' ]" "local BoxLang JAR is copied directly"
 	assert_true "[ -f '$boxlang_install_home/lib/boxlang-miniserver.jar' ]" "local MiniServer JAR is copied directly"
+	assert_contains "Installing BoxLang® from local artifacts to [$boxlang_install_home]" "$output" "local artifacts are reported accurately"
+	assert_not_contains "Installing BoxLang® [latest]" "$output" "local artifacts are not reported as latest"
 	assert_not_contains "Unzipping Assets" "$output" "local JAR artifacts are not reported as unzipped"
 	assert_not_contains "Checking for CommandBox" "$output" "CommandBox is not checked when disabled"
 	assert_contains "Skipping CommandBox installation" "$output" "CommandBox skip is reported when disabled"
