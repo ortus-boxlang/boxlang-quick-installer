@@ -29,9 +29,10 @@ jobs:
           mkdir -p "$log_directory"
           log_path="$log_directory/linux-${{ matrix.distro }}.log"
           set +e
-          sh ./tests/run-all.sh ${{ matrix.distro }} >"$log_path" 2>&1
-          exit_code=$?
-          printf '%s\n' "$exit_code" >"$log_path.exitcode"
+          (
+            sh ./tests/run-all.sh ${{ matrix.distro }}
+            printf '%s\n' "$?" >"$log_path.exitcode"
+          ) 2>&1 | tee "$log_path"
 
       - name: Report Linux test results
         if: always()
@@ -69,7 +70,7 @@ jobs:
           $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
           New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
           $logPath = Join-Path $logDirectory 'windows.log'
-          & .\tests\run-all.ps1 -Platform Windows *> $logPath
+          & .\tests\run-all.ps1 -Platform Windows *>&1 | Tee-Object -FilePath $logPath
           $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
           Set-Content -Path "$logPath.exitcode" -Value $exitCode
 
