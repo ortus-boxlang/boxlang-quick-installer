@@ -901,7 +901,8 @@ EOF
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
 	# Create bin directory in BoxLang home for module executables
-	local BOXLANG_HOME_BIN="$HOME/.boxlang/bin"
+	local BOXLANG_HOME="${BOXLANG_HOME:-$HOME/.boxlang}"
+	local BOXLANG_HOME_BIN="$BOXLANG_HOME/bin"
 	print_info "📁 Creating BoxLang home bin directory..."
 	mkdir -p "$BOXLANG_HOME_BIN"
 	print_success "BoxLang home bin directory created at [$BOXLANG_HOME_BIN]"

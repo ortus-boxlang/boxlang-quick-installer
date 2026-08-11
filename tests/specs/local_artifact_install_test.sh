@@ -160,12 +160,13 @@ test_local_jars_are_copied_without_extraction() {
 	local boxlang_jar="$sandbox/boxlang.jar"
 	local miniserver_jar="$sandbox/boxlang-miniserver.jar"
 	local boxlang_home="$sandbox/home-boxlang"
+	local module_home="$sandbox/module-home"
 	local miniserver_home="$sandbox/home-miniserver"
 	local boxlang_install_home
 	local miniserver_install_home
 	boxlang_install_home="$(expected_install_home "$sandbox/install-boxlang" "$boxlang_home")"
 	miniserver_install_home="$(expected_install_home "$sandbox/install-miniserver" "$miniserver_home")"
-	mkdir -p "$scripts_dir"
+	mkdir -p "$scripts_dir" "$boxlang_home" "$miniserver_home"
 	create_runtime_archive "$sandbox" "$runtime_zip"
 	create_runtime_archive "$sandbox" "$miniserver_zip"
 	echo 'boxlang jar' > "$boxlang_jar"
@@ -173,7 +174,7 @@ test_local_jars_are_copied_without_extraction() {
 	echo '#!/bin/sh' > "$scripts_dir/install-bvm.sh"
 
 	local output
-	output=$(HOME="$boxlang_home" BOXLANG_INSTALL_HOME="$sandbox/install-boxlang" TERM="xterm-256color" \
+	output=$(HOME="$boxlang_home" BOXLANG_INSTALL_HOME="$sandbox/install-boxlang" BOXLANG_HOME="$module_home" TERM="xterm-256color" \
 		sh "$INSTALLER_SCRIPT" --force --without-commandbox --without-jre \
 			--boxlang-path "$boxlang_jar" \
 			--miniserver-path "$miniserver_jar" \
@@ -183,7 +184,8 @@ test_local_jars_are_copied_without_extraction() {
 	assert_not_contains "Unzipping Assets" "$output" "local JAR artifacts are not reported as unzipped"
 	assert_not_contains "Checking for CommandBox" "$output" "CommandBox is not checked when disabled"
 	assert_contains "Skipping CommandBox installation" "$output" "CommandBox skip is reported when disabled"
-	assert_contains "Module executable directory: [$boxlang_home/.boxlang/bin]" "$output" "module executable directory reports its actual location"
+	assert_true "[ -d '$module_home/bin' ]" "module executable directory honors BOXLANG_HOME"
+	assert_contains "Module executable directory: [$module_home/bin]" "$output" "module executable directory reports its actual location"
 	assert_not_contains "[[: not found" "$output" "local JAR verification is POSIX-shell compatible"
 	assert_not_contains "grep: ]" "$output" "profile update does not pass a malformed grep argument"
 
