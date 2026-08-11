@@ -331,7 +331,23 @@ test_module_installer_preserves_escaped_json_control_characters() {
 #!/bin/sh
 printf '%s\n' '{"data":{"version":"1.2.3","downloadURL":"https://example.test/module.zip","description":"line one\r\nline two"}}'
 EOF
-	chmod +x "$mock_bin/curl"
+	cat > "$mock_bin/jq" <<'EOF'
+#!/bin/sh
+payload=$(cat)
+case "$payload" in
+*'\r\n'*) ;;
+*)
+	printf '%s\n' 'jq: parse error: Invalid string: control characters must be escaped' >&2
+	exit 1
+	;;
+esac
+case "$*" in
+*.data.version*) printf '%s\n' '1.2.3' ;;
+*.data.downloadURL*) printf '%s\n' 'https://example.test/module.zip' ;;
+*) exit 1 ;;
+esac
+EOF
+	chmod +x "$mock_bin/curl" "$mock_bin/jq"
 	printf '\nget_latest_version_from_forgebox bx-cli\nprintf "%%s|%%s\\n" "$TARGET_VERSION" "$DOWNLOAD_URL"\n' >> "$module_library"
 	output=$(PATH="$mock_bin:$PATH" TERM="xterm-256color" sh "$module_library")
 	assert_contains "1.2.3|https://example.test/module.zip" "$output" "module installer preserves escaped JSON control characters under POSIX sh"
