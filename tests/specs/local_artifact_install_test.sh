@@ -185,7 +185,7 @@ test_local_jars_are_copied_without_extraction() {
 	assert_not_contains "Installing BoxLang® [latest]" "$output" "local artifacts are not reported as latest"
 	assert_not_contains "Unzipping Assets" "$output" "local JAR artifacts are not reported as unzipped"
 	assert_not_contains "Checking for CommandBox" "$output" "CommandBox is not checked when disabled"
-	assert_contains "Skipping CommandBox installation" "$output" "CommandBox skip is reported when disabled"
+	assert_not_contains "CommandBox installation" "$output" "CommandBox handling is silent when disabled"
 	assert_true "[ -d '$module_home/bin' ]" "module executable directory honors BOXLANG_HOME"
 	assert_contains "Module executable directory: [$module_home/bin]" "$output" "module executable directory reports its actual location"
 	assert_not_contains "[[: not found" "$output" "local JAR verification is POSIX-shell compatible"

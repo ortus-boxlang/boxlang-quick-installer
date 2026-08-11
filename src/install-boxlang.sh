@@ -345,7 +345,6 @@ check_and_install_commandbox() {
 	local boxlang_bin="$2"
 
 	if [ "$INSTALL_COMMANDBOX" = "false" ]; then
-		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 		return 0
 	fi
 
