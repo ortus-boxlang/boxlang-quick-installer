@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
 
 # BoxLang Module Installer Script
 # This script helps install and manage BoxLang modules from FORGEBOX.
@@ -14,6 +17,7 @@ set -e
 
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 # We need this in case the target OS we are installing in does not have a `TERM` implementation declared
 # or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions or Docker containers)
@@ -23,14 +27,12 @@ fi
 
 # Include the helper functions
 # These are installed by the installer script
-if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
-	source "$(dirname "$0")/helpers/helpers.sh"
-elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
-	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+if [ -f "$SCRIPT_DIR/helpers/helpers.sh" ]; then
+	. "$SCRIPT_DIR/helpers/helpers.sh"
 elif [ -f "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh" ]; then
-	source "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh"
+	. "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh"
 elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
-    source "${BVM_HOME}/scripts/helpers/helpers.sh"
+    . "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
 	printf "${RED}Error: Helper scripts not found. Please verify your installation.${NORMAL}\n"
 	exit 1
@@ -41,30 +43,26 @@ fi
 ###########################################################################
 
 parse_module_list() {
-	local modules=()
 	local input=""
 
 	# Concatenate all arguments into a single string
 	for arg in "$@"; do
 		# Skip flags
-		if [[ "$arg" == --* ]]; then
-			continue
-		fi
-		input="$input $arg"
+		case "$arg" in
+		--*) ;;
+		*) input="$input $arg" ;;
+		esac
 	done
 
 	# Replace commas with spaces and normalize whitespace
 	input=$(echo "$input" | sed 's/,/ /g' | tr -s ' ')
 
-	# Split by spaces and add to array
+	# Split by spaces and output each module.
 	for module in $input; do
 		if [ -n "$module" ]; then
-			modules+=("$module")
+			printf '%s\n' "$module"
 		fi
 	done
-
-	# Output modules one per line
-	printf '%s\n' "${modules[@]}"
 }
 
 show_help() {
@@ -458,7 +456,7 @@ EOF
 			local EXEC_NAMES=$(echo "${EXECUTABLES}" | jq -r 'keys[]' 2>/dev/null)
 			if [ -n "${EXEC_NAMES}" ]; then
 				printf "${BLUE}🔧 Creating executable scripts...${NORMAL}\n"
-				while IFS= read -r exec_name; do
+				printf '%s\n' "${EXEC_NAMES}" | while IFS= read -r exec_name; do
 					if [ -n "${exec_name}" ]; then
 						local exec_content=$(echo "${EXECUTABLES}" | jq -r ".\"${exec_name}\"" 2>/dev/null)
 						if [ -n "${exec_content}" ] && [ "${exec_content}" != "null" ]; then
@@ -468,7 +466,7 @@ EOF
 							chmod +x "${exec_script}"
 						fi
 					fi
-				done <<< "${EXEC_NAMES}"
+				done
 			fi
 		fi
 	fi
@@ -704,7 +702,8 @@ outdated_modules() {
 	printf "%-25s %-15s %-15s %s\n" "DEPENDENCY" "CURRENT" "FORGEBOX" "STATUS"
 	printf "%-25s %-15s %-15s %s\n" "-------------------------" "---------------" "---------------" "--------------------"
 
-	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
+	local OUTDATED_MODULES=""
+	local OUTDATED_COUNT=0
 	while IFS=$'\t' read -r module_name current_version latest_version status; do
 		local status_label
 		case "$status" in
@@ -712,8 +711,9 @@ outdated_modules() {
 			ahead) status_label="🔄 ahead (dev/snapshot)" ;;
 			outdated)
 				status_label="🆙 outdated"
-				OUTDATED_NAMES+=("$module_name")
-				OUTDATED_VERSIONS+=("$latest_version")
+				OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+"
+				OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 				;;
 			*) status_label="⚠️  unable to check" ;;
 		esac
@@ -722,7 +722,6 @@ outdated_modules() {
 	rm -f "${REPORT_FILE}"
 
 	printf "\n"
-	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
 	if [ "$OUTDATED_COUNT" -eq 0 ]; then
 		printf "${GREEN}✅ All modules are up to date${NORMAL}\n"
 		return 0
@@ -733,9 +732,8 @@ outdated_modules() {
 	read -r confirmation < /dev/tty
 	case "$confirmation" in
 		[yY]|[yY][eE][sS])
-			local i
-			for (( i=0; i<OUTDATED_COUNT; i++ )); do
-				install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+			printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
+				install_module "${module_name}@${latest_version}"
 			done
 			;;
 		*)
@@ -765,17 +763,18 @@ update_modules() {
 	REPORT_FILE=$(mktemp)
 	compute_outdated_report "${MODULES_HOME}" > "${REPORT_FILE}"
 
-	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
+	local OUTDATED_MODULES=""
+	local OUTDATED_COUNT=0
 	while IFS=$'\t' read -r module_name current_version latest_version status; do
 		if [ "$status" = "outdated" ]; then
 			printf -- "🆙 %s: %s → %s\n" "$module_name" "$current_version" "$latest_version"
-			OUTDATED_NAMES+=("$module_name")
-			OUTDATED_VERSIONS+=("$latest_version")
+			OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+"
+			OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 		fi
 	done < "${REPORT_FILE}"
 	rm -f "${REPORT_FILE}"
 
-	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
 	if [ "$OUTDATED_COUNT" -eq 0 ]; then
 		printf "${GREEN}✅ All modules are up to date, nothing to update${NORMAL}\n"
 		return 0
@@ -794,9 +793,8 @@ update_modules() {
 		esac
 	fi
 
-	local i
-	for (( i=0; i<OUTDATED_COUNT; i++ )); do
-		install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+	printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
+		install_module "${module_name}@${latest_version}"
 	done
 
 	printf "${GREEN}✅ Updated ${OUTDATED_COUNT} module(s)!${NORMAL}\n"
@@ -804,6 +802,11 @@ update_modules() {
 
 main() {
 	setup_colors
+
+	# Module installer dependencies
+	if ! preflight_check skip curl unzip jq; then
+		exit 1
+	fi
 
 	# Check if no arguments are passed
 	if [ $# -eq 0 ]; then
@@ -1001,12 +1004,12 @@ main() {
 		fi
 
 		# Parse comma/space-delimited module list
-		while IFS= read -r module; do
+		parse_module_list "$@" | while IFS= read -r module; do
 			if [ -n "$module" ]; then
 				printf "${GREEN}🚀 Starting removal of module: ${module}${NORMAL}\n"
 				remove_module "$module" "$FORCE_REMOVE"
 			fi
-		done < <(parse_module_list "$@")
+		done
 
 		exit 0
 	fi
@@ -1017,12 +1020,12 @@ main() {
 	fi
 
 	# Parse comma/space-delimited module list and install
-	while IFS= read -r module; do
+	parse_module_list "$@" | while IFS= read -r module; do
 		if [ -n "$module" ]; then
 			printf "${GREEN}🚀 Starting installation of module: ${module}${NORMAL}\n"
 			install_module "$module"
 		fi
-	done < <(parse_module_list "$@")
+	done
 }
 
 main "$@"

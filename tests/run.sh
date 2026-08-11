@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
+
 # Global test runner for BoxLang project
 # Author: BoxLang Team
 # License: Apache License, Version 2.0
@@ -6,7 +10,7 @@
 # Note: Not using 'set -e' here to allow test failures without stopping the runner
 
 # Get the directory of this script
-TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$TEST_DIR")"
 SPECS_DIR="$TEST_DIR/specs"
 
@@ -27,7 +31,7 @@ NORMAL='\033[0m'
 TOTAL_SUITES=0
 PASSED_SUITES=0
 FAILED_SUITES=0
-FAILED_SUITE_NAMES=()
+FAILED_SUITE_NAMES=""
 
 ###########################################################################
 # Helper Functions
@@ -50,14 +54,14 @@ run_test_suite() {
     local test_file="$1"
     local suite_name=$(basename "$test_file" .sh)
 
-    ((TOTAL_SUITES++))
+    TOTAL_SUITES=$((TOTAL_SUITES + 1))
 
     print_section "$suite_name"
 
     if [ ! -f "$test_file" ]; then
         echo -e "${RED}❌ Test file not found: $test_file${NORMAL}"
-        ((FAILED_SUITES++))
-        FAILED_SUITE_NAMES+=("$suite_name (file not found)")
+        FAILED_SUITES=$((FAILED_SUITES + 1))
+        FAILED_SUITE_NAMES="$FAILED_SUITE_NAMES\n$suite_name (file not found)"
         return 1
     fi
 
@@ -68,15 +72,15 @@ run_test_suite() {
 
     # Run the test suite and capture exit code, but don't let it stop the runner
     echo -e "${BLUE}Starting test suite: $suite_name${NORMAL}"
-    if "$test_file" 2>&1; then
+    if sh "$test_file" 2>&1; then
         echo -e "${GREEN}✅ $suite_name completed successfully${NORMAL}"
-        ((PASSED_SUITES++))
+        PASSED_SUITES=$((PASSED_SUITES + 1))
         return 0
     else
         local exit_code=$?
         echo -e "${RED}❌ $suite_name failed (exit code: $exit_code)${NORMAL}"
-        ((FAILED_SUITES++))
-        FAILED_SUITE_NAMES+=("$suite_name")
+        FAILED_SUITES=$((FAILED_SUITES + 1))
+        FAILED_SUITE_NAMES="$FAILED_SUITE_NAMES\n$suite_name"
         return 1
     fi
 }
@@ -103,23 +107,25 @@ run_all_tests() {
 
     # Get test files dynamically
     local test_files
-    test_files=($(get_test_files))
+    test_files=$(get_test_files)
 
-    if [ ${#test_files[@]} -eq 0 ]; then
+    if [ -z "$test_files" ]; then
         echo -e "${RED}❌ No test files found in $SPECS_DIR${NORMAL}"
         echo -e "${YELLOW}Test files should follow the pattern: *_test.sh${NORMAL}"
         exit 1
     fi
 
-    echo -e "${BLUE}Found ${#test_files[@]} test suite(s):${NORMAL}"
-    for test_file in "${test_files[@]}"; do
+    local suite_count=0
+    for test_file in $test_files; do
+        suite_count=$((suite_count + 1))
         local suite_name=$(basename "$test_file" .sh)
         echo -e "${BLUE}  • $suite_name${NORMAL}"
     done
+    echo -e "${BLUE}Found $suite_count test suite(s):${NORMAL}"
     echo ""
 
     # Run each test suite (continue even if individual tests fail)
-    for test_file in "${test_files[@]}"; do
+    for test_file in $test_files; do
         # Run test suite but don't let failures stop the runner
         run_test_suite "$test_file" || true
     done
@@ -142,8 +148,8 @@ run_all_tests() {
     else
         echo ""
         echo -e "${RED}${BOLD}💥 SOME TEST SUITES FAILED:${NORMAL}"
-        for suite in "${FAILED_SUITE_NAMES[@]}"; do
-            echo -e "${RED}   • $suite${NORMAL}"
+        printf '%b\n' "$FAILED_SUITE_NAMES" | while IFS= read -r suite; do
+            [ -n "$suite" ] && echo -e "${RED}   • $suite${NORMAL}"
         done
         echo ""
         echo -e "${YELLOW}Please review the failed tests above and fix any issues.${NORMAL}"
@@ -184,15 +190,15 @@ list_tests() {
     echo ""
 
     local test_files
-    test_files=($(get_test_files))
+    test_files=$(get_test_files)
 
-    if [ ${#test_files[@]} -eq 0 ]; then
+    if [ -z "$test_files" ]; then
         echo "  No test files found in $SPECS_DIR"
         echo "  Test files should follow the pattern: *_test.sh"
         return 1
     fi
 
-    for test_file in "${test_files[@]}"; do
+    for test_file in $test_files; do
         local suite_name=$(basename "$test_file" .sh)
         local description=""
 

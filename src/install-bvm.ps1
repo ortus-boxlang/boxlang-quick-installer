@@ -1,4 +1,4 @@
-# BVM (BoxLang Version Manager) Installer for Windows
+﻿# BVM (BoxLang Version Manager) Installer for Windows
 # Description: This script installs BVM and sets up the environment on Windows.
 # Author: BoxLang Team
 # Version: @build.version@
@@ -67,15 +67,15 @@ if ($args.Count -ge 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
 ###########################################################################
 $FORCE_INSTALL = $false
 $NON_INTERACTIVE = $false
-$INSTALL_JRE = ""  # empty = prompt, "true" = yes, "false" = skip
+$JAVA_INSTALL_MODE = "prompt"
 
 foreach ($arg in $args) {
     switch ($arg) {
         "--force"       { $FORCE_INSTALL = $true }
-        "--yes"         { $NON_INTERACTIVE = $true }
-        "-y"            { $NON_INTERACTIVE = $true }
-        "--with-jre"    { $INSTALL_JRE = "true" }
-        "--without-jre" { $INSTALL_JRE = "false" }
+		"--yes"         { $NON_INTERACTIVE = $true; $JAVA_INSTALL_MODE = "automatic" }
+		"-y"            { $NON_INTERACTIVE = $true; $JAVA_INSTALL_MODE = "automatic" }
+		"--with-jre"    { $JAVA_INSTALL_MODE = "automatic" }
+		"--without-jre" { $JAVA_INSTALL_MODE = "skip" }
     }
 }
 
@@ -101,7 +101,9 @@ function Test-Prerequisites {
         Write-Host -ForegroundColor Green "✅ Internet connectivity confirmed"
     }
     catch {
-        Write-Host -ForegroundColor Yellow "⚠️  Could not verify internet connectivity - downloads may fail"
+        Write-Host -ForegroundColor Red "❌ Cannot reach downloads.ortussolutions.com. BVM requires an internet connection to install."
+        Write-Host -ForegroundColor Blue "💡 Check your network or proxy settings, then rerun the installer."
+        $allPassed = $false
     }
 
     return $allPassed
@@ -192,8 +194,15 @@ function Install-BVM {
 
     # Create BVM directories
     Write-Host -ForegroundColor Blue "📁 Creating BVM directories at [$BVM_HOME]..."
-    foreach ($dir in @($binDir, $versionsDir, $cacheDir, $scriptsDir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    try {
+        foreach ($dir in @($binDir, $versionsDir, $cacheDir, $scriptsDir)) {
+            New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Red "❌ Cannot create BVM directories at [$BVM_HOME]."
+        Write-Host -ForegroundColor Blue "💡 Set BVM_HOME to a directory you can write to, then rerun the installer."
+        return $false
     }
 
     # Download BoxLang installer bundle (contains all helper scripts)
@@ -352,11 +361,16 @@ function Add-BvmToPath {
 
     if ($shouldAdd) {
         $newPath = if ($currentPath) { "$currentPath;$binDir" } else { $binDir }
-        [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
-        # Also update the current session
-        $env:Path = "$env:Path;$binDir"
-        Write-Host -ForegroundColor Green "✅ Added [$binDir] to User PATH"
-        Write-Host -ForegroundColor Blue "💡 Restart your terminal for the PATH change to take effect"
+        try {
+            [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
+            $env:Path = "$env:Path;$binDir"
+            Write-Host -ForegroundColor Green "✅ Added [$binDir] to User PATH"
+            Write-Host -ForegroundColor Blue "💡 Restart your terminal for the PATH change to take effect"
+        }
+        catch {
+            Write-Host -ForegroundColor Yellow "⚠️  BVM was installed, but Windows blocked the PATH update."
+            Write-Host -ForegroundColor Blue "💡 Add [$binDir] to your User PATH manually."
+        }
     } else {
         Write-Host -ForegroundColor Yellow "Skipped automatic PATH update"
         Write-Host -ForegroundColor Blue "💡 Manually add the following to your PATH:"
@@ -386,10 +400,10 @@ if (-not (Test-Prerequisites)) {
 }
 
 # Java check
-if ($INSTALL_JRE -ne "false") {
+if ($JAVA_INSTALL_MODE -ne "skip") {
     $javaOk = Test-JavaVersion
     if (-not $javaOk) {
-        if ($INSTALL_JRE -eq "true" -or $NON_INTERACTIVE) {
+		if ($JAVA_INSTALL_MODE -eq "automatic") {
             Write-Host -ForegroundColor Blue "💡 Java not found. Please install Java 21+ manually and re-run this installer."
             Write-Host "   Download: https://adoptium.net/"
         } else {

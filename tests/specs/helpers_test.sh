@@ -1,18 +1,20 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
+
 # Test suite for helpers.sh
 # Author: BoxLang Team
 # License: Apache License, Version 2.0
 
-set -e
-
 # Get the directory of this script
-TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$TEST_DIR")")"
 HELPERS_FILE="$PROJECT_ROOT/src/helpers/helpers.sh"
 
 # Source the helpers file
 if [ -f "$HELPERS_FILE" ]; then
-    source "$HELPERS_FILE"
+    . "$HELPERS_FILE"
 else
     echo "❌ Error: helpers.sh not found at $HELPERS_FILE"
     exit 1
@@ -21,7 +23,7 @@ fi
 # Test results tracking
 TESTS_PASSED=0
 TESTS_FAILED=0
-FAILED_TESTS=()
+FAILED_TESTS=""
 
 ###########################################################################
 # Test Framework Functions
@@ -34,14 +36,14 @@ assert_equals() {
 
     if [ "$expected" = "$actual" ]; then
         echo "✅ PASS: $test_name"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
         return 0
     else
         echo "❌ FAIL: $test_name"
         echo "   Expected: '$expected'"
         echo "   Actual:   '$actual'"
-        FAILED_TESTS+=("$test_name")
-        ((TESTS_FAILED++))
+        FAILED_TESTS="$FAILED_TESTS\n$test_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
     fi
 }
@@ -51,17 +53,20 @@ assert_contains() {
     local string="$2"
     local test_name="$3"
 
-    if [[ "$string" == *"$substring"* ]]; then
+    case "$string" in
+    *"$substring"*)
         echo "✅ PASS: $test_name"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
         return 0
-    else
+        ;;
+    *)
         echo "❌ FAIL: $test_name"
         echo "   Expected '$string' to contain '$substring'"
-        FAILED_TESTS+=("$test_name")
-        ((TESTS_FAILED++))
+        FAILED_TESTS="$FAILED_TESTS\n$test_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
-    fi
+        ;;
+    esac
 }
 
 assert_return_code() {
@@ -71,14 +76,14 @@ assert_return_code() {
 
     if [ "$expected_code" -eq "$actual_code" ]; then
         echo "✅ PASS: $test_name"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
         return 0
     else
         echo "❌ FAIL: $test_name"
         echo "   Expected return code: $expected_code"
         echo "   Actual return code:   $actual_code"
-        FAILED_TESTS+=("$test_name")
-        ((TESTS_FAILED++))
+        FAILED_TESTS="$FAILED_TESTS\n$test_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
     fi
 }
@@ -102,7 +107,7 @@ test_print_functions() {
 
     # Test print_info
     local info_output=$(print_info "test message" 2>&1)
-    assert_contains "ℹ️ test message" "$info_output" "print_info() outputs correct format"
+    assert_contains "ℹ️  test message" "$info_output" "print_info() outputs correct format"
 
     # Test print_success
     local success_output=$(print_success "test success" 2>&1)
@@ -114,7 +119,7 @@ test_print_functions() {
 
     # Test print_error
     local error_output=$(print_error "test error" 2>&1)
-    assert_contains "🔴 test error" "$error_output" "print_error() outputs correct format"
+    assert_contains "🔴  test error" "$error_output" "print_error() outputs correct format"
 
     # Test print_header
     local header_output=$(print_header "Test Header" 2>&1)
@@ -160,7 +165,7 @@ test_setup_colors() {
     [ -n "${NORMAL+x}" ] && echo "✅ PASS: setup_colors() sets NORMAL variable" || echo "❌ FAIL: setup_colors() does not set NORMAL variable"
 
     # Count as passed tests
-    ((TESTS_PASSED+=3))
+    TESTS_PASSED=$((TESTS_PASSED + 3))
 }
 
 ###########################################################################
@@ -261,7 +266,7 @@ test_java_version_extraction() {
         local version="$1"
         local mock_path="/tmp/mock_java_$$"
         cat > "$mock_path" << EOF
-#!/bin/bash
+#!/bin/sh
 echo 'openjdk version "$version" 2024-01-15'
 echo 'OpenJDK Runtime Environment (build $version+35-2562)'
 echo 'OpenJDK 64-Bit Server VM (build $version+35-2562, mixed mode, sharing)'
@@ -351,15 +356,12 @@ run_all_tests() {
     else
         echo ""
         echo "💥 Some tests failed:"
-        for test in "${FAILED_TESTS[@]}"; do
-            echo "   • $test"
+        printf '%b\n' "$FAILED_TESTS" | while IFS= read -r test; do
+            [ -n "$test" ] && echo "   • $test"
         done
         echo ""
         exit 1
     fi
 }
 
-# Run tests if script is executed directly
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    run_all_tests
-fi
+run_all_tests

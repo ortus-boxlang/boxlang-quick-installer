@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
 
 # BoxLang Helpers
 # A collection of helper functions for BoxLang scripts.
@@ -34,7 +37,10 @@ print_header() {
 # Check if command exists
 ###########################################################################
 command_exists() {
-    command -v "$1" >/dev/null 2>&1
+	if command -v "$1" >/dev/null 2>&1; then
+		return 0
+	fi
+	return 1
 }
 
 ###########################################################################
@@ -75,34 +81,47 @@ setup_colors() {
 ###########################################################################
 # Pre-flight Checks
 ###########################################################################
-# Verifies required dependencies are installed: curl, unzip and jq
+# Verifies dependencies, installs missing command tools, and validates Java.
+# With no arguments, retains the legacy prompted Java check and default tools.
+# Usage: preflight_check [prompt|automatic|skip] [dep1 dep2 ...]
 preflight_check() {
-	local auto_install="${1:-false}"
 	printf "${BLUE}🔍 Running system requirements checks...${NORMAL}\n"
-	local missing_deps=()
-
-	# Check required commands dependencies
-	if [ "$(uname)" = "Darwin" ]; then
-		# If brew is not installed, then quit, but only if we are on macOS
-		if ! command_exists brew; then
-			printf "${RED}❌ Homebrew is not installed. Please install Homebrew first.${NORMAL}\n"
-			printf "${BLUE}💡 You can install Homebrew with:${NORMAL}\n"
-			printf "${GREEN}   /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'\n"
-			return 1
-		fi
+	local java_install_mode="prompt"
+	local use_default_deps=true
+	if [ "$1" = "prompt" ] || [ "$1" = "automatic" ] || [ "$1" = "skip" ]; then
+		java_install_mode="$1"
+		shift
 	fi
-	command_exists bash || missing_deps+=( "bash" )
-	command_exists curl || missing_deps+=( "curl" )
-	command_exists unzip || missing_deps+=( "unzip" )
-	command_exists jq || missing_deps+=( "jq" )
+	if [ "${1:-}" = "--" ]; then
+		use_default_deps=false
+		shift
+	fi
+	local missing_deps=""
+	local required_deps="$*"
 
-	if [ ${#missing_deps[@]} -ne 0 ]; then
-		printf "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NORMAL}\n"
+	if [ "$use_default_deps" = true ] && [ -z "$required_deps" ]; then
+		required_deps="curl unzip jq"
+	fi
+
+	for dep in $required_deps; do
+		if ! command_exists "$dep"; then
+			missing_deps="$missing_deps $dep"
+		fi
+	done
+
+	if [ -n "$missing_deps" ]; then
+		local package_deps="$missing_deps"
 
 		if [ "$(uname)" = "Darwin" ]; then
+			if ! command_exists brew; then
+				printf "${RED}❌ Homebrew is not installed. Please install Homebrew first.${NORMAL}\n"
+				printf "${BLUE}💡 You can install Homebrew with:${NORMAL}\n"
+				printf "${GREEN}   /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'\n"
+				return 1
+			fi
 			# Install the dependencies using Homebrew
 			printf "${BLUE}💡 Installing missing dependencies using Homebrew...${NORMAL}\n"
-			for dep in "${missing_deps[@]}"; do
+			for dep in $package_deps; do
 				printf "${BLUE}   Installing ${dep}...${NORMAL}\n"
 				if ! brew install "$dep"; then
 					printf "${RED}❌ Failed to install ${dep}. Please install it manually.${NORMAL}\n"
@@ -129,9 +148,9 @@ preflight_check() {
 					printf "${RED}❌ Failed to update package list with apt.${NORMAL}\n"
 					return 1
 				fi
-				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apt install -y ${missing_deps[*]}${NORMAL}\n"
-				if ! $use_sudo apt install -y ${missing_deps[*]}; then
+				printf "${BLUE}   Installing dependencies: ${package_deps}...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apt install -y ${package_deps}${NORMAL}\n"
+				if ! $use_sudo apt install -y $package_deps; then
 					printf "${RED}❌ Failed to install dependencies with apt. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
@@ -142,101 +161,97 @@ preflight_check() {
 					printf "${RED}❌ Failed to update package list with apk.${NORMAL}\n"
 					return 1
 				fi
-				printf "${BLUE}   Installing dependencies: ${missing_deps[*]}...${NORMAL}\n"
-				printf "${BLUE}🔍 Executing: $use_sudo apk add ${missing_deps[*]}${NORMAL}\n"
-				if ! $use_sudo apk add ${missing_deps[*]}; then
+				printf "${BLUE}   Installing dependencies: ${package_deps}...${NORMAL}\n"
+				printf "${BLUE}🔍 Executing: $use_sudo apk add ${package_deps}${NORMAL}\n"
+				if ! $use_sudo apk add $package_deps; then
 					printf "${RED}❌ Failed to install dependencies with apk. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists yum; then
 				printf "${BLUE}   Installing dependencies with yum...${NORMAL}\n"
-				if ! $use_sudo yum install -y ${missing_deps[*]}; then
+				if ! $use_sudo yum install -y $package_deps; then
 					printf "${RED}❌ Failed to install dependencies with yum. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists dnf; then
 				printf "${BLUE}   Installing dependencies with dnf...${NORMAL}\n"
-				if ! $use_sudo dnf install -y ${missing_deps[*]}; then
+				if ! $use_sudo dnf install -y $package_deps; then
 					printf "${RED}❌ Failed to install dependencies with dnf. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			elif command_exists pacman; then
 				printf "${BLUE}   Installing dependencies with pacman...${NORMAL}\n"
-				if ! $use_sudo pacman -S --noconfirm ${missing_deps[*]}; then
+				if ! $use_sudo pacman -S --noconfirm $package_deps; then
 					printf "${RED}❌ Failed to install dependencies with pacman. Please install them manually.${NORMAL}\n"
 					return 1
 				fi
 			else
-				printf "${RED}❌ No supported package manager found. Please install dependencies manually: ${missing_deps[*]}${NORMAL}\n"
+				printf "${RED}❌ No supported package manager found. Please install dependencies manually: ${package_deps}${NORMAL}\n"
 				return 1
 			fi
 			printf "${GREEN}✅ All dependencies installed successfully!${NORMAL}\n"
 		fi
 	fi
 
-	###########################################################################
-	# Java Version Check
-	###########################################################################
-	if ! check_java_version "$auto_install"; then
-		printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
+	if [ "$java_install_mode" != "skip" ]; then
+		ensure_java "$java_install_mode"
+	fi
+}
 
-		# Otherwise, use the prompt's default answer in non-interactive mode.
-		if [ "${NON_INTERACTIVE:-false}" = true ]; then
-			response=""
-		else
-			printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
-			if [ -r /dev/tty ]; then
-				read -r response < /dev/tty
-			else
-				response=""
-			fi
-		fi
-		case "$response" in
-			[yY][eE][sS]|[yY])
-				printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
-				if install_java; then
-					printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
-					return 0
-				else
-					printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
-					return 1
-				fi
-				;;
-			*)
-				printf "${YELLOW}💡 You can install Java manually using:${NORMAL}\n"
-				if [ "$(uname)" = "Darwin" ]; then
-					printf "   brew install openjdk@21\n"
-					printf "   or download from: https://adoptium.net/\n"
-					if command_exists sdk; then
-						printf "   or with SDKMAN: sdk install java 21-tem\n"
-					fi
-				elif [ "$(uname)" = "Linux" ]; then
-					if command_exists apt-get; then
-						printf "   sudo apt update && sudo apt install openjdk-21-jre\n"
-					elif command_exists yum; then
-						printf "   sudo yum install java-21-openjdk\n"
-					elif command_exists dnf; then
-						printf "   sudo dnf install java-21-openjdk\n"
-					else
-						printf "   Download from: https://adoptium.net/\n"
-					fi
-					if command_exists sdk; then
-						printf "   or with SDKMAN: sdk install java 21-tem\n"
-					fi
-				fi
-				exit 1
-				;;
-		esac
+###########################################################################
+# Ensure Java 21 is available for BoxLang.
+# Mode: prompt (default), automatic, or skip.
+###########################################################################
+ensure_java() {
+	local java_install_mode="${1:-prompt}"
+
+	if check_java_version; then
+		return 0
 	fi
 
-	return 0
+	printf "${RED}🔴  Error: Java 21 or higher is required to run BoxLang${NORMAL}\n"
+
+	case "$java_install_mode" in
+		automatic)
+			printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
+			if install_java; then
+				printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+				return 0
+			fi
+			printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+			;;
+		prompt)
+			if [ "${NON_INTERACTIVE:-false}" != true ] && [ -r /dev/tty ]; then
+				printf "${YELLOW}Would you like to automatically install Java 21 JRE? (y/N)${NORMAL} "
+				read -r response < /dev/tty
+				case "$response" in
+					[yY][eE][sS]|[yY])
+						printf "${BLUE}📥 Proceeding with automatic Java installation...${NORMAL}\n"
+						if install_java; then
+							printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
+							return 0
+						fi
+						printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
+						;;
+				esac
+			fi
+			printf "${YELLOW}💡 Java 21 must be installed manually before running BoxLang.${NORMAL}\n"
+			;;
+		skip)
+			printf "${YELLOW}💡 Java 21 must be installed manually before running BoxLang.${NORMAL}\n"
+			;;
+		*)
+			printf "${RED}❌ Invalid Java installation mode: ${java_install_mode}${NORMAL}\n"
+			;;
+	esac
+
+	return 1
 }
 
 ###########################################################################
 # Java Version Check Function (Enhanced for sudo compatibility)
 ###########################################################################
 check_java_version() {
-	local auto_install="${1:-false}"
 	printf "${BLUE}🔍 Checking Java 21 installation...${NORMAL}\n"
 	local JAVA_CMD=""
 	local JAVA_VERSION=""
@@ -248,38 +263,41 @@ check_java_version() {
 		echo "$version_output" | awk -F '"' '/version/ {print $2}' | sed 's/^1\.//' | cut -d'.' -f1
 	}
 
-	# Try multiple approaches to find Java, especially when running under sudo
-	local java_candidates=(
-		"java"                                          # Standard PATH
-		"$JAVA_HOME/bin/java"                          # JAVA_HOME if set
-		"/usr/bin/java"                                # Common system location
-		"/usr/local/bin/java"                          # Homebrew location
-		"/opt/homebrew/bin/java"                       # Apple Silicon Homebrew
-		"/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java"  # macOS Oracle/OpenJDK,
-		"/opt/java/openjdk-21-jre/bin/java"                # Custom install location (Linux
-	)
+	# Try all Java executables on PATH before fixed locations.
+	local java_candidates=""
+	local path_entry
+	local old_ifs="$IFS"
+	IFS=:
+	for path_entry in $PATH; do
+		if [ -x "${path_entry:-.}/java" ]; then
+			java_candidates="$java_candidates ${path_entry:-.}/java"
+		fi
+	done
+	IFS="$old_ifs"
+	java_candidates="$java_candidates ${JAVA_HOME:-}/bin/java /usr/bin/java /usr/local/bin/java /opt/homebrew/bin/java /Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java /opt/java/openjdk-21-jre/bin/java"
 
 	# If running under sudo, try to get the original user's environment
-	if [ -n "${SUDO_USER}" ]; then
+	if [ -n "${SUDO_USER:-}" ]; then
 		printf "${YELLOW}🛡️ Detected sudo execution. Checking Java from original user context...${NORMAL}\n"
 
 		# Try to get Java from the original user's environment
 		local user_java_cmd=$(sudo -u "${SUDO_USER}" -i bash -c 'command -v java 2>/dev/null' || echo "")
 		if [ -n "$user_java_cmd" ]; then
-			java_candidates=("$user_java_cmd" "${java_candidates[@]}")
+			java_candidates="$user_java_cmd $java_candidates"
 		fi
 
 		# Try to get JAVA_HOME from original user
 		local user_java_home=$(sudo -u "${SUDO_USER}" -i bash -c 'echo $JAVA_HOME 2>/dev/null' || echo "")
 		if [ -n "$user_java_home" ] && [ -f "$user_java_home/bin/java" ]; then
-			java_candidates=("$user_java_home/bin/java" "${java_candidates[@]}")
+			java_candidates="$user_java_home/bin/java $java_candidates"
 		fi
 	fi
 
 	# Test each candidate
-	for candidate in "${java_candidates[@]}"; do
+	for candidate in $java_candidates; do
 		# Handle glob patterns
-		if [[ "$candidate" == *"*"* ]]; then
+		case "$candidate" in
+		*"*")
 			for expanded_path in $candidate; do
 				if [ -x "$expanded_path" ]; then
 					local version_output=$("$expanded_path" -version 2>&1)
@@ -293,7 +311,8 @@ check_java_version() {
 					fi
 				fi
 			done
-		else
+			;;
+		*)
 			if command_exists "$candidate" || [ -x "$candidate" ]; then
 				local version_output=$("$candidate" -version 2>&1)
 				if [ $? -eq 0 ]; then
@@ -307,20 +326,9 @@ check_java_version() {
 					fi
 				fi
 			fi
-		fi
+			;;
+		esac
 	done
-
-	# If auto_install is true, attempt automatic installation
-	if [ "$auto_install" = "true" ]; then
-		printf "${YELLOW}Java 21+ not found. Attempting automatic installation...${NORMAL}\n"
-		if install_java; then
-			printf "${GREEN}✅ Java installation completed successfully!${NORMAL}\n"
-			return 0
-		else
-			printf "${RED}❌ Automatic Java installation failed.${NORMAL}\n"
-			return 1
-		fi
-	fi
 
 	return 1
 }
@@ -586,11 +594,10 @@ extract_semantic_version() {
 isSnapshotVersion() {
 	local version_string="$1"
 	# Check if version contains snapshot, beta, alpha, or other pre-release indicators
-	if [[ "$version_string" =~ (snapshot|beta|alpha|rc|SNAPSHOT|BETA|ALPHA|RC) ]]; then
-		return 0  # true - is snapshot
-	else
-		return 1  # false - is not snapshot
-	fi
+	case "$version_string" in
+		*snapshot*|*beta*|*alpha*|*rc*|*SNAPSHOT*|*BETA*|*ALPHA*|*RC*) return 0 ;;
+		*) return 1 ;;
+	esac
 }
 
 # Compare two semantic versions (Major.Minor.Patch)
@@ -599,14 +606,11 @@ compare_versions() {
 	local version1="$1"
 	local version2="$2"
 
-	# Split versions into arrays
-	IFS='.' read -ra V1 <<< "$version1"
-	IFS='.' read -ra V2 <<< "$version2"
-
 	# Compare major, minor, patch
 	for i in 0 1 2; do
-		local v1_part=${V1[i]:-0}
-		local v2_part=${V2[i]:-0}
+		local field=$((i + 1))
+		local v1_part=$(printf '%s\n' "$version1" | awk -F. -v field="$field" '{ print ($field == "" ? 0 : $field) }')
+		local v2_part=$(printf '%s\n' "$version2" | awk -F. -v field="$field" '{ print ($field == "" ? 0 : $field) }')
 
 		if [ "$v1_part" -gt "$v2_part" ]; then
 			return 1  # version1 > version2

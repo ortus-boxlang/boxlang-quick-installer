@@ -1,4 +1,4 @@
-# BoxLang Version Manager (BVM) for Windows
+﻿# BoxLang Version Manager (BVM) for Windows
 # A version manager for BoxLang similar to jenv or nvm
 # Author: BoxLang Team
 # Version: @build.version@
@@ -1134,7 +1134,7 @@ function Show-Help {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $command = if ($args.Count -gt 0) { $args[0] } else { "" }
-$restArgs = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
+[string[]]$restArgs = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
 
 switch ($command.ToLower()) {
 

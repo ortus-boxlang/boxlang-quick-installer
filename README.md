@@ -29,11 +29,11 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 
 **Mac and Linux:**
 
-```bash
-/bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
+```sh
+/bin/sh -c "$(curl -fsSL https://install.boxlang.io)"
 
 # With automatic Java 21  installation
-curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
+curl -fsSL https://install.boxlang.io | sh -s -- --with-jre
 ```
 
 **Windows:**
@@ -64,14 +64,14 @@ boxlang-miniserver --port 8080
 
 The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
 
-- **bash** - Required shell execution environment, especially on Alpine Linux
+- **POSIX-compatible `sh`** - Required shell execution environment
 - **curl** - For downloading releases
 - **PowerShell 6+** - Required for Windows installations
 
-**Alpine Linux** : You will need to install bash manually as it is not included by default.
+**Alpine Linux** includes a compatible `sh`; install `curl` before using the remote installer.
 
-```bash
-apk add --no-cache bash curl
+```sh
+apk add --no-cache curl
 ```
 
 ### Requirements
@@ -108,7 +108,7 @@ sudo dnf install curl unzip jq java-21-openjdk
 
 ```bash
 # Prerequisites automatically installed by installer
-apk add --no-cache bash curl unzip jq openjdk21
+apk add --no-cache curl unzip jq openjdk21
 # Java 21 automatically installed with --with-jre option
 ```
 
@@ -162,6 +162,9 @@ Here are the available options for the install command.
 | `--force` | | Force reinstallation even if already installed |
 | `--with-commandbox` | | Install CommandBox without prompting |
 | `--without-commandbox` | | Skip CommandBox installation |
+| `--boxlang-path <path>` | | Use a local BoxLang JAR or ZIP instead of downloading it |
+| `--miniserver-path <path>` | | Use a local MiniServer JAR or ZIP instead of downloading it |
+| `--installer-scripts-path <path>` | | Use a local installer scripts ZIP or directory instead of downloading it |
 | `--non-interactive` | | Never prompt for input; automatically enabled when input is redirected |
 | `--with-jre` | | ✨ Automatically install Java 21 JRE if not found |
 | `--without-jre` | | ✨ Skip Java installation (manual installation required) |
@@ -173,6 +176,7 @@ Here are the available options for the install command.
 - The `--force` option is useful when you need to reinstall or update an existing installation
 - `--yes` answers yes to all prompts and automatically installs CommandBox and Java when needed
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
+- `--boxlang-path`, `--miniserver-path`, and `--installer-scripts-path` accept local artifacts; JARs are copied directly and ZIPs are extracted
 - `--non-interactive` skips all prompts and uses each prompt's existing default answer; it is also enabled automatically when standard input is redirected
 - ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
 - ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
@@ -256,11 +260,11 @@ Examples:
   sudo install-boxlang --system
 
 Non-Interactive Usage:
-  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox --non-interactive
-  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox --non-interactive
-  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre --non-interactive
-  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
-  🌐 Install with existing prompt defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --non-interactive
+  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | sh -s -- --with-commandbox --non-interactive
+  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | sh -s -- --without-commandbox --non-interactive
+  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | sh -s -- --with-jre --non-interactive
+  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | sh -s -- --yes
+  🌐 Install with existing prompt defaults: curl -fsSL https://boxlang.io/install.sh | sh -s -- --non-interactive
 ```
 
 ## 🎯 Detailed Usage

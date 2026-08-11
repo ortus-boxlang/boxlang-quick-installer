@@ -48,14 +48,14 @@ The only difference is that BVM adds version management capabilities on top.
 - 🐚 **Shell initialization** - centralizes BVM and BoxLang PATH setup for Bash, Zsh, and Fish
 - ⌨️ **Command completion** - provides BVM command and version completion for Bash and Zsh
 - 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
-- ☕ **Automatic Java installation** - installs Java 21 JRE if needed with `--with-jre` option
+- ☕ **Java installation assistance** - the Unix installer prompts to install Java 21 when needed; the Windows installer supports `--with-jre`
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
 
 ## 🚀 Quick Start
 
 ## 📋 Prerequisites
 
-The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
+The Unix installer attempts to install missing command dependencies and prompts to install Java 21 when needed.
 
 - **bash** - Required shell execution environment (macOS/Linux), especially on Alpine Linux
 - **curl** - For downloading releases
@@ -67,7 +67,7 @@ The installer will attempt to install any missing prerequisites automatically, b
 apk add --no-cache bash curl
 ```
 
-The following are automatically installed for you, but you can install them manually if you prefer.
+The Unix installer can install these command dependencies through a supported package manager. Java installation is prompted for during Unix installation; on Windows, use `--with-jre` or `--yes` to install it automatically.
 
 - **Java 21+** - JRE or JDK
 - **unzip** - For extracting downloaded files
@@ -98,9 +98,8 @@ sudo dnf install curl unzip jq java-21-openjdk
 **Alpine Linux:**
 
 ```bash
-# Prerequisites automatically installed by installer
+# Install manually when needed
 apk add --no-cache bash curl unzip jq openjdk21
-# Java 21 automatically installed with --with-jre option
 ```
 
 ## ⬇️ Installation
@@ -108,16 +107,13 @@ apk add --no-cache bash curl unzip jq openjdk21
 ### macOS / Linux
 
 ```bash
-# Install BVM (auto-installs Java 21 if needed)
-curl -fsSL https://install-bvm.boxlang.io | bash -s -- --with-jre
-
-# Or standard installation (requires Java 21 to be pre-installed)
+# Install BVM. If Java 21 is missing, the installer prompts to install it.
 curl -fsSL https://install-bvm.boxlang.io | bash
 
 # Download and run locally
 wget https://raw.githubusercontent.com/ortus-boxlang/boxlang-quick-installer/main/src/install-bvm.sh
 chmod +x install-bvm.sh
-./install-bvm.sh --with-jre  # Auto-install Java if needed
+./install-bvm.sh
 ```
 
 ### Windows (PowerShell)
@@ -126,8 +122,13 @@ chmod +x install-bvm.sh
 # Install BVM via PowerShell one-liner (run in PowerShell as Administrator)
 iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1 | iex
 
-# Or with Java install check skip
-iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1 | iex; --without-jre
+# Skip the Java check
+$script = iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1
+& ([scriptblock]::Create($script.Content)) --without-jre
+
+# Install Java 21 automatically when it is missing
+$script = iwr -useb https://install-bvm.boxlang.io/install-bvm.ps1
+& ([scriptblock]::Create($script.Content)) --with-jre
 
 # Download and run locally
 Invoke-WebRequest -Uri https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/install-bvm.ps1 -OutFile install-bvm.ps1
@@ -145,7 +146,7 @@ boxlang --version
 #### Windows Requirements
 
 - **PowerShell 5.1+** (built into Windows 10/11) or PowerShell Core 6+
-- **Java 21+** — download from [Adoptium](https://adoptium.net/) or [Microsoft OpenJDK](https://www.microsoft.com/openjdk)
+- **Java 21+** — required by BVM; use `--with-jre` or download it from [Adoptium](https://adoptium.net/) or [Microsoft OpenJDK](https://www.microsoft.com/openjdk)
 - **Administrator privileges** recommended for junction/symlink creation
 - Internet connection
 
