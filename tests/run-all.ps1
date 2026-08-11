@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet('All', 'Linux', 'Windows')]
+    [string]$Platform = 'All'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -22,18 +25,36 @@ function Set-DockerEngine {
     if ((docker info --format '{{.OSType}}') -ne $Engine) { throw "Docker did not switch to $Engine containers." }
 }
 
-try {
-    Set-DockerEngine linux
+function Invoke-LinuxTests {
     & "$testRoot\run-linux-containers.ps1"
     & "$testRoot\run-offline-container-tests.ps1" -Platform Linux
+}
 
-    Set-DockerEngine windows
+function Invoke-WindowsTests {
     & docker run --rm --isolation=hyperv -v "${repository}:C:\workspace:ro" -w C:\workspace mcr.microsoft.com/windows/servercore:ltsc2022 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\workspace\tests\powershell\run.ps1
     if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell test suites failed.' }
     & "$testRoot\run-offline-container-tests.ps1" -Platform Windows
 }
-finally {
-    Set-DockerEngine $originalEngine
+
+if ($Platform -eq 'All') {
+    try {
+        Set-DockerEngine linux
+        Invoke-LinuxTests
+
+        Set-DockerEngine windows
+        Invoke-WindowsTests
+    }
+    finally {
+        Set-DockerEngine $originalEngine
+    }
+}
+elseif ($Platform -eq 'Linux') {
+    if ($originalEngine -ne 'linux') { throw 'Docker must be switched to Linux containers.' }
+    Invoke-LinuxTests
+}
+else {
+    if ($originalEngine -ne 'windows') { throw 'Docker must be switched to Windows containers.' }
+    Invoke-WindowsTests
 }
 
 Write-Host 'All Windows host test runs passed.' -ForegroundColor Green

@@ -69,7 +69,7 @@ jobs:
           $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
           New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
           $logPath = Join-Path $logDirectory 'windows.log'
-          & .\tests\run-all.ps1 *> $logPath
+          & .\tests\run-all.ps1 -Platform Windows *> $logPath
           $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
           Set-Content -Path "$logPath.exitcode" -Value $exitCode
 
