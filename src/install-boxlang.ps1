@@ -824,8 +824,10 @@ if (-not $FORCE_INSTALL) {
         Write-Host ""
     }
 } else {
-    Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
-    Remove-PreviousInstallation
+    if (Test-Path $INSTALLATION_FOLDER -PathType Container) {
+        Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
+        Remove-PreviousInstallation
+    }
     Write-Host ""
 }
 
