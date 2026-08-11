@@ -852,17 +852,17 @@ install_boxlang() {
 	fi
 	case "$BOXLANG_PATH" in
 	*.jar)
-		cat > "${DESTINATION_BIN}/boxlang" <<'EOF'
+		cat > "${DESTINATION_BIN}/boxlang" <<EOF
 #!/bin/sh
-exec java -jar "$(dirname "$0")/../lib/boxlang.jar" "$@"
+exec java -jar "${SYSTEM_HOME}/lib/boxlang.jar" "\$@"
 EOF
 		;;
 	esac
 	case "$MINISERVER_PATH" in
 	*.jar)
-		cat > "${DESTINATION_BIN}/boxlang-miniserver" <<'EOF'
+		cat > "${DESTINATION_BIN}/boxlang-miniserver" <<EOF
 #!/bin/sh
-exec java -jar "$(dirname "$0")/../lib/boxlang-miniserver.jar" "$@"
+exec java -jar "${SYSTEM_HOME}/lib/boxlang-miniserver.jar" "\$@"
 EOF
 		;;
 	esac

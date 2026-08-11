@@ -162,16 +162,23 @@ test_local_jars_are_copied_without_extraction() {
 	local boxlang_home="$sandbox/home-boxlang"
 	local module_home="$sandbox/module-home"
 	local miniserver_home="$sandbox/home-miniserver"
+	local mock_bin="$sandbox/mock-bin"
+	local launcher_bin="$sandbox/launcher-bin"
 	local boxlang_install_home
 	local miniserver_install_home
 	boxlang_install_home="$(expected_install_home "$sandbox/install-boxlang" "$boxlang_home")"
 	miniserver_install_home="$(expected_install_home "$sandbox/install-miniserver" "$miniserver_home")"
-	mkdir -p "$scripts_dir" "$boxlang_home" "$miniserver_home"
+	mkdir -p "$scripts_dir" "$boxlang_home" "$miniserver_home" "$mock_bin" "$launcher_bin"
 	create_runtime_archive "$sandbox" "$runtime_zip"
 	create_runtime_archive "$sandbox" "$miniserver_zip"
 	echo 'boxlang jar' > "$boxlang_jar"
 	echo 'miniserver jar' > "$miniserver_jar"
 	echo '#!/bin/sh' > "$scripts_dir/install-bvm.sh"
+	cat > "$mock_bin/java" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*"
+EOF
+	chmod +x "$mock_bin/java"
 
 	local output
 	output=$(HOME="$boxlang_home" BOXLANG_INSTALL_HOME="$sandbox/install-boxlang" BOXLANG_HOME="$module_home" TERM="xterm-256color" \
@@ -191,6 +198,14 @@ test_local_jars_are_copied_without_extraction() {
 	assert_contains "Module executable directory: [$module_home/bin]" "$output" "module executable directory reports its actual location"
 	assert_not_contains "[[: not found" "$output" "local JAR verification is POSIX-shell compatible"
 	assert_not_contains "grep: ]" "$output" "profile update does not pass a malformed grep argument"
+	ln -s "$boxlang_install_home/bin/boxlang" "$launcher_bin/boxlang"
+	ln -s "$boxlang_install_home/bin/boxlang-miniserver" "$launcher_bin/boxlang-miniserver"
+	local boxlang_launcher_output
+	local miniserver_launcher_output
+	boxlang_launcher_output=$(PATH="$mock_bin:$PATH" "$launcher_bin/boxlang" --version)
+	miniserver_launcher_output=$(PATH="$mock_bin:$PATH" "$launcher_bin/boxlang-miniserver" --version)
+	assert_contains "-jar $boxlang_install_home/lib/boxlang.jar --version" "$boxlang_launcher_output" "BoxLang JAR launcher works through a symlink"
+	assert_contains "-jar $boxlang_install_home/lib/boxlang-miniserver.jar --version" "$miniserver_launcher_output" "MiniServer JAR launcher works through a symlink"
 
 	HOME="$miniserver_home" BOXLANG_INSTALL_HOME="$sandbox/install-miniserver" TERM="xterm-256color" \
 		sh "$INSTALLER_SCRIPT" --force --without-commandbox --without-jre \
