@@ -125,11 +125,16 @@ list_modules() {
 
 	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
 
-	# Read installed modules from the manifest
+	# Read installed modules from the manifest.
+	# `|| true` keeps a jq failure (e.g. unreadable manifest) from tripping `set -e`.
 	local DEP_COUNT
-	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null)
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null || true)
 
-	if [ -z "$DEP_COUNT" ] || [ "$DEP_COUNT" -eq 0 ]; then
+	# DEP_COUNT can be empty or non-numeric when jq produced no output, so only
+	# run the numeric comparison when it holds a valid integer. Without this
+	# guard, POSIX sh (dash / BusyBox ash) raises "Illegal number" on an empty
+	# or non-numeric value instead of short-circuiting cleanly.
+	if [ -z "$DEP_COUNT" ] || [ "${DEP_COUNT:-0}" -eq 0 ] 2>/dev/null; then
 		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
 	else
 		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
