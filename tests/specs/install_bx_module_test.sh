@@ -376,6 +376,10 @@ test_main_no_args_installs_project_box_json_dependencies() {
 
     local output rc
     output=$(
+        # main() starts with a real preflight_check, which may try to
+        # apt-install curl/unzip/jq on a container lacking them - stub it out
+        # since these tests only exercise the box.json dispatch logic.
+        preflight_check() { return 0; }
         install_module_dependencies() {
             printf '%s\t%s\n' "$1" "$2" >> "$CALLS_FILE"
         }
@@ -395,7 +399,10 @@ test_main_no_args_without_box_json_shows_usage_error() {
     mkdir -p "$EMPTY_DIR"
 
     local output rc
-    output=$(cd "$EMPTY_DIR" && main 2>&1)
+    output=$(
+        preflight_check() { return 0; }
+        cd "$EMPTY_DIR" && main 2>&1
+    )
     rc=$?
 
     assert_return_code 1 "$rc" "main() with no args and no box.json exits 1"
@@ -427,6 +434,7 @@ EOF
 
     local output rc
     output=$(
+        preflight_check() { return 0; }
         install_module() {
             printf 'module=%s MODULES_HOME=%s LOCAL_INSTALL=%s\n' "$1" "$MODULES_HOME" "$LOCAL_INSTALL" >> "$CALLS_FILE"
         }
