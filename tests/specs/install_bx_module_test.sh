@@ -217,10 +217,240 @@ EOF
     assert_not_contains "Illegal number" "$output" "list_modules() never emits 'Illegal number'"
 }
 
+###########################################################################
+# Tests for install_module_dependencies (box.json dependency installation)
+###########################################################################
+
+test_install_module_dependencies_installs_wildcard_and_pinned_versions() {
+    run_test_group "install_module_dependencies with wildcard and pinned deps"
+
+    local MODULE_DIR="$TEST_TMP/module-with-deps"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "*", "bx-ai": "2.1.0"}}' > "$MODULE_DIR/box.json"
+
+    # Fake jq reporting two dependencies: one wildcard, one pinned
+    local BIN_JQ="$TEST_TMP/bin-jqdeps"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'bx-orm\t*\nbx-ai\t2.1.0\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    # Stub install_module so we assert on what would be installed instead of
+    # performing a real network install.
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_wildcard.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" ""
+
+    local calls
+    calls=$(cat "$INSTALL_CALLS_FILE")
+
+    assert_contains "bx-orm" "$calls" "install_module_dependencies() installs a '*' dependency by name only (latest)"
+    assert_not_contains "bx-orm@" "$calls" "install_module_dependencies() does not pin a '*' dependency to a version"
+    assert_contains "bx-ai@2.1.0" "$calls" "install_module_dependencies() installs a pinned dependency with its exact version"
+
+    # Restore the real install_module for subsequent tests
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+test_install_module_dependencies_installs_be_and_snapshot_versions() {
+    run_test_group "install_module_dependencies with 'be' and 'snapshot' deps"
+
+    local MODULE_DIR="$TEST_TMP/module-with-be-snapshot-deps"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "be", "bx-ai": "snapshot"}}' > "$MODULE_DIR/box.json"
+
+    # Fake jq reporting a bleeding-edge dependency and a snapshot dependency
+    local BIN_JQ="$TEST_TMP/bin-jqbesnap"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'bx-orm\tbe\nbx-ai\tsnapshot\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_be_snapshot.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" ""
+
+    local calls
+    calls=$(cat "$INSTALL_CALLS_FILE")
+
+    assert_contains "bx-orm@be" "$calls" "install_module_dependencies() passes through a 'be' dependency version"
+    assert_contains "bx-ai@snapshot" "$calls" "install_module_dependencies() passes through a 'snapshot' dependency version"
+
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+test_install_module_dependencies_no_box_json() {
+    run_test_group "install_module_dependencies with no box.json"
+
+    local MODULE_DIR="$TEST_TMP/module-without-box-json"
+    mkdir -p "$MODULE_DIR"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_none.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    install_module_dependencies "$MODULE_DIR" ""
+    local rc=$?
+
+    assert_return_code 0 "$rc" "install_module_dependencies() returns 0 when box.json is missing"
+    assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() installs nothing when box.json is missing"
+
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+test_install_module_dependencies_skips_circular_dependency() {
+    run_test_group "install_module_dependencies with a circular dependency"
+
+    local MODULE_DIR="$TEST_TMP/module-circular"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "*"}}' > "$MODULE_DIR/box.json"
+
+    local BIN_JQ="$TEST_TMP/bin-jqcircular"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "1" ;;
+	*to_entries*) printf 'bx-orm\t*\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_circular.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    # "bx-orm" is already in the VISITED chain, so it must be skipped rather
+    # than recursively re-installed.
+    local output
+    output=$(PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "bx-root bx-orm" 2>&1)
+
+    assert_contains "Skipping circular dependency" "$output" "install_module_dependencies() reports a skipped circular dependency"
+    assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not install an already-visited dependency"
+
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+###########################################################################
+# Tests for `main` with no arguments (project box.json auto-install)
+###########################################################################
+
+test_main_no_args_installs_project_box_json_dependencies() {
+    run_test_group "main() with no arguments and a project box.json"
+
+    local PROJECT_DIR="$TEST_TMP/project-with-box-json"
+    mkdir -p "$PROJECT_DIR"
+    echo '{"name": "my-app", "dependencies": {"bx-orm": "*"}}' > "$PROJECT_DIR/box.json"
+
+    local CALLS_FILE="$TEST_TMP/main_no_args_calls.txt"
+    : > "$CALLS_FILE"
+
+    local output rc
+    output=$(
+        install_module_dependencies() {
+            printf '%s\t%s\n' "$1" "$2" >> "$CALLS_FILE"
+        }
+        cd "$PROJECT_DIR" && main 2>&1
+    )
+    rc=$?
+
+    assert_return_code 0 "$rc" "main() with no args and a box.json exits 0"
+    assert_contains "Found box.json" "$output" "main() reports finding the project box.json"
+    assert_contains "$PROJECT_DIR" "$(cat "$CALLS_FILE")" "main() installs dependencies from the project's box.json directory"
+}
+
+test_main_no_args_without_box_json_shows_usage_error() {
+    run_test_group "main() with no arguments and no box.json"
+
+    local EMPTY_DIR="$TEST_TMP/project-without-box-json"
+    mkdir -p "$EMPTY_DIR"
+
+    local output rc
+    output=$(cd "$EMPTY_DIR" && main 2>&1)
+    rc=$?
+
+    assert_return_code 1 "$rc" "main() with no args and no box.json exits 1"
+    assert_contains "No module(s) specified" "$output" "main() falls back to the usage error when no box.json exists"
+}
+
+test_main_local_flag_only_installs_project_box_json_dependencies_locally() {
+    run_test_group "main() with only --local and a project box.json"
+
+    local PROJECT_DIR="$TEST_TMP/project-local-box-json"
+    mkdir -p "$PROJECT_DIR"
+    echo '{"dependencies": {"bx-orm": "*"}}' > "$PROJECT_DIR/box.json"
+
+    # Fake jq reporting one dependency, used by the real install_module_dependencies
+    local BIN_JQ="$TEST_TMP/bin-jqlocal"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "1" ;;
+	*to_entries*) printf 'bx-orm\t*\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local CALLS_FILE="$TEST_TMP/main_local_calls.txt"
+    : > "$CALLS_FILE"
+
+    local output rc
+    output=$(
+        install_module() {
+            printf 'module=%s MODULES_HOME=%s LOCAL_INSTALL=%s\n' "$1" "$MODULES_HOME" "$LOCAL_INSTALL" >> "$CALLS_FILE"
+        }
+        cd "$PROJECT_DIR" && PATH="$BIN_JQ:$PATH" main --local 2>&1
+    )
+    rc=$?
+
+    assert_return_code 0 "$rc" "main() with --local only and a box.json exits 0"
+    assert_contains "Found box.json" "$output" "main() reports finding the project box.json under --local"
+    assert_contains "MODULES_HOME=$PROJECT_DIR/boxlang_modules" "$(cat "$CALLS_FILE")" "main() installs project dependencies into the local boxlang_modules directory"
+    assert_contains "LOCAL_INSTALL=true" "$(cat "$CALLS_FILE")" "main() keeps LOCAL_INSTALL true when installing project dependencies via --local"
+}
+
 run_all_tests() {
     test_list_modules_jq_failure
     test_list_modules_empty_manifest
     test_list_modules_with_installed_modules
+    test_install_module_dependencies_installs_wildcard_and_pinned_versions
+    test_install_module_dependencies_installs_be_and_snapshot_versions
+    test_install_module_dependencies_no_box_json
+    test_install_module_dependencies_skips_circular_dependency
+    test_main_no_args_installs_project_box_json_dependencies
+    test_main_no_args_without_box_json_shows_usage_error
+    test_main_local_flag_only_installs_project_box_json_dependencies_locally
 
     # Print summary
     echo ""
