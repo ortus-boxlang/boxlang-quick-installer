@@ -244,7 +244,7 @@ function Show-Help {
     Write-Host "  - Use --local to work with modules in current directory's boxlang_modules folder"
     Write-Host "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)"
     Write-Host "  - Requires PowerShell to be installed"
-    Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified)"
+    Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified, including `"be`" or `"snapshot`")"
 }
 
 function Set-BoxJsonDependency {

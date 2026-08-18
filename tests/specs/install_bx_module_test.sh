@@ -262,6 +262,43 @@ EOF
     . "$SITE_DIR/install-bx-module.sh"
 }
 
+test_install_module_dependencies_installs_be_and_snapshot_versions() {
+    run_test_group "install_module_dependencies with 'be' and 'snapshot' deps"
+
+    local MODULE_DIR="$TEST_TMP/module-with-be-snapshot-deps"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "be", "bx-ai": "snapshot"}}' > "$MODULE_DIR/box.json"
+
+    # Fake jq reporting a bleeding-edge dependency and a snapshot dependency
+    local BIN_JQ="$TEST_TMP/bin-jqbesnap"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'bx-orm\tbe\nbx-ai\tsnapshot\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_be_snapshot.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" ""
+
+    local calls
+    calls=$(cat "$INSTALL_CALLS_FILE")
+
+    assert_contains "bx-orm@be" "$calls" "install_module_dependencies() passes through a 'be' dependency version"
+    assert_contains "bx-ai@snapshot" "$calls" "install_module_dependencies() passes through a 'snapshot' dependency version"
+
+    . "$SITE_DIR/install-bx-module.sh"
+}
+
 test_install_module_dependencies_no_box_json() {
     run_test_group "install_module_dependencies with no box.json"
 
@@ -324,6 +361,7 @@ run_all_tests() {
     test_list_modules_empty_manifest
     test_list_modules_with_installed_modules
     test_install_module_dependencies_installs_wildcard_and_pinned_versions
+    test_install_module_dependencies_installs_be_and_snapshot_versions
     test_install_module_dependencies_no_box_json
     test_install_module_dependencies_skips_circular_dependency
 
