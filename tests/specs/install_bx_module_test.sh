@@ -217,10 +217,115 @@ EOF
     assert_not_contains "Illegal number" "$output" "list_modules() never emits 'Illegal number'"
 }
 
+###########################################################################
+# Tests for install_module_dependencies (box.json dependency installation)
+###########################################################################
+
+test_install_module_dependencies_installs_wildcard_and_pinned_versions() {
+    run_test_group "install_module_dependencies with wildcard and pinned deps"
+
+    local MODULE_DIR="$TEST_TMP/module-with-deps"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "*", "bx-ai": "2.1.0"}}' > "$MODULE_DIR/box.json"
+
+    # Fake jq reporting two dependencies: one wildcard, one pinned
+    local BIN_JQ="$TEST_TMP/bin-jqdeps"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'bx-orm\t*\nbx-ai\t2.1.0\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    # Stub install_module so we assert on what would be installed instead of
+    # performing a real network install.
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_wildcard.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" ""
+
+    local calls
+    calls=$(cat "$INSTALL_CALLS_FILE")
+
+    assert_contains "bx-orm" "$calls" "install_module_dependencies() installs a '*' dependency by name only (latest)"
+    assert_not_contains "bx-orm@" "$calls" "install_module_dependencies() does not pin a '*' dependency to a version"
+    assert_contains "bx-ai@2.1.0" "$calls" "install_module_dependencies() installs a pinned dependency with its exact version"
+
+    # Restore the real install_module for subsequent tests
+    . "$SITE_DIR/install-bx-module.sh"
+}
+
+test_install_module_dependencies_no_box_json() {
+    run_test_group "install_module_dependencies with no box.json"
+
+    local MODULE_DIR="$TEST_TMP/module-without-box-json"
+    mkdir -p "$MODULE_DIR"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_none.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    install_module_dependencies "$MODULE_DIR" ""
+    local rc=$?
+
+    assert_return_code 0 "$rc" "install_module_dependencies() returns 0 when box.json is missing"
+    assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() installs nothing when box.json is missing"
+
+    . "$SITE_DIR/install-bx-module.sh"
+}
+
+test_install_module_dependencies_skips_circular_dependency() {
+    run_test_group "install_module_dependencies with a circular dependency"
+
+    local MODULE_DIR="$TEST_TMP/module-circular"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "*"}}' > "$MODULE_DIR/box.json"
+
+    local BIN_JQ="$TEST_TMP/bin-jqcircular"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "1" ;;
+	*to_entries*) printf 'bx-orm\t*\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_circular.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    # "bx-orm" is already in the VISITED chain, so it must be skipped rather
+    # than recursively re-installed.
+    local output
+    output=$(PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "bx-root bx-orm" 2>&1)
+
+    assert_contains "Skipping circular dependency" "$output" "install_module_dependencies() reports a skipped circular dependency"
+    assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not install an already-visited dependency"
+
+    . "$SITE_DIR/install-bx-module.sh"
+}
+
 run_all_tests() {
     test_list_modules_jq_failure
     test_list_modules_empty_manifest
     test_list_modules_with_installed_modules
+    test_install_module_dependencies_installs_wildcard_and_pinned_versions
+    test_install_module_dependencies_no_box_json
+    test_install_module_dependencies_skips_circular_dependency
 
     # Print summary
     echo ""

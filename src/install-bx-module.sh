@@ -18,6 +18,10 @@ set -e
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# A literal tab character for use as an IFS field separator when parsing
+# tab-delimited jq output. `$'\t'` is a bash/ksh-ism that POSIX /bin/sh
+# (dash, BusyBox ash) does not expand, so it must be built with printf instead.
+TAB="$(printf '\t')"
 
 # We need this in case the target OS we are installing in does not have a `TERM` implementation declared
 # or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions or Docker containers)
@@ -108,6 +112,7 @@ show_help() {
 	printf "  - Use --local to work with modules in current directory's boxlang_modules folder\n"
 	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
+	printf "  - Dependencies declared in a module's box.json are installed automatically (latest version for \"*\", otherwise the version specified)\n"
 }
 
 list_modules() {
@@ -138,7 +143,7 @@ list_modules() {
 		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
 	else
 		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
-		while IFS=$'\t' read -r module_name module_version; do
+		while IFS="$TAB" read -r module_name module_version; do
 			printf -- "✓ %s (%s)\n" "$module_name" "$module_version"
 		done
 	fi
@@ -312,6 +317,10 @@ get_snapshot_version_from_forgebox() {
 
 install_module() {
 	local INPUT=${1}
+	# Space-delimited list of modules already being installed up the dependency
+	# chain (including the module currently being processed). Used to guard
+	# against circular dependencies when recursively installing box.json deps.
+	local VISITED=${2:-""}
 	local TARGET_MODULE=""
 	local TARGET_VERSION=""
 
@@ -476,11 +485,63 @@ EOF
 			fi
 		fi
 	fi
+
+	# Install any module dependencies declared in the extracted module's box.json
+	install_module_dependencies "${DESTINATION}" "${VISITED} ${TARGET_MODULE}"
+
 	# Track this install in the modules manifest
 	box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
 
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
+}
+
+# Reads a module's own box.json (as extracted to MODULE_DIR) and installs any
+# declared dependencies. A dependency version of "*" (or empty/null) installs
+# the latest version from FORGEBOX; any other value is installed as-is
+# (e.g. an exact version, "be", or "snapshot").
+install_module_dependencies() {
+	local MODULE_DIR=${1}
+	local VISITED=${2:-""}
+	local BOX_JSON_PATH="${MODULE_DIR}/box.json"
+
+	[ -f "${BOX_JSON_PATH}" ] || return 0
+
+	# `|| true` keeps a jq failure (e.g. malformed box.json) from tripping `set -e`.
+	local DEP_COUNT
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null || true)
+
+	# Guard against a non-numeric DEP_COUNT (see list_modules() for why).
+	if [ -z "$DEP_COUNT" ] || [ "${DEP_COUNT:-0}" -eq 0 ] 2>/dev/null; then
+		return 0
+	fi
+
+	printf "${BLUE}🔗 Found %s module dependenc%s, installing...${NORMAL}\n" \
+		"$DEP_COUNT" "$([ "$DEP_COUNT" -eq 1 ] && echo "y" || echo "ies")"
+
+	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
+	while IFS="$TAB" read -r dep_name dep_version; do
+		[ -z "$dep_name" ] && continue
+
+		# Skip dependencies already being installed up the chain to avoid
+		# infinite recursion on circular module dependencies.
+		case " ${VISITED} " in
+			*" ${dep_name} "*)
+				printf "${YELLOW}⚠️  Skipping circular dependency: ${dep_name}${NORMAL}\n"
+				continue
+				;;
+		esac
+
+		local dep_input
+		if [ -z "$dep_version" ] || [ "$dep_version" = "null" ] || [ "$dep_version" = "*" ]; then
+			dep_input="${dep_name}"
+		else
+			dep_input="${dep_name}@${dep_version}"
+		fi
+
+		printf "${GREEN}📦 Installing dependency: ${dep_input}${NORMAL}\n"
+		install_module "$dep_input" "${VISITED}"
+	done
 }
 
 remove_module() {
@@ -649,7 +710,7 @@ compute_outdated_report() {
 	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
 
 	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
-	while IFS=$'\t' read -r module_name current_version; do
+	while IFS="$TAB" read -r module_name current_version; do
 		local current_semver
 		current_semver=$(extract_semantic_version "$current_version")
 		[ -z "$current_semver" ] && continue
@@ -710,7 +771,7 @@ outdated_modules() {
 
 	local OUTDATED_MODULES=""
 	local OUTDATED_COUNT=0
-	while IFS=$'\t' read -r module_name current_version latest_version status; do
+	while IFS="$TAB" read -r module_name current_version latest_version status; do
 		local status_label
 		case "$status" in
 			uptodate) status_label="✅ up to date" ;;
@@ -771,7 +832,7 @@ update_modules() {
 
 	local OUTDATED_MODULES=""
 	local OUTDATED_COUNT=0
-	while IFS=$'\t' read -r module_name current_version latest_version status; do
+	while IFS="$TAB" read -r module_name current_version latest_version status; do
 		if [ "$status" = "outdated" ]; then
 			printf -- "🆙 %s: %s → %s\n" "$module_name" "$current_version" "$latest_version"
 			OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}

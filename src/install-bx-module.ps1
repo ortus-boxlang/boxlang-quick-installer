@@ -244,6 +244,7 @@ function Show-Help {
     Write-Host "  - Use --local to work with modules in current directory's boxlang_modules folder"
     Write-Host "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)"
     Write-Host "  - Requires PowerShell to be installed"
+    Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified)"
 }
 
 function Set-BoxJsonDependency {
@@ -592,8 +593,43 @@ function Get-LatestVersionFromForgebox {
     }
 }
 
+function Install-ModuleDependencies {
+    param(
+        [PSCustomObject]$BoxJson,
+        [string[]]$Visited
+    )
+
+    if (-not $BoxJson -or -not $BoxJson.dependencies) { return }
+
+    $depNames = $BoxJson.dependencies.PSObject.Properties.Name
+    if (-not $depNames -or $depNames.Count -eq 0) { return }
+
+    $depNoun = if ($depNames.Count -eq 1) { "dependency" } else { "dependencies" }
+    Write-Host "🔗 Found $($depNames.Count) module $depNoun, installing..." -ForegroundColor Blue
+
+    foreach ($depName in $depNames) {
+        if ($Visited -contains $depName) {
+            Write-Host "⚠️  Skipping circular dependency: $depName" -ForegroundColor Yellow
+            continue
+        }
+
+        $depVersion = $BoxJson.dependencies.$depName
+        $depInput = if (-not $depVersion -or $depVersion -eq "*" -or $depVersion -eq "null") {
+            $depName
+        } else {
+            "$depName@$depVersion"
+        }
+
+        Write-Host "📦 Installing dependency: $depInput" -ForegroundColor Green
+        Install-Module -moduleName $depInput -Visited $Visited
+    }
+}
+
 function Install-Module {
-    param([string]$moduleName)
+    param(
+        [string]$moduleName,
+        [string[]]$Visited = @()
+    )
 
     $targetModule = ""
     $targetVersion = ""
@@ -769,6 +805,9 @@ boxlang module:$moduleName %*
                         }
                     }
                 }
+
+                # Install any module dependencies declared in box.json
+                Install-ModuleDependencies -BoxJson $boxJson -Visited ($Visited + $targetModule)
             } catch {
                 # Silently ignore box.json parsing errors
             }
