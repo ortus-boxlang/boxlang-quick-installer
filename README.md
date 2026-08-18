@@ -337,6 +337,9 @@ install-bx-module --update --force --local
 # Install a project's dependencies (reads ./box.json, like `npm install`)
 install-bx-module
 
+# Same, but into the local boxlang_modules folder instead of BoxLang HOME
+install-bx-module --local
+
 # Get help
 install-bx-module --help
 ```
@@ -345,7 +348,7 @@ Module installations are tracked in a `box.json` dependencies manifest. Global m
 
 If an installed module's own `box.json` declares a `dependencies` entry, those dependencies are installed automatically right after it: a `"*"` (or empty/null) version installs the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
 
-Running `install-bx-module` with no arguments checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. If no `box.json` is present, the usual usage help is shown instead.
+Running `install-bx-module` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
 
 ## 🌐 Running Applications
 

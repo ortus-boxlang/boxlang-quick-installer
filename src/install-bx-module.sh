@@ -878,28 +878,6 @@ main() {
 		exit 1
 	fi
 
-	# Check if no arguments are passed. If a box.json exists in the current
-	# directory, treat it as a project manifest and install the dependencies
-	# it declares (similar to running `npm install` with no arguments).
-	if [ $# -eq 0 ]; then
-		if [ -f "$(pwd)/box.json" ]; then
-			if [ -z "${BOXLANG_HOME}" ]; then
-				export BOXLANG_HOME="$HOME/.boxlang"
-			fi
-			MODULES_HOME="${BOXLANG_HOME}/modules"
-			LOCAL_INSTALL=false
-
-			printf "${YELLOW}📄 Found box.json in $(pwd), installing its declared dependencies...${NORMAL}\n"
-			install_module_dependencies "$(pwd)" ""
-			exit 0
-		fi
-
-		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
-		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
-		show_help
-		exit 1
-	fi
-
 	# Show help if requested
 	if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
 		show_help
@@ -1098,13 +1076,32 @@ main() {
 		exit 0
 	fi
 
+	# No module names were given (either no arguments at all, or only
+	# --local). If a box.json exists in the current directory, treat it as a
+	# project manifest and install the dependencies it declares (similar to
+	# running `npm install` with no arguments), honoring --local/BoxLang HOME
+	# just like a normal install would.
+	MODULE_LIST=$(parse_module_list "$@")
+	if [ -z "$MODULE_LIST" ]; then
+		if [ -f "$(pwd)/box.json" ]; then
+			printf "${YELLOW}📄 Found box.json in $(pwd), installing its declared dependencies...${NORMAL}\n"
+			install_module_dependencies "$(pwd)" ""
+			exit 0
+		fi
+
+		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
+		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
+		show_help
+		exit 1
+	fi
+
 	# Inform about local installation
 	if [ "$LOCAL_INSTALL" = true ]; then
 		printf "${YELLOW}📍 Installing modules locally in $(pwd)/boxlang_modules${NORMAL}\n"
 	fi
 
-	# Parse comma/space-delimited module list and install
-	parse_module_list "$@" | while IFS= read -r module; do
+	# Install the parsed comma/space-delimited module list
+	printf '%s\n' "$MODULE_LIST" | while IFS= read -r module; do
 		if [ -n "$module" ]; then
 			printf "${GREEN}🚀 Starting installation of module: ${module}${NORMAL}\n"
 			install_module "$module"

@@ -402,6 +402,44 @@ test_main_no_args_without_box_json_shows_usage_error() {
     assert_contains "No module(s) specified" "$output" "main() falls back to the usage error when no box.json exists"
 }
 
+test_main_local_flag_only_installs_project_box_json_dependencies_locally() {
+    run_test_group "main() with only --local and a project box.json"
+
+    local PROJECT_DIR="$TEST_TMP/project-local-box-json"
+    mkdir -p "$PROJECT_DIR"
+    echo '{"dependencies": {"bx-orm": "*"}}' > "$PROJECT_DIR/box.json"
+
+    # Fake jq reporting one dependency, used by the real install_module_dependencies
+    local BIN_JQ="$TEST_TMP/bin-jqlocal"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "1" ;;
+	*to_entries*) printf 'bx-orm\t*\n' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local CALLS_FILE="$TEST_TMP/main_local_calls.txt"
+    : > "$CALLS_FILE"
+
+    local output rc
+    output=$(
+        install_module() {
+            printf 'module=%s MODULES_HOME=%s LOCAL_INSTALL=%s\n' "$1" "$MODULES_HOME" "$LOCAL_INSTALL" >> "$CALLS_FILE"
+        }
+        cd "$PROJECT_DIR" && PATH="$BIN_JQ:$PATH" main --local 2>&1
+    )
+    rc=$?
+
+    assert_return_code 0 "$rc" "main() with --local only and a box.json exits 0"
+    assert_contains "Found box.json" "$output" "main() reports finding the project box.json under --local"
+    assert_contains "MODULES_HOME=$PROJECT_DIR/boxlang_modules" "$(cat "$CALLS_FILE")" "main() installs project dependencies into the local boxlang_modules directory"
+    assert_contains "LOCAL_INSTALL=true" "$(cat "$CALLS_FILE")" "main() keeps LOCAL_INSTALL true when installing project dependencies via --local"
+}
+
 run_all_tests() {
     test_list_modules_jq_failure
     test_list_modules_empty_manifest
@@ -412,6 +450,7 @@ run_all_tests() {
     test_install_module_dependencies_skips_circular_dependency
     test_main_no_args_installs_project_box_json_dependencies
     test_main_no_args_without_box_json_shows_usage_error
+    test_main_local_flag_only_installs_project_box_json_dependencies_locally
 
     # Print summary
     echo ""

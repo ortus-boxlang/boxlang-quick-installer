@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `--non-interactive` to the BoxLang installers. It skips prompts using their existing defaults and is enabled automatically when standard input is redirected.
 - `install-bx-module` now installs module dependencies automatically. When an installed module's own `box.json` declares a `dependencies` entry, each one is installed too: a `"*"` (or empty/null) version resolves to the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
-- Running `install-bx-module` with no arguments now checks the current directory for a `box.json`. If one exists, its declared `dependencies` are installed (to BoxLang HOME, same as a normal install), the same way `npm install` installs a project's dependencies with no arguments. Without a `box.json` present, the usual usage error is shown.
+- Running `install-bx-module` with no module names now checks the current directory for a `box.json`. If one exists, its declared `dependencies` are installed, the same way `npm install` installs a project's dependencies with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). Without a `box.json` present, the usual usage error is shown.
 
 ### Fixed
 

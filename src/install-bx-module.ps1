@@ -899,35 +899,6 @@ function Remove-Module {
 
 # Main execution starts here
 
-# Check if no arguments are passed. If a box.json exists in the current
-# directory, treat it as a project manifest and install the dependencies it
-# declares (similar to running `npm install` with no arguments).
-if ($args.Count -eq 0) {
-    $projectBoxJsonPath = Join-Path (Get-Location) "box.json"
-    if (Test-Path $projectBoxJsonPath) {
-        if (-not $env:BOXLANG_HOME) {
-            $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
-        }
-        $MODULES_HOME = Join-Path $env:BOXLANG_HOME "modules"
-        $LOCAL_INSTALL = $false
-
-        Write-Host "📄 Found box.json in $(Get-Location), installing its declared dependencies..." -ForegroundColor Yellow
-        try {
-            $projectBoxJson = Get-Content $projectBoxJsonPath -Raw | ConvertFrom-Json
-            Install-ModuleDependencies -BoxJson $projectBoxJson -Visited @()
-        } catch {
-            Write-Host "❌ Error: Failed to parse box.json: $($_.Exception.Message)" -ForegroundColor Red
-            exit 1
-        }
-        exit 0
-    }
-
-    Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
-    Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
-	Show-Help
-    exit 1
-}
-
 # Show help if requested
 if ($args[0] -eq "--help" -or $args[0] -eq "-h") {
     Show-Help
@@ -1104,13 +1075,38 @@ if ($REMOVE_MODE) {
     exit 0
 }
 
+# No module names were given (either no arguments at all, or only --local).
+# If a box.json exists in the current directory, treat it as a project
+# manifest and install the dependencies it declares (similar to running
+# `npm install` with no arguments), honoring --local/BoxLang HOME just like a
+# normal install would.
+$modules = Parse-ModuleList $currentArgs
+if ($modules.Count -eq 0) {
+    $projectBoxJsonPath = Join-Path (Get-Location) "box.json"
+    if (Test-Path $projectBoxJsonPath) {
+        Write-Host "📄 Found box.json in $(Get-Location), installing its declared dependencies..." -ForegroundColor Yellow
+        try {
+            $projectBoxJson = Get-Content $projectBoxJsonPath -Raw | ConvertFrom-Json
+            Install-ModuleDependencies -BoxJson $projectBoxJson -Visited @()
+        } catch {
+            Write-Host "❌ Error: Failed to parse box.json: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+        }
+        exit 0
+    }
+
+    Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
+    Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
+    Show-Help
+    exit 1
+}
+
 # Inform about local installation
 if ($LOCAL_INSTALL) {
     Write-Host "📍 Installing modules locally in $(Get-Location)\boxlang_modules" -ForegroundColor Yellow
 }
 
-# Parse comma/space-delimited module list and install
-$modules = Parse-ModuleList $currentArgs
+# Install the parsed comma/space-delimited module list
 foreach ($module in $modules) {
     if ($module) {
         Write-Host "🚀 Starting installation of module: $module" -ForegroundColor Green
