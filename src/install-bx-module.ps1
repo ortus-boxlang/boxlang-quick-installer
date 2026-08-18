@@ -908,7 +908,10 @@ if ($args[0] -eq "--help" -or $args[0] -eq "-h") {
 # Handle --list command (can be used with --local)
 if ($args[0] -eq "--list") {
     $LIST_MODE = $true
-    $remainingArgs = $args[1..($args.Count-1)]
+    $remainingArgs = @()
+    if ($args.Count -gt 1) {
+        $remainingArgs = $args[1..($args.Count-1)]
+    }
 
     # Check if --local is specified with --list
     $LOCAL_LIST = $false
@@ -1022,7 +1025,10 @@ $currentArgs = $args
 # Check if --remove is the first argument
 if ($args[0] -eq "--remove") {
     $REMOVE_MODE = $true
-    $currentArgs = $args[1..($args.Count-1)]
+    $currentArgs = @()
+    if ($args.Count -gt 1) {
+        $currentArgs = $args[1..($args.Count-1)]
+    }
 
     # Check for --force flag
     if ($currentArgs -contains "--force") {
