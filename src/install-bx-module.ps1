@@ -206,6 +206,7 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 --list [--local]"
     Write-Host "  install-bx-module.ps1 --outdated [--local]"
     Write-Host "  install-bx-module.ps1 --update [--force] [--local]"
+    Write-Host "  install-bx-module.ps1 (no arguments, run from a directory with a box.json)"
     Write-Host "  install-bx-module.ps1 --help"
     Write-Host ""
     Write-Host "Arguments:" -ForegroundColor DarkYellow
@@ -236,6 +237,7 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 --outdated --local"
     Write-Host "  install-bx-module.ps1 --update"
     Write-Host "  install-bx-module.ps1 --update --force --local"
+    Write-Host "  install-bx-module.ps1"
     Write-Host ""
     Write-Host "Notes:" -ForegroundColor DarkYellow
     Write-Host "  - If no version is specified, the latest version from FORGEBOX will be installed"
@@ -245,6 +247,7 @@ function Show-Help {
     Write-Host "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)"
     Write-Host "  - Requires PowerShell to be installed"
     Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified, including `"be`" or `"snapshot`")"
+    Write-Host "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists"
 }
 
 function Set-BoxJsonDependency {
@@ -896,8 +899,29 @@ function Remove-Module {
 
 # Main execution starts here
 
-# Check if no arguments are passed
+# Check if no arguments are passed. If a box.json exists in the current
+# directory, treat it as a project manifest and install the dependencies it
+# declares (similar to running `npm install` with no arguments).
 if ($args.Count -eq 0) {
+    $projectBoxJsonPath = Join-Path (Get-Location) "box.json"
+    if (Test-Path $projectBoxJsonPath) {
+        if (-not $env:BOXLANG_HOME) {
+            $env:BOXLANG_HOME = Join-Path $env:USERPROFILE ".boxlang"
+        }
+        $MODULES_HOME = Join-Path $env:BOXLANG_HOME "modules"
+        $LOCAL_INSTALL = $false
+
+        Write-Host "📄 Found box.json in $(Get-Location), installing its declared dependencies..." -ForegroundColor Yellow
+        try {
+            $projectBoxJson = Get-Content $projectBoxJsonPath -Raw | ConvertFrom-Json
+            Install-ModuleDependencies -BoxJson $projectBoxJson -Visited @()
+        } catch {
+            Write-Host "❌ Error: Failed to parse box.json: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+        }
+        exit 0
+    }
+
     Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
     Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
 	Show-Help

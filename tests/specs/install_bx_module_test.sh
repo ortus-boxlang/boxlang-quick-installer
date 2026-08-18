@@ -260,6 +260,7 @@ EOF
 
     # Restore the real install_module for subsequent tests
     . "$SITE_DIR/install-bx-module.sh"
+    set +e
 }
 
 test_install_module_dependencies_installs_be_and_snapshot_versions() {
@@ -297,6 +298,7 @@ EOF
     assert_contains "bx-ai@snapshot" "$calls" "install_module_dependencies() passes through a 'snapshot' dependency version"
 
     . "$SITE_DIR/install-bx-module.sh"
+    set +e
 }
 
 test_install_module_dependencies_no_box_json() {
@@ -318,6 +320,7 @@ test_install_module_dependencies_no_box_json() {
     assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() installs nothing when box.json is missing"
 
     . "$SITE_DIR/install-bx-module.sh"
+    set +e
 }
 
 test_install_module_dependencies_skips_circular_dependency() {
@@ -354,6 +357,49 @@ EOF
     assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not install an already-visited dependency"
 
     . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+###########################################################################
+# Tests for `main` with no arguments (project box.json auto-install)
+###########################################################################
+
+test_main_no_args_installs_project_box_json_dependencies() {
+    run_test_group "main() with no arguments and a project box.json"
+
+    local PROJECT_DIR="$TEST_TMP/project-with-box-json"
+    mkdir -p "$PROJECT_DIR"
+    echo '{"name": "my-app", "dependencies": {"bx-orm": "*"}}' > "$PROJECT_DIR/box.json"
+
+    local CALLS_FILE="$TEST_TMP/main_no_args_calls.txt"
+    : > "$CALLS_FILE"
+
+    local output rc
+    output=$(
+        install_module_dependencies() {
+            printf '%s\t%s\n' "$1" "$2" >> "$CALLS_FILE"
+        }
+        cd "$PROJECT_DIR" && main 2>&1
+    )
+    rc=$?
+
+    assert_return_code 0 "$rc" "main() with no args and a box.json exits 0"
+    assert_contains "Found box.json" "$output" "main() reports finding the project box.json"
+    assert_contains "$PROJECT_DIR" "$(cat "$CALLS_FILE")" "main() installs dependencies from the project's box.json directory"
+}
+
+test_main_no_args_without_box_json_shows_usage_error() {
+    run_test_group "main() with no arguments and no box.json"
+
+    local EMPTY_DIR="$TEST_TMP/project-without-box-json"
+    mkdir -p "$EMPTY_DIR"
+
+    local output rc
+    output=$(cd "$EMPTY_DIR" && main 2>&1)
+    rc=$?
+
+    assert_return_code 1 "$rc" "main() with no args and no box.json exits 1"
+    assert_contains "No module(s) specified" "$output" "main() falls back to the usage error when no box.json exists"
 }
 
 run_all_tests() {
@@ -364,6 +410,8 @@ run_all_tests() {
     test_install_module_dependencies_installs_be_and_snapshot_versions
     test_install_module_dependencies_no_box_json
     test_install_module_dependencies_skips_circular_dependency
+    test_main_no_args_installs_project_box_json_dependencies
+    test_main_no_args_without_box_json_shows_usage_error
 
     # Print summary
     echo ""

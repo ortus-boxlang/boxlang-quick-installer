@@ -78,6 +78,7 @@ show_help() {
 	printf "  install-bx-module.sh --list [--local]\n"
 	printf "  install-bx-module.sh --outdated [--local]\n"
 	printf "  install-bx-module.sh --update [--force] [--local]\n"
+	printf "  install-bx-module.sh (no arguments, run from a directory with a box.json)\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}ARGUMENTS:${NORMAL}\n"
 	printf "  <module-name>     The name(s) of the module(s) to install. (Comma or space delimmited)\n"
@@ -104,7 +105,8 @@ show_help() {
 	printf "  install-bx-module --outdated\n"
 	printf "  install-bx-module --outdated --local\n"
 	printf "  install-bx-module --update\n"
-	printf "  install-bx-module --update --force --local\n\n"
+	printf "  install-bx-module --update --force --local\n"
+	printf "  install-bx-module\n\n"
 	printf "${BOLD}NOTES:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
 	printf "  - Multiple modules can be specified, separated by spaces or commas\n"
@@ -113,6 +115,7 @@ show_help() {
 	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
 	printf "  - Dependencies declared in a module's box.json are installed automatically (latest version for \"*\", otherwise the version specified, including \"be\" or \"snapshot\")\n"
+	printf "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists\n"
 }
 
 list_modules() {
@@ -875,8 +878,22 @@ main() {
 		exit 1
 	fi
 
-	# Check if no arguments are passed
+	# Check if no arguments are passed. If a box.json exists in the current
+	# directory, treat it as a project manifest and install the dependencies
+	# it declares (similar to running `npm install` with no arguments).
 	if [ $# -eq 0 ]; then
+		if [ -f "$(pwd)/box.json" ]; then
+			if [ -z "${BOXLANG_HOME}" ]; then
+				export BOXLANG_HOME="$HOME/.boxlang"
+			fi
+			MODULES_HOME="${BOXLANG_HOME}/modules"
+			LOCAL_INSTALL=false
+
+			printf "${YELLOW}📄 Found box.json in $(pwd), installing its declared dependencies...${NORMAL}\n"
+			install_module_dependencies "$(pwd)" ""
+			exit 0
+		fi
+
 		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
 		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
 		show_help
