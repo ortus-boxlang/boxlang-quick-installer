@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed the Windows installer to honor `BOXLANG_INSTALL_HOME` for custom installation paths, while retaining `C:\boxlang` as the default.
 - Fixed `install-bx-module.sh` parsing tab-delimited `jq` output with `IFS=$'\t'`, which POSIX `/bin/sh` (dash, BusyBox ash) does not expand, so fields were never actually being split.
+- Fixed `install-bx-module.ps1 --remove` and `--list` silently doing nothing instead of showing their usage error when called with no other arguments (e.g. `install-bx-module.ps1 --remove` alone). A descending PowerShell range (`1..0`) left the flag itself in the parsed argument list instead of producing an empty one.
 
 ## [1.32.0] - 2026-07-31
 
