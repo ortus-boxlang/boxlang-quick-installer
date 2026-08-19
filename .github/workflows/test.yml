@@ -11,9 +11,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   linux:
     name: Linux tests (${{ matrix.distro }})
