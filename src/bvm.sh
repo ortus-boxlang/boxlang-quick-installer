@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
+
 # BoxLang Version Manager (BVM)
 # A simple version manager for BoxLang similar to jenv or nvm
 # Author: BoxLang Team
@@ -34,9 +38,9 @@ VERSION_CHECK_URL="$INSTALLER_BASE_URL/version.json"
 
 # Helpers
 if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
-	source "$(dirname "$0")/helpers/helpers.sh"
+	. "$(dirname "$0")/helpers/helpers.sh"
 elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
-    source "${BVM_HOME}/scripts/helpers/helpers.sh"
+    . "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
 	printf "${RED}Error: BVM helper scripts not found. Please ensure BVM is installed correctly.${NORMAL}\n"
 	printf "${YELLOW}You can reinstall BVM using the installer script:${NORMAL}\n"
@@ -83,8 +87,8 @@ create_current_link() {
         fi
 
         # Escape single quotes for PowerShell single-quoted strings
-        current_path="${current_path//\'/\'\'}"
-        target_path="${target_path//\'/\'\'}"
+        current_path=$(printf '%s' "$current_path" | sed "s/'/''/g")
+        target_path=$(printf '%s' "$target_path" | sed "s/'/''/g")
 
         if powershell -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType Junction -Path '$current_path' -Target '$target_path' -Force | Out-Null" >/dev/null 2>&1; then
             return 0
@@ -920,22 +924,22 @@ check_health() {
 
 	# Check prerequisites
     print_info "Checking prerequisites..."
-    local missing_deps=()
+	local missing_deps=""
 
 	if [ "$(uname)" = "Darwin" ]; then
-		command_exists shasum || missing_deps+=( "shasum" )
+		command_exists shasum || missing_deps="$missing_deps shasum"
 	elif [ "$(uname)" = "Linux" ]; then
-		command_exists sha256sum || missing_deps+=( "sha256sum" )
+		command_exists sha256sum || missing_deps="$missing_deps sha256sum"
 	fi
 
-    command_exists curl || missing_deps+=( "curl" )
-    command_exists unzip || missing_deps+=( "unzip" )
-    command_exists jq || missing_deps+=( "jq" )
+    command_exists curl || missing_deps="$missing_deps curl"
+    command_exists unzip || missing_deps="$missing_deps unzip"
+    command_exists jq || missing_deps="$missing_deps jq"
 
-    if [ ${#missing_deps[@]} -eq 0 ]; then
+    if [ -z "$missing_deps" ]; then
         print_success "All prerequisites satisfied"
     else
-        print_warning "Missing optional dependencies: ${missing_deps[*]}"
+        print_warning "Missing optional dependencies:$missing_deps"
         print_info "Some features may not work optimally"
     fi
 
@@ -1000,23 +1004,18 @@ check_health() {
             fi
 
             # Check other expected binaries
-            local expected_binaries=(
-                "bx"
-                "boxlang-miniserver"
-                "bx-miniserver"
-            )
-
-            local missing_binaries=()
-            for binary in "${expected_binaries[@]}"; do
+            local expected_binaries="bx boxlang-miniserver bx-miniserver"
+            local missing_binaries=""
+            for binary in $expected_binaries; do
                 if [ ! -e "$BVM_CURRENT_LINK/bin/$binary" ]; then
-                    missing_binaries+=("$binary")
+                    missing_binaries="$missing_binaries $binary"
                 fi
             done
 
-            if [ ${#missing_binaries[@]} -eq 0 ]; then
+            if [ -z "$missing_binaries" ]; then
                 print_success "👊 All expected binaries are present"
             else
-                print_warning "Missing binaries: ${missing_binaries[*]}"
+                print_warning "Missing binaries:$missing_binaries"
                 print_info "Some features may not be available"
             fi
         else
@@ -1040,24 +1039,18 @@ check_health() {
     fi
     print_info "Checking BVM helper scripts..."
     local bvm_scripts_dir="${BVM_SCRIPTS_DIR}"
-    local expected_bvm_scripts=(
-        "install-bx-module.sh"
-        "install-bx-site.sh"
-		"install-bvm.sh"
-		"bvm.sh"
-    )
-
-    local missing_bvm_scripts=()
-    for script in "${expected_bvm_scripts[@]}"; do
+    local expected_bvm_scripts="install-bx-module.sh install-bx-site.sh install-bvm.sh bvm.sh"
+    local missing_bvm_scripts=""
+    for script in $expected_bvm_scripts; do
         if [ ! -x "$bvm_scripts_dir/$script" ]; then
-            missing_bvm_scripts+=("$script")
+            missing_bvm_scripts="$missing_bvm_scripts $script"
         fi
     done
 
-    if [ ${#missing_bvm_scripts[@]} -eq 0 ]; then
+    if [ -z "$missing_bvm_scripts" ]; then
         print_success "👊 All BVM helper scripts are present"
     else
-        print_warning "Missing BVM helper scripts: ${missing_bvm_scripts[*]}"
+        print_warning "Missing BVM helper scripts:$missing_bvm_scripts"
         print_info "Reinstall BVM to get the latest helper scripts"
     fi
 
@@ -1193,12 +1186,14 @@ verify_download_with_checksum() {
     fi
 
     # Basic ZIP file validation
-    if [[ "$file_path" == *.zip ]]; then
-        if ! unzip -t "$file_path" >/dev/null 2>&1; then
-            print_error "Downloaded ZIP file is corrupted"
-            return 1
-        fi
-    fi
+    case "$file_path" in
+        *.zip)
+            if ! unzip -t "$file_path" >/dev/null 2>&1; then
+                print_error "Downloaded ZIP file is corrupted"
+                return 1
+            fi
+            ;;
+    esac
 
     # Try to download and verify SHA-256 checksum
     local filename=$(basename "$file_path")
@@ -1322,8 +1317,8 @@ cleanup_on_error() {
     fi
 }
 
-# Set up error trap
-trap 'cleanup_on_error' ERR
+# Run cleanup on shell exit; it checks whether the exit status indicates failure.
+trap 'cleanup_on_error' EXIT
 
 ###########################################################################
 # Main Function

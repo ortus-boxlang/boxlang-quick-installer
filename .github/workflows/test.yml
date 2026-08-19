@@ -1,0 +1,99 @@
+name: Test Installers
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: Linux tests (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [alpine, debian, ubuntu, fedora, arch]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run Linux tests
+        id: run-linux
+        continue-on-error: true
+        shell: sh
+        run: |
+          log_directory="$RUNNER_TEMP/installer-test-logs"
+          mkdir -p "$log_directory"
+          log_path="$log_directory/linux-${{ matrix.distro }}.log"
+          set +e
+          (
+            sh ./tests/run-all.sh ${{ matrix.distro }}
+            printf '%s\n' "$?" >"$log_path.exitcode"
+          ) 2>&1 | tee "$log_path"
+
+      - name: Report Linux test results
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/linux-${{ matrix.distro }}.log'
+          $exitCode = [int](Get-Content "$logPath.exitcode")
+          & ./tests/ci-report.ps1 -Name 'Linux tests (${{ matrix.distro }})' -LogPath $logPath -ExitCode $exitCode
+
+      - name: Upload Linux test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-log-linux-${{ matrix.distro }}
+          path: ${{ runner.temp }}/installer-test-logs/linux-${{ matrix.distro }}.log
+
+      - name: Finalize Linux test results
+        if: always()
+        shell: sh
+        run: exit "$(cat "$RUNNER_TEMP/installer-test-logs/linux-${{ matrix.distro }}.log.exitcode")"
+
+  windows:
+    name: Test suite (Windows)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run Windows test suite
+        id: run-windows
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $logDirectory = Join-Path $env:RUNNER_TEMP 'installer-test-logs'
+          New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+          $logPath = Join-Path $logDirectory 'windows.log'
+          & .\tests\run-all.ps1 -Platform Windows *>&1 | Tee-Object -FilePath $logPath
+          $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
+          Set-Content -Path "$logPath.exitcode" -Value $exitCode
+
+      - name: Report Windows test result
+        if: always()
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $logPath = Join-Path $env:RUNNER_TEMP 'installer-test-logs/windows.log'
+          $exitCode = [int](Get-Content "$logPath.exitcode")
+          & .\tests\ci-report.ps1 -Name 'Windows test suite' -LogPath $logPath -ExitCode $exitCode
+
+      - name: Upload Windows test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-log-windows
+          path: ${{ runner.temp }}/installer-test-logs/windows.log
+
+      - name: Finalize Windows test result
+        if: always()
+        shell: powershell
+        run: exit [int](Get-Content "$env:RUNNER_TEMP/installer-test-logs/windows.log.exitcode")

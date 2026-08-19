@@ -29,17 +29,21 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 
 **Mac and Linux:**
 
-```bash
-/bin/bash -c "$(curl -fsSL https://install.boxlang.io)"
+```sh
+/bin/sh -c "$(curl -fsSL https://install.boxlang.io)"
 
 # With automatic Java 21  installation
-curl -fsSL https://install.boxlang.io | bash -s -- --with-jre
+curl -fsSL https://install.boxlang.io | sh -s -- --with-jre
 ```
 
 **Windows:**
 
 ```powershell
 # Single version (simple)
+powershell -NoExit -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://install-windows.boxlang.io'))"
+
+# Install to a custom location (default: C:\boxlang)
+$env:BOXLANG_INSTALL_HOME = "D:\Tools\BoxLang"
 powershell -NoExit -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://install-windows.boxlang.io'))"
 ```
 
@@ -60,14 +64,14 @@ boxlang-miniserver --port 8080
 
 The installer will attempt to install any missing prerequisites automatically, but there are some that will need to be installed manually depending on your platform.
 
-- **bash** - Required shell execution environment, especially on Alpine Linux
+- **POSIX-compatible `sh`** - Required shell execution environment
 - **curl** - For downloading releases
 - **PowerShell 6+** - Required for Windows installations
 
-**Alpine Linux** : You will need to install bash manually as it is not included by default.
+**Alpine Linux** includes a compatible `sh`; install `curl` before using the remote installer.
 
-```bash
-apk add --no-cache bash curl
+```sh
+apk add --no-cache curl
 ```
 
 ### Requirements
@@ -104,7 +108,7 @@ sudo dnf install curl unzip jq java-21-openjdk
 
 ```bash
 # Prerequisites automatically installed by installer
-apk add --no-cache bash curl unzip jq openjdk21
+apk add --no-cache curl unzip jq openjdk21
 # Java 21 automatically installed with --with-jre option
 ```
 
@@ -158,16 +162,22 @@ Here are the available options for the install command.
 | `--force` | | Force reinstallation even if already installed |
 | `--with-commandbox` | | Install CommandBox without prompting |
 | `--without-commandbox` | | Skip CommandBox installation |
+| `--boxlang-path <path>` | | Use a local BoxLang JAR or ZIP instead of downloading it |
+| `--miniserver-path <path>` | | Use a local MiniServer JAR or ZIP instead of downloading it |
+| `--installer-scripts-path <path>` | | Use a local installer scripts ZIP or directory instead of downloading it |
+| `--non-interactive` | | Never prompt for input; automatically enabled when input is redirected |
 | `--with-jre` | | ✨ Automatically install Java 21 JRE if not found |
 | `--without-jre` | | ✨ Skip Java installation (manual installation required) |
-| `--yes` | `-y` | Use defaults for all prompts (installs CommandBox and Java) |
+| `--yes` | `-y` | Answer yes to all prompts and automatically install CommandBox and Java |
 
 ### Notes
 
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
-- `--yes` automatically accepts all defaults, including installing CommandBox and Java
+- `--yes` answers yes to all prompts and automatically installs CommandBox and Java when needed
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
+- `--boxlang-path`, `--miniserver-path`, and `--installer-scripts-path` accept local artifacts; JARs are copied directly and ZIPs are extracted
+- `--non-interactive` skips all prompts and uses each prompt's existing default answer; it is also enabled automatically when standard input is redirected
 - ✨ `--with-jre` automatically installs OpenJDK 21 JRE if Java 21+ is not found
 - ✨ `--without-jre` skips Java installation entirely (you must install Java manually)
 - ✨ The installer can detect your OS (macOS/Linux/Alpine) and architecture (x64/ARM64) for Java installation
@@ -227,9 +237,10 @@ Options:
   --force               Force reinstallation even if already installed
   --with-commandbox     Install CommandBox without prompting
   --without-commandbox  Skip CommandBox installation
+  --non-interactive     Never prompt for input (also enabled when input is redirected)
   --with-jre            ✨ Automatically install Java 21 JRE if not found
   --without-jre         ✨ Skip Java installation (manual installation required)
-  --yes, -y             Use defaults for all prompts (installs CommandBox and Java)
+  --yes, -y             Answer yes to all prompts and install CommandBox and Java
 
 Examples:
   install-boxlang
@@ -239,6 +250,7 @@ Examples:
   install-boxlang --force
   install-boxlang --with-commandbox
   install-boxlang --without-commandbox
+  install-boxlang --non-interactive
   install-boxlang --with-jre
   install-boxlang --without-jre
   install-boxlang --with-commandbox --with-jre
@@ -248,11 +260,11 @@ Examples:
   sudo install-boxlang --system
 
 Non-Interactive Usage:
-  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox
-  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox
-  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-jre
-  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
-  🌐 Install with defaults: curl -fsSL https://boxlang.io/install.sh | bash -s -- --yes
+  🌐 Install with CommandBox: curl -fsSL https://boxlang.io/install.sh | sh -s -- --with-commandbox --non-interactive
+  🌐 Install without CommandBox: curl -fsSL https://boxlang.io/install.sh | sh -s -- --without-commandbox --non-interactive
+  🌐 Install with Java auto-install: curl -fsSL https://boxlang.io/install.sh | sh -s -- --with-jre --non-interactive
+  🌐 Full auto-install (Java + CommandBox): curl -fsSL https://boxlang.io/install.sh | sh -s -- --yes
+  🌐 Install with existing prompt defaults: curl -fsSL https://boxlang.io/install.sh | sh -s -- --non-interactive
 ```
 
 ## 🎯 Detailed Usage
@@ -322,11 +334,21 @@ install-bx-module --update --force
 install-bx-module --outdated --local
 install-bx-module --update --force --local
 
+# Install a project's dependencies (reads ./box.json, like `npm install`)
+install-bx-module
+
+# Same, but into the local boxlang_modules folder instead of BoxLang HOME
+install-bx-module --local
+
 # Get help
 install-bx-module --help
 ```
 
 Module installations are tracked in a `box.json` dependencies manifest. Global modules use `~/.boxlang/modules/box.json`, while `--local` modules use `./boxlang_modules/box.json`. Installing and removing modules updates the manifest, and `--list` can generate a missing manifest from modules that were installed previously.
+
+If an installed module's own `box.json` declares a `dependencies` entry, those dependencies are installed automatically right after it: a `"*"` (or empty/null) version installs the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
+
+Running `install-bx-module` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
 
 ## 🌐 Running Applications
 

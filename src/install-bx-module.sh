@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
 
 # BoxLang Module Installer Script
 # This script helps install and manage BoxLang modules from FORGEBOX.
@@ -14,6 +17,11 @@ set -e
 
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# A literal tab character for use as an IFS field separator when parsing
+# tab-delimited jq output. `$'\t'` is a bash/ksh-ism that POSIX /bin/sh
+# (dash, BusyBox ash) does not expand, so it must be built with printf instead.
+TAB="$(printf '\t')"
 
 # We need this in case the target OS we are installing in does not have a `TERM` implementation declared
 # or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions or Docker containers)
@@ -23,14 +31,12 @@ fi
 
 # Include the helper functions
 # These are installed by the installer script
-if [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
-	source "$(dirname "$0")/helpers/helpers.sh"
-elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
-	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+if [ -f "$SCRIPT_DIR/helpers/helpers.sh" ]; then
+	. "$SCRIPT_DIR/helpers/helpers.sh"
 elif [ -f "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh" ]; then
-	source "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh"
+	. "${BOXLANG_INSTALL_HOME}/scripts/helpers/helpers.sh"
 elif [ -f "${BVM_HOME}/scripts/helpers/helpers.sh" ]; then
-    source "${BVM_HOME}/scripts/helpers/helpers.sh"
+    . "${BVM_HOME}/scripts/helpers/helpers.sh"
 else
 	printf "${RED}Error: Helper scripts not found. Please verify your installation.${NORMAL}\n"
 	exit 1
@@ -41,30 +47,26 @@ fi
 ###########################################################################
 
 parse_module_list() {
-	local modules=()
 	local input=""
 
 	# Concatenate all arguments into a single string
 	for arg in "$@"; do
 		# Skip flags
-		if [[ "$arg" == --* ]]; then
-			continue
-		fi
-		input="$input $arg"
+		case "$arg" in
+		--*) ;;
+		*) input="$input $arg" ;;
+		esac
 	done
 
 	# Replace commas with spaces and normalize whitespace
 	input=$(echo "$input" | sed 's/,/ /g' | tr -s ' ')
 
-	# Split by spaces and add to array
+	# Split by spaces and output each module.
 	for module in $input; do
 		if [ -n "$module" ]; then
-			modules+=("$module")
+			printf '%s\n' "$module"
 		fi
 	done
-
-	# Output modules one per line
-	printf '%s\n' "${modules[@]}"
 }
 
 show_help() {
@@ -76,6 +78,7 @@ show_help() {
 	printf "  install-bx-module.sh --list [--local]\n"
 	printf "  install-bx-module.sh --outdated [--local]\n"
 	printf "  install-bx-module.sh --update [--force] [--local]\n"
+	printf "  install-bx-module.sh (no arguments, run from a directory with a box.json)\n"
 	printf "  install-bx-module.sh --help\n\n"
 	printf "${BOLD}ARGUMENTS:${NORMAL}\n"
 	printf "  <module-name>     The name(s) of the module(s) to install. (Comma or space delimmited)\n"
@@ -102,7 +105,8 @@ show_help() {
 	printf "  install-bx-module --outdated\n"
 	printf "  install-bx-module --outdated --local\n"
 	printf "  install-bx-module --update\n"
-	printf "  install-bx-module --update --force --local\n\n"
+	printf "  install-bx-module --update --force --local\n"
+	printf "  install-bx-module\n\n"
 	printf "${BOLD}NOTES:${NORMAL}\n"
 	printf "  - If no version is specified, the latest version from FORGEBOX will be installed\n"
 	printf "  - Multiple modules can be specified, separated by spaces or commas\n"
@@ -110,6 +114,8 @@ show_help() {
 	printf "  - Use --local to work with modules in current directory's boxlang_modules folder\n"
 	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
+	printf "  - Dependencies declared in a module's box.json are installed automatically (latest version for \"*\", otherwise the version specified, including \"be\" or \"snapshot\")\n"
+	printf "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists\n"
 }
 
 list_modules() {
@@ -127,15 +133,20 @@ list_modules() {
 
 	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
 
-	# Read installed modules from the manifest
+	# Read installed modules from the manifest.
+	# `|| true` keeps a jq failure (e.g. unreadable manifest) from tripping `set -e`.
 	local DEP_COUNT
-	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null)
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null || true)
 
-	if [ -z "$DEP_COUNT" ] || [ "$DEP_COUNT" -eq 0 ]; then
+	# DEP_COUNT can be empty or non-numeric when jq produced no output, so only
+	# run the numeric comparison when it holds a valid integer. Without this
+	# guard, POSIX sh (dash / BusyBox ash) raises "Illegal number" on an empty
+	# or non-numeric value instead of short-circuiting cleanly.
+	if [ -z "$DEP_COUNT" ] || [ "${DEP_COUNT:-0}" -eq 0 ] 2>/dev/null; then
 		printf "${YELLOW}📭 No modules installed${NORMAL}\n"
 	else
 		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
-		while IFS=$'\t' read -r module_name module_version; do
+		while IFS="$TAB" read -r module_name module_version; do
 			printf -- "✓ %s (%s)\n" "$module_name" "$module_version"
 		done
 	fi
@@ -164,7 +175,7 @@ resolve_forgebox_storage_url() {
 		exit 1
 	fi
 
-	local SECURE_URL=$(echo "${STORAGE_JSON}" | jq -r '.data')
+	local SECURE_URL=$(printf '%s\n' "${STORAGE_JSON}" | jq -r '.data')
 
 	if [ "$SECURE_URL" = "null" ] || [ -z "$SECURE_URL" ]; then
 		printf "${RED}❌ Error: Invalid response from ForgeBox storage${NORMAL}\n" >&2
@@ -188,8 +199,8 @@ get_latest_version_from_forgebox() {
 		exit 1
 	fi
 
-	local VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version')
-	local DOWNLOAD_URL_TEMP=$(echo "${ENTRY_JSON}" | jq -r '.data.downloadURL')
+	local VERSION=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.version')
+	local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.downloadURL')
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -228,7 +239,7 @@ get_be_version_from_forgebox() {
 
 	# Take the first (latest) version regardless of stable/pre-release status
 	# The ForgeBox API returns versions in newest-first order
-	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[0].version')
+	local VERSION=$(printf '%s\n' "${VERSIONS_JSON}" | jq -r '.data[0].version')
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -239,7 +250,7 @@ get_be_version_from_forgebox() {
 	# Get the full entry info for this version to check for forgeboxStorage
 	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/versions/${VERSION}")
 	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
 		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -276,7 +287,7 @@ get_snapshot_version_from_forgebox() {
 	fi
 
 	# Find the first version with "-snapshot" in the versions array
-	local VERSION=$(echo "${VERSIONS_JSON}" | jq -r '.data[] | select(.version | contains("-snapshot")) | .version' | head -n 1)
+	local VERSION=$(printf '%s\n' "${VERSIONS_JSON}" | jq -r '.data[] | select(.version | contains("-snapshot")) | .version' | head -n 1)
 
 	# Validate parsed data
 	if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
@@ -287,7 +298,7 @@ get_snapshot_version_from_forgebox() {
 	# Get the full entry info for this version to check for forgeboxStorage
 	local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${MODULE_NAME}/${VERSION}")
 	if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-		local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+		local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 		if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 			DOWNLOAD_URL_TEMP=$(resolve_forgebox_storage_url "$MODULE_NAME" "$VERSION")
 		elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -309,15 +320,20 @@ get_snapshot_version_from_forgebox() {
 
 install_module() {
 	local INPUT=${1}
+	# Space-delimited list of modules already being installed up the dependency
+	# chain (including the module currently being processed). Used to guard
+	# against circular dependencies when recursively installing box.json deps.
+	local VISITED=${2:-""}
 	local TARGET_MODULE=""
 	local TARGET_VERSION=""
 
-	if [[ "$INPUT" =~ @ ]]; then
-		TARGET_MODULE=$(echo "$INPUT" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]')
-		TARGET_VERSION=$(echo "$INPUT" | cut -d'@' -f2)
-	else
-		TARGET_MODULE=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]')
-	fi
+	case "$INPUT" in
+		*@*)
+			TARGET_MODULE=$(echo "$INPUT" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]')
+			TARGET_VERSION=$(echo "$INPUT" | cut -d'@' -f2)
+			;;
+		*) TARGET_MODULE=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]') ;;
+	esac
 
 	# Validate module name
 	if [ -z "$TARGET_MODULE" ]; then
@@ -349,7 +365,7 @@ install_module() {
 		# We have a targeted version, first try to get it from ForgeBox API to check for forgeboxStorage
 		local VERSION_JSON=$(curl -sSL "${FORGEBOX_API_URL}/entry/${TARGET_MODULE}/versions/${TARGET_VERSION}")
 		if [ -n "$VERSION_JSON" ] && [ "$VERSION_JSON" != "null" ]; then
-			local DOWNLOAD_URL_TEMP=$(echo "${VERSION_JSON}" | jq -r '.data.downloadURL')
+			local DOWNLOAD_URL_TEMP=$(printf '%s\n' "${VERSION_JSON}" | jq -r '.data.downloadURL')
 			if [ "$DOWNLOAD_URL_TEMP" = "forgeboxStorage" ]; then
 				local DOWNLOAD_URL=$(resolve_forgebox_storage_url "$TARGET_MODULE" "$TARGET_VERSION")
 			elif [ "$DOWNLOAD_URL_TEMP" != "null" ] && [ -n "$DOWNLOAD_URL_TEMP" ]; then
@@ -458,7 +474,7 @@ EOF
 			local EXEC_NAMES=$(echo "${EXECUTABLES}" | jq -r 'keys[]' 2>/dev/null)
 			if [ -n "${EXEC_NAMES}" ]; then
 				printf "${BLUE}🔧 Creating executable scripts...${NORMAL}\n"
-				while IFS= read -r exec_name; do
+				printf '%s\n' "${EXEC_NAMES}" | while IFS= read -r exec_name; do
 					if [ -n "${exec_name}" ]; then
 						local exec_content=$(echo "${EXECUTABLES}" | jq -r ".\"${exec_name}\"" 2>/dev/null)
 						if [ -n "${exec_content}" ] && [ "${exec_content}" != "null" ]; then
@@ -468,15 +484,67 @@ EOF
 							chmod +x "${exec_script}"
 						fi
 					fi
-				done <<< "${EXEC_NAMES}"
+				done
 			fi
 		fi
 	fi
+
+	# Install any module dependencies declared in the extracted module's box.json
+	install_module_dependencies "${DESTINATION}" "${VISITED} ${TARGET_MODULE}"
+
 	# Track this install in the modules manifest
 	box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
 
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
+}
+
+# Reads a module's own box.json (as extracted to MODULE_DIR) and installs any
+# declared dependencies. A dependency version of "*" (or empty/null) installs
+# the latest version from FORGEBOX; any other value is installed as-is
+# (e.g. an exact version, "be", or "snapshot").
+install_module_dependencies() {
+	local MODULE_DIR=${1}
+	local VISITED=${2:-""}
+	local BOX_JSON_PATH="${MODULE_DIR}/box.json"
+
+	[ -f "${BOX_JSON_PATH}" ] || return 0
+
+	# `|| true` keeps a jq failure (e.g. malformed box.json) from tripping `set -e`.
+	local DEP_COUNT
+	DEP_COUNT=$(jq -r '.dependencies // {} | length' "${BOX_JSON_PATH}" 2>/dev/null || true)
+
+	# Guard against a non-numeric DEP_COUNT (see list_modules() for why).
+	if [ -z "$DEP_COUNT" ] || [ "${DEP_COUNT:-0}" -eq 0 ] 2>/dev/null; then
+		return 0
+	fi
+
+	printf "${BLUE}🔗 Found %s module dependenc%s, installing...${NORMAL}\n" \
+		"$DEP_COUNT" "$([ "$DEP_COUNT" -eq 1 ] && echo "y" || echo "ies")"
+
+	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
+	while IFS="$TAB" read -r dep_name dep_version; do
+		[ -z "$dep_name" ] && continue
+
+		# Skip dependencies already being installed up the chain to avoid
+		# infinite recursion on circular module dependencies.
+		case " ${VISITED} " in
+			*" ${dep_name} "*)
+				printf "${YELLOW}⚠️  Skipping circular dependency: ${dep_name}${NORMAL}\n"
+				continue
+				;;
+		esac
+
+		local dep_input
+		if [ -z "$dep_version" ] || [ "$dep_version" = "null" ] || [ "$dep_version" = "*" ]; then
+			dep_input="${dep_name}"
+		else
+			dep_input="${dep_name}@${dep_version}"
+		fi
+
+		printf "${GREEN}📦 Installing dependency: ${dep_input}${NORMAL}\n"
+		install_module "$dep_input" "${VISITED}"
+	done
 }
 
 remove_module() {
@@ -628,7 +696,7 @@ fetch_forgebox_latest_version() {
 	fi
 
 	local VERSION
-	VERSION=$(echo "${ENTRY_JSON}" | jq -r '.data.version // empty' 2>/dev/null)
+	VERSION=$(printf '%s\n' "${ENTRY_JSON}" | jq -r '.data.version // empty' 2>/dev/null)
 	if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
 		return 1
 	fi
@@ -645,7 +713,7 @@ compute_outdated_report() {
 	BOX_JSON_PATH=$(ensure_modules_manifest "${MODULES_PATH}")
 
 	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
-	while IFS=$'\t' read -r module_name current_version; do
+	while IFS="$TAB" read -r module_name current_version; do
 		local current_semver
 		current_semver=$(extract_semantic_version "$current_version")
 		[ -z "$current_semver" ] && continue
@@ -704,16 +772,18 @@ outdated_modules() {
 	printf "%-25s %-15s %-15s %s\n" "DEPENDENCY" "CURRENT" "FORGEBOX" "STATUS"
 	printf "%-25s %-15s %-15s %s\n" "-------------------------" "---------------" "---------------" "--------------------"
 
-	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
-	while IFS=$'\t' read -r module_name current_version latest_version status; do
+	local OUTDATED_MODULES=""
+	local OUTDATED_COUNT=0
+	while IFS="$TAB" read -r module_name current_version latest_version status; do
 		local status_label
 		case "$status" in
 			uptodate) status_label="✅ up to date" ;;
 			ahead) status_label="🔄 ahead (dev/snapshot)" ;;
 			outdated)
 				status_label="🆙 outdated"
-				OUTDATED_NAMES+=("$module_name")
-				OUTDATED_VERSIONS+=("$latest_version")
+				OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+"
+				OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 				;;
 			*) status_label="⚠️  unable to check" ;;
 		esac
@@ -722,7 +792,6 @@ outdated_modules() {
 	rm -f "${REPORT_FILE}"
 
 	printf "\n"
-	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
 	if [ "$OUTDATED_COUNT" -eq 0 ]; then
 		printf "${GREEN}✅ All modules are up to date${NORMAL}\n"
 		return 0
@@ -733,9 +802,8 @@ outdated_modules() {
 	read -r confirmation < /dev/tty
 	case "$confirmation" in
 		[yY]|[yY][eE][sS])
-			local i
-			for (( i=0; i<OUTDATED_COUNT; i++ )); do
-				install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+			printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
+				install_module "${module_name}@${latest_version}"
 			done
 			;;
 		*)
@@ -765,17 +833,18 @@ update_modules() {
 	REPORT_FILE=$(mktemp)
 	compute_outdated_report "${MODULES_HOME}" > "${REPORT_FILE}"
 
-	local OUTDATED_NAMES=() OUTDATED_VERSIONS=()
-	while IFS=$'\t' read -r module_name current_version latest_version status; do
+	local OUTDATED_MODULES=""
+	local OUTDATED_COUNT=0
+	while IFS="$TAB" read -r module_name current_version latest_version status; do
 		if [ "$status" = "outdated" ]; then
 			printf -- "🆙 %s: %s → %s\n" "$module_name" "$current_version" "$latest_version"
-			OUTDATED_NAMES+=("$module_name")
-			OUTDATED_VERSIONS+=("$latest_version")
+			OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+"
+			OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 		fi
 	done < "${REPORT_FILE}"
 	rm -f "${REPORT_FILE}"
 
-	local OUTDATED_COUNT=${#OUTDATED_NAMES[@]}
 	if [ "$OUTDATED_COUNT" -eq 0 ]; then
 		printf "${GREEN}✅ All modules are up to date, nothing to update${NORMAL}\n"
 		return 0
@@ -794,9 +863,8 @@ update_modules() {
 		esac
 	fi
 
-	local i
-	for (( i=0; i<OUTDATED_COUNT; i++ )); do
-		install_module "${OUTDATED_NAMES[$i]}@${OUTDATED_VERSIONS[$i]}"
+	printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
+		install_module "${module_name}@${latest_version}"
 	done
 
 	printf "${GREEN}✅ Updated ${OUTDATED_COUNT} module(s)!${NORMAL}\n"
@@ -805,11 +873,8 @@ update_modules() {
 main() {
 	setup_colors
 
-	# Check if no arguments are passed
-	if [ $# -eq 0 ]; then
-		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
-		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
-		show_help
+	# Module installer dependencies
+	if ! preflight_check skip curl unzip jq; then
 		exit 1
 	fi
 
@@ -1001,14 +1066,33 @@ main() {
 		fi
 
 		# Parse comma/space-delimited module list
-		while IFS= read -r module; do
+		parse_module_list "$@" | while IFS= read -r module; do
 			if [ -n "$module" ]; then
 				printf "${GREEN}🚀 Starting removal of module: ${module}${NORMAL}\n"
 				remove_module "$module" "$FORCE_REMOVE"
 			fi
-		done < <(parse_module_list "$@")
+		done
 
 		exit 0
+	fi
+
+	# No module names were given (either no arguments at all, or only
+	# --local). If a box.json exists in the current directory, treat it as a
+	# project manifest and install the dependencies it declares (similar to
+	# running `npm install` with no arguments), honoring --local/BoxLang HOME
+	# just like a normal install would.
+	MODULE_LIST=$(parse_module_list "$@")
+	if [ -z "$MODULE_LIST" ]; then
+		if [ -f "$(pwd)/box.json" ]; then
+			printf "${YELLOW}📄 Found box.json in $(pwd), installing its declared dependencies...${NORMAL}\n"
+			install_module_dependencies "$(pwd)" ""
+			exit 0
+		fi
+
+		printf "${RED}❌ Error: No module(s) specified${NORMAL}\n"
+		printf "${YELLOW}💡 This script installs or removes BoxLang modules.${NORMAL}\n"
+		show_help
+		exit 1
 	fi
 
 	# Inform about local installation
@@ -1016,13 +1100,13 @@ main() {
 		printf "${YELLOW}📍 Installing modules locally in $(pwd)/boxlang_modules${NORMAL}\n"
 	fi
 
-	# Parse comma/space-delimited module list and install
-	while IFS= read -r module; do
+	# Install the parsed comma/space-delimited module list
+	printf '%s\n' "$MODULE_LIST" | while IFS= read -r module; do
 		if [ -n "$module" ]; then
 			printf "${GREEN}🚀 Starting installation of module: ${module}${NORMAL}\n"
 			install_module "$module"
 		fi
-	done < <(parse_module_list "$@")
+	done
 }
 
 main "$@"

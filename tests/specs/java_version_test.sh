@@ -1,18 +1,20 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
+
 # Comprehensive tests for check_java_version() function
 # Author: BoxLang Team
 # License: Apache License, Version 2.0
 
-set -e
-
 # Get the directory of this script
-TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$TEST_DIR")")"
 HELPERS_FILE="$PROJECT_ROOT/src/helpers/helpers.sh"
 
 # Source the helpers file
 if [ -f "$HELPERS_FILE" ]; then
-    source "$HELPERS_FILE"
+    . "$HELPERS_FILE"
 else
     echo "❌ Error: helpers.sh not found at $HELPERS_FILE"
     exit 1
@@ -38,7 +40,7 @@ create_mock_java() {
 
     mkdir -p "$(dirname "$java_path")"
     cat > "$java_path" << EOF
-#!/bin/bash
+#!/bin/sh
 if [ "\$1" = "-version" ]; then
     echo '$version_output' >&2
     exit $return_code
@@ -52,6 +54,7 @@ EOF
 
 # Function to setup mock environment
 setup_mock_environment() {
+    mkdir -p "$MOCK_DIR"
     export PATH="$MOCK_DIR:$PATH"
     # Clear any existing JAVA_HOME for testing
     export JAVA_HOME_BACKUP="$JAVA_HOME"
@@ -79,14 +82,14 @@ assert_java_check_result() {
 
     if [ "$return_code" -eq "$expected_code" ]; then
         echo "✅ PASS: $test_name"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
         return 0
     else
         echo "❌ FAIL: $test_name"
         echo "   Expected return code: $expected_code"
         echo "   Actual return code:   $return_code"
         echo "   Output: $output"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
     fi
 }
@@ -286,33 +289,31 @@ test_extract_java_version_function() {
     }
 
     # Test various version formats
-    local test_cases=(
-        'openjdk version "21.0.1" 2023-10-17|21'
-        'openjdk version "17.0.5" 2022-10-18|17'
-        'openjdk version "1.8.0_345" 2022-08-11|8'
-        'java version "21.0.1" 2023-10-17 LTS|21'
-        'openjdk version "11.0.16" 2022-07-19|11'
-        'java version "1.8.0_333" 2022-04-22|8'
-    )
-
     local passed=0
     local failed=0
 
-    for test_case in "${test_cases[@]}"; do
+    while IFS= read -r test_case; do
         local input="${test_case%|*}"
         local expected="${test_case#*|}"
         local actual=$(extract_java_version "$input")
 
         if [ "$actual" = "$expected" ]; then
             echo "✅ PASS: extract_java_version('$input') = '$actual'"
-            ((passed++))
-            ((TESTS_PASSED++))
+            passed=$((passed + 1))
+            TESTS_PASSED=$((TESTS_PASSED + 1))
         else
             echo "❌ FAIL: extract_java_version('$input') = '$actual' (expected '$expected')"
-            ((failed++))
-            ((TESTS_FAILED++))
+            failed=$((failed + 1))
+            TESTS_FAILED=$((TESTS_FAILED + 1))
         fi
-    done
+    done <<'EOF'
+openjdk version "21.0.1" 2023-10-17|21
+openjdk version "17.0.5" 2022-10-18|17
+openjdk version "1.8.0_345" 2022-08-11|8
+java version "21.0.1" 2023-10-17 LTS|21
+openjdk version "11.0.16" 2022-10-18|11
+java version "1.8.0_333" 2022-04-22|8
+EOF
 
     echo "   Extraction tests: $passed passed, $failed failed"
 }
@@ -368,7 +369,4 @@ cleanup() {
 # Set up cleanup trap
 trap cleanup EXIT
 
-# Run tests if script is executed directly
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    run_java_tests
-fi
+run_java_tests

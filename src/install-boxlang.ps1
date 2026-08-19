@@ -8,10 +8,31 @@ $requiredJavaVersion = 21
 $installedJavaVersion = $null
 $bxName = "BoxLang" + [char]0x00A9;
 $installerVersion = "@build.version@"
+$INSTALLATION_FOLDER = if ([string]::IsNullOrWhiteSpace($env:BOXLANG_INSTALL_HOME)) {
+    "C:\boxlang"
+} else {
+    $env:BOXLANG_INSTALL_HOME
+}
+$DESTINATION_LIB = "$($INSTALLATION_FOLDER.TrimEnd('\'))\lib"
+$DESTINATION_BIN = "$($INSTALLATION_FOLDER.TrimEnd('\'))\bin"
+$DESTINATION_HOME = "$($INSTALLATION_FOLDER.TrimEnd('\'))\home"
+$DESTINATION_SCRIPTS = "$($INSTALLATION_FOLDER.TrimEnd('\'))\scripts"
+$BOXLANG_HOME_BIN = Join-Path -Path $env:USERPROFILE -ChildPath ".boxlang\bin"
 
 # Command line flags - empty = prompt, true = install, false = skip
 $INSTALL_COMMANDBOX = ""
+$JAVA_INSTALL_MODE = "prompt"
 $NON_INTERACTIVE = $false
+$BOXLANG_PATH = ""
+$MINISERVER_PATH = ""
+$INSTALLER_SCRIPTS_PATH = ""
+
+if ([Console]::IsInputRedirected) {
+    $NON_INTERACTIVE = $true
+}
+if ($args -contains "--non-interactive") {
+    $NON_INTERACTIVE = $true
+}
 
 ###########################################################################
 # Help Function
@@ -44,6 +65,12 @@ function Show-Help {
     Write-Host "  --force           Force reinstallation even if already installed"
     Write-Host "  --with-commandbox Install CommandBox without prompting"
     Write-Host "  --without-commandbox Skip CommandBox installation"
+    Write-Host "  --with-jre        Require Java 21 or higher"
+    Write-Host "  --without-jre     Skip the Java check for a local artifact installation"
+	Write-Host "  --boxlang-path <path> Use a local BoxLang JAR or ZIP"
+	Write-Host "  --miniserver-path <path> Use a local MiniServer JAR or ZIP"
+	Write-Host "  --installer-scripts-path <path> Use a local installer scripts ZIP or directory"
+    Write-Host "  --non-interactive  Never prompt for input (also enabled when input is redirected)"
     Write-Host "  --yes, -y         Use defaults for all prompts (installs CommandBox)"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
@@ -81,9 +108,9 @@ function Show-Help {
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Installation Paths:"
     Write-Host ""
-    Write-Host "  📁 Binaries: C:\boxlang\bin\"
-    Write-Host "  📁 Libraries: C:\boxlang\lib\"
-    Write-Host "  📁 BoxLang Home: C:\boxlang\home\"
+    Write-Host "  📁 Binaries: $DESTINATION_BIN\"
+    Write-Host "  📁 Libraries: $DESTINATION_LIB\"
+    Write-Host "  📁 BoxLang Home: $DESTINATION_HOME\"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "After Installation:"
     Write-Host ""
@@ -109,7 +136,7 @@ function Show-Help {
     Write-Host ""
     Write-Host -NoNewline "  - Run as Administrator for best results: "
     Write-Host -ForegroundColor Green "Run as Administrator"
-    Write-Host "  - Installation adds C:\boxlang\bin to your PATH"
+    Write-Host "  - Installation adds $DESTINATION_BIN to your PATH"
     Write-Host "  - Java detection works in various PowerShell contexts"
     Write-Host "  - Previous versions are automatically removed before installation"
     Write-Host "  - BoxLang® is open-source under Apache 2.0 License"
@@ -136,12 +163,15 @@ function Uninstall-BoxLang {
 
     # Remove from standard Windows program locations
     Write-Host -ForegroundColor Blue "Removing binaries and scripts..."
-    Remove-Item -Path "C:\boxlang" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $INSTALLATION_FOLDER -Recurse -Force -ErrorAction SilentlyContinue
 
     # Remove from PATH
     Write-Host -ForegroundColor Blue "Removing from PATH..."
     $currentPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
-    $newPath = ($currentPath -split ";" | Where-Object { $_ -notlike "*boxlang*" }) -join ";"
+    $pathsToRemove = @($DESTINATION_BIN, $BOXLANG_HOME_BIN)
+    $newPath = ($currentPath -split ";" | Where-Object {
+        $pathsToRemove -notcontains $_
+    }) -join ";"
     [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
 
     # Remove environment variables
@@ -163,6 +193,8 @@ if ($args.Count -ge 1 -and $args[0] -eq "--uninstall") {
 # Preflight Checks Function
 ###########################################################################
 function Test-Prerequisites {
+    param([bool]$RequireInternet = $true)
+
     Write-Host -ForegroundColor Blue "🔍 Running pre-flight checks..."
 
     $missingDeps = @()
@@ -172,15 +204,21 @@ function Test-Prerequisites {
         $missingDeps += "PowerShell 5.1+"
     }
 
-    # Check for internet connectivity
-    try {
-        $testConnection = Test-NetConnection -ComputerName "downloads.ortussolutions.com" -Port 443 -InformationLevel Quiet -ErrorAction SilentlyContinue
-        if (-not $testConnection) {
-            $missingDeps += "Internet connectivity"
+    if ($RequireInternet) {
+        try {
+            if (Get-Command Test-NetConnection -ErrorAction SilentlyContinue) {
+                $testConnection = Test-NetConnection -ComputerName "downloads.ortussolutions.com" -Port 443 -InformationLevel Quiet -ErrorAction Stop
+            } else {
+                $null = Invoke-WebRequest -Uri "https://downloads.ortussolutions.com" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                $testConnection = $true
+            }
+			if (-not $testConnection) {
+				$missingDeps += "Internet connectivity to downloads.ortussolutions.com"
+			}
         }
-    }
-    catch {
-        Write-Host -ForegroundColor Yellow "⚠️  Could not verify internet connectivity"
+        catch {
+            $missingDeps += "Internet connectivity to downloads.ortussolutions.com"
+        }
     }
 
     if ($missingDeps.Count -gt 0) {
@@ -216,7 +254,7 @@ function Get-CurrentBoxLangVersion {
     # Try to find BoxLang in common locations
     $boxlangCandidates = @(
         "boxlang",                                    # In PATH
-        "C:\boxlang\bin\boxlang.bat",                # Standard Windows install
+        (Join-Path -Path $DESTINATION_BIN -ChildPath "boxlang.bat"), # Standard Windows install
         "$env:USERPROFILE\.local\bin\boxlang.bat"    # User install
     )
 
@@ -333,7 +371,11 @@ function Test-ForUpdates {
         }
         -1 {
             Write-Host -ForegroundColor Yellow "🆙 A newer version of BoxLang is available!"
-            $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            if ($NON_INTERACTIVE) {
+                $response = ""
+            } else {
+                $response = Read-Host "Would you like to update to version $latestVersion? [Y/n]"
+            }
             if ($response -notmatch "^[nN]") {
                 Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
                 # Call the script again with latest version
@@ -359,7 +401,8 @@ if ($args.Count -ge 1 -and $args[0] -eq "--check-update") {
 # Parse arguments to check for flags and remove them from args
 $FORCE_INSTALL = $false
 $newArgs = @()
-foreach ($arg in $args) {
+for ($argIndex = 0; $argIndex -lt $args.Count; $argIndex++) {
+    $arg = $args[$argIndex]
     switch ($arg) {
         "--force" {
             $FORCE_INSTALL = $true
@@ -370,9 +413,34 @@ foreach ($arg in $args) {
         "--without-commandbox" {
             $INSTALL_COMMANDBOX = $false
         }
+        "--with-jre" {
+            $JAVA_INSTALL_MODE = "automatic"
+        }
+        "--without-jre" {
+            $JAVA_INSTALL_MODE = "skip"
+        }
+        "--boxlang-path" {
+            $argIndex++
+            if ($argIndex -ge $args.Count) { throw "--boxlang-path requires a path" }
+            $BOXLANG_PATH = $args[$argIndex]
+        }
+        "--miniserver-path" {
+            $argIndex++
+            if ($argIndex -ge $args.Count) { throw "--miniserver-path requires a path" }
+            $MINISERVER_PATH = $args[$argIndex]
+        }
+        "--installer-scripts-path" {
+            $argIndex++
+            if ($argIndex -ge $args.Count) { throw "--installer-scripts-path requires a path" }
+            $INSTALLER_SCRIPTS_PATH = $args[$argIndex]
+        }
         { $_ -eq "--yes" -or $_ -eq "-y" } {
             # Setup all defaults here - install CommandBox by default
             $INSTALL_COMMANDBOX = $true
+			$JAVA_INSTALL_MODE = "automatic"
+            $NON_INTERACTIVE = $true
+        }
+        "--non-interactive" {
             $NON_INTERACTIVE = $true
         }
         default {
@@ -400,12 +468,6 @@ $LATEST_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/boxla
 $LATEST_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/boxlang-miniserver-latest.zip"
 $VERSIONED_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang/${TARGET_VERSION}/boxlang-${TARGET_VERSION}.zip"
 $VERSIONED_URL_MINISERVER = "https://downloads.ortussolutions.com/ortussolutions/boxlang-runtimes/boxlang-miniserver/${TARGET_VERSION}/boxlang-miniserver-${TARGET_VERSION}.zip"
-$INSTALLATION_FOLDER = "c:\boxlang"
-$DESTINATION_LIB = "$INSTALLATION_FOLDER\lib"
-$DESTINATION_BIN = "$INSTALLATION_FOLDER\bin"
-$DESTINATION_HOME = "$INSTALLATION_FOLDER\home"
-$DESTINATION_SCRIPTS = "$INSTALLATION_FOLDER\scripts"
-
 # Set the progress preference to silently continue to avoid cluttering the console
 $ProgressPreference = 'SilentlyContinue'
 
@@ -494,7 +556,7 @@ function Update-PathVariable {
         Write-Host -ForegroundColor Yellow "⚠️  $dir is not in your PATH"
     }
 
-    # If non-interactive mode (--yes flag was used), auto-update PATH
+    # If non-interactive mode is enabled, auto-update PATH
     if ($NON_INTERACTIVE) {
         Write-Host -ForegroundColor Green "Adding directories to PATH (automatic mode)..."
     } else {
@@ -517,13 +579,20 @@ function Update-PathVariable {
         Write-Host -ForegroundColor Blue "Adding $dir to PATH..."
         $newPath = "$newPath;$dir"
     }
-    [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
-    Write-Host -ForegroundColor Green "✅ Successfully updated PATH"
-    Write-Host -ForegroundColor Blue "💡 Restart your terminal to use the new PATH"
+    try {
+        [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
+        Write-Host -ForegroundColor Green "✅ Successfully updated PATH"
+        Write-Host -ForegroundColor Blue "💡 Restart your terminal to use the new PATH"
+    }
+    catch {
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang was installed, but Windows blocked the PATH update."
+        Write-Host -ForegroundColor Blue "💡 Add these directories to your User PATH manually: $($missingDirs -join '; ')"
+    }
 }
 
 # Perform preflight checks
-if (-not (Test-Prerequisites)) {
+$needsDownload = -not $BOXLANG_PATH -or -not $MINISERVER_PATH -or -not $INSTALLER_SCRIPTS_PATH -or $INSTALL_COMMANDBOX -ne $false
+if (-not (Test-Prerequisites -RequireInternet $needsDownload)) {
     exit 1
 }
 
@@ -533,8 +602,12 @@ if (-not (Test-Prerequisites)) {
 function Test-JavaVersion {
     Write-Host -ForegroundColor Blue "🔍 Checking Java installation..."
 
+    $pathJavaCandidates = @(Get-Command java -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source } |
+        ForEach-Object { $_.Source })
     $javaCandidates = @(
-        "java",                                    # Standard PATH
+        $pathJavaCandidates
+        "java"                                    # Standard PATH fallback
         "$env:JAVA_HOME\bin\java.exe",            # JAVA_HOME if set
         "C:\Program Files\Java\*\bin\java.exe",   # Common Windows Oracle location
         "C:\Program Files (x86)\Java\*\bin\java.exe", # 32-bit Java location
@@ -594,8 +667,8 @@ function Test-JavaVersion {
     return $false
 }
 
-# Perform Java version check
-if (-not (Test-JavaVersion)) {
+# Perform Java version check unless a local artifact installation explicitly skips it.
+if ($JAVA_INSTALL_MODE -ne "skip" -and -not (Test-JavaVersion)) {
     exit 1
 }
 
@@ -604,6 +677,10 @@ function Check-And-Install-CommandBox {
     param(
         [string]$BinDir
     )
+
+	if ($INSTALL_COMMANDBOX -eq $false) {
+		return $false
+	}
 
     Write-Host -ForegroundColor Blue "🔍 Checking for CommandBox..."
 
@@ -614,13 +691,6 @@ function Check-And-Install-CommandBox {
         return $true
     }
 
-    # Check command line flags first
-    if ($INSTALL_COMMANDBOX -eq $false) {
-        Write-Host -ForegroundColor Yellow "Skipping CommandBox installation (--without-commandbox specified)"
-        Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
-        return $false
-    }
-
     Write-Host -ForegroundColor Yellow "⚠️  CommandBox is not installed"
     Write-Host -ForegroundColor Blue "💡 CommandBox is the Package Manager for BoxLang®"
     Write-Host -ForegroundColor Blue "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more"
@@ -629,6 +699,9 @@ function Check-And-Install-CommandBox {
     # If flag is explicitly set to true, install without prompting
     if ($INSTALL_COMMANDBOX -eq $true) {
         Write-Host -ForegroundColor Green "Installing CommandBox (automatic mode)..."
+    } elseif ($NON_INTERACTIVE) {
+        # Use the prompt's default answer without reading input.
+        $response = ""
     } else {
         # Ask user if they want to install CommandBox
         $response = Read-Host "Would you like to install CommandBox? [Y/n]"
@@ -742,7 +815,7 @@ if (-not $FORCE_INSTALL) {
 
     $currentVersion = Get-CurrentBoxLangVersion
     if ($currentVersion) {
-        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [C:\boxlang] with version [$currentVersion]"
+        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [$INSTALLATION_FOLDER] with version [$currentVersion]"
         Write-Host -ForegroundColor Blue "💡 Use '.\install-boxlang.ps1 --uninstall' to remove the existing version before reinstalling."
         Write-Host -ForegroundColor Blue "💡 Or use '--force' to do a forced reinstall."
         exit 0
@@ -751,8 +824,10 @@ if (-not $FORCE_INSTALL) {
         Write-Host ""
     }
 } else {
-    Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
-    Remove-PreviousInstallation
+    if (Test-Path $INSTALLATION_FOLDER -PathType Container) {
+        Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
+        Remove-PreviousInstallation
+    }
     Write-Host ""
 }
 
@@ -767,84 +842,106 @@ if (-not $FORCE_INSTALL) {
 # Prepare directories for installation
 Write-Host -ForegroundColor Blue "📁 Creating installation folders..."
 $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "/boxlang"
-$INSTALLATION_FOLDER = "c:\boxlang"
-New-Item -Type Directory -Path $tmp -Force | Out-Null
-New-Item -Type Directory -Path $INSTALLATION_FOLDER -Force | Out-Null
-New-Item -Type Directory -Path $DESTINATION_HOME -Force | Out-Null
-
-# Download BoxLang
-Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® binary from $DOWNLOAD_URL"
-Remove-Item -Path $tmp\boxlang.zip -ErrorAction SilentlyContinue -Force
 try {
+    New-Item -Type Directory -Path $tmp -Force -ErrorAction Stop | Out-Null
+    New-Item -Type Directory -Path $INSTALLATION_FOLDER -Force -ErrorAction Stop | Out-Null
+    New-Item -Type Directory -Path $DESTINATION_HOME -Force -ErrorAction Stop | Out-Null
+}
+catch {
+    Write-Host -ForegroundColor Red "❌ Cannot create the BoxLang installation directory [$INSTALLATION_FOLDER]."
+    Write-Host -ForegroundColor Yellow "💡 Run PowerShell as Administrator, or set BOXLANG_INSTALL_HOME to a directory you can write to and rerun the installer."
+    exit 1
+}
+
+# Get BoxLang
+if ($BOXLANG_PATH) {
+    if (-not (Test-Path $BOXLANG_PATH -PathType Leaf)) {
+        throw "BoxLang path does not exist: $BOXLANG_PATH"
+    }
+    if ([System.IO.Path]::GetExtension($BOXLANG_PATH) -ieq ".jar") {
+        Write-Host -ForegroundColor Blue "📦 Using local BoxLang JAR: $BOXLANG_PATH"
+        New-Item -Type Directory -Path $DESTINATION_LIB -Force | Out-Null
+        Copy-Item -Path $BOXLANG_PATH -Destination $DESTINATION_LIB -Force
+    } else {
+        Write-Host -ForegroundColor Blue "📦 Using local BoxLang ZIP: $BOXLANG_PATH"
+        Copy-Item -Path $BOXLANG_PATH -Destination $tmp\boxlang.zip -Force
+    }
+} else {
+    Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® binary from $DOWNLOAD_URL"
     Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $tmp\boxlang.zip -ErrorAction Stop
 }
-catch {
-    Write-Host -ForegroundColor Red "❌ Error: Download of BoxLang® binary failed"
-    Write-Host -ForegroundColor Red $_.Exception.Message
-    exit 1
-}
 
-# download miniserver
-Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® MiniServer binary from $DOWNLOAD_URL_MINISERVER"
-Remove-Item -Path $tmp\boxlang-miniserver.zip -ErrorAction SilentlyContinue -Force
-try {
+# Get MiniServer
+if ($MINISERVER_PATH) {
+    if (-not (Test-Path $MINISERVER_PATH -PathType Leaf)) {
+        throw "MiniServer path does not exist: $MINISERVER_PATH"
+    }
+    if ([System.IO.Path]::GetExtension($MINISERVER_PATH) -ieq ".jar") {
+        Write-Host -ForegroundColor Blue "📦 Using local MiniServer JAR: $MINISERVER_PATH"
+        New-Item -Type Directory -Path $DESTINATION_LIB -Force | Out-Null
+        Copy-Item -Path $MINISERVER_PATH -Destination $DESTINATION_LIB -Force
+    } else {
+        Write-Host -ForegroundColor Blue "📦 Using local MiniServer ZIP: $MINISERVER_PATH"
+        Copy-Item -Path $MINISERVER_PATH -Destination $tmp\boxlang-miniserver.zip -Force
+    }
+} else {
+    Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® MiniServer binary from $DOWNLOAD_URL_MINISERVER"
     Invoke-WebRequest -Uri $DOWNLOAD_URL_MINISERVER -OutFile $tmp\boxlang-miniserver.zip -ErrorAction Stop
 }
-catch {
-    Write-Host -ForegroundColor Red "❌ Error: Download of BoxLang® MiniServer binary failed"
-    Write-Host -ForegroundColor Red $_.Exception.Message
-    exit 1
+
+# Get installer scripts
+if ($INSTALLER_SCRIPTS_PATH) {
+    if (-not (Test-Path $INSTALLER_SCRIPTS_PATH)) {
+        throw "Installer scripts path does not exist: $INSTALLER_SCRIPTS_PATH"
+    }
+    if (-not (Test-Path $INSTALLER_SCRIPTS_PATH -PathType Container)) {
+        Write-Host -ForegroundColor Blue "📦 Using local installer scripts ZIP: $INSTALLER_SCRIPTS_PATH"
+        Copy-Item -Path $INSTALLER_SCRIPTS_PATH -Destination $tmp\boxlang-installer.zip -Force
+    }
+} else {
+    Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® Quick Installer from $INSTALLER_URL"
+    Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $tmp\boxlang-installer.zip -ErrorAction Stop
 }
 
-# download quick-installer
-Write-Host -ForegroundColor Blue "📥 Downloading BoxLang® Quick Installer from $INSTALLER_URL"
-Remove-Item -Path $tmp\boxlang-installer.zip -ErrorAction SilentlyContinue -Force
-try {
-	Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $tmp\boxlang-installer.zip -ErrorAction Stop
-}
-catch {
-	Write-Host -ForegroundColor Red "❌ Error: Download of BoxLang® Quick Installer failed"
-	Write-Host -ForegroundColor Red $_.Exception.Message
-	exit 1
-}
-
-# Unpacking the Assets
-Write-Host -ForegroundColor Green "📦 Unzipping BoxLang"
-try {
+# Unpack ZIP assets and copy local script directories.
+if (Test-Path $tmp\boxlang.zip) {
+    Write-Host -ForegroundColor Green "📦 Unzipping BoxLang"
     Expand-Archive -Path $tmp\boxlang.zip -DestinationPath $INSTALLATION_FOLDER -Force -ErrorAction Stop
 }
-catch {
-    Write-Host -ForegroundColor Red "❌ Error: Failed to extract BoxLang archive"
-    Write-Host -ForegroundColor Red $_.Exception.Message
-    exit 1
-}
-Write-Host -ForegroundColor Green "📦 Unzipping BoxLang MiniServer"
-try {
+if (Test-Path $tmp\boxlang-miniserver.zip) {
+    Write-Host -ForegroundColor Green "📦 Unzipping BoxLang MiniServer"
     Expand-Archive -Path $tmp\boxlang-miniserver.zip -DestinationPath $INSTALLATION_FOLDER -Force -ErrorAction Stop
 }
-catch {
-    Write-Host -ForegroundColor Red "❌ Error: Failed to extract BoxLang MiniServer archive"
-    Write-Host -ForegroundColor Red $_.Exception.Message
-    exit 1
-}
-Write-Host -ForegroundColor Green "📦 Unzipping BoxLang Quick Installer"
-try {
+if ($INSTALLER_SCRIPTS_PATH -and (Test-Path $INSTALLER_SCRIPTS_PATH -PathType Container)) {
+    Write-Host -ForegroundColor Green "📋 Copying local installer scripts"
+    New-Item -Type Directory -Path $DESTINATION_BIN -Force | Out-Null
+    Copy-Item -Path (Join-Path $INSTALLER_SCRIPTS_PATH "*") -Destination $DESTINATION_BIN -Recurse -Force
+} elseif (Test-Path $tmp\boxlang-installer.zip) {
+    Write-Host -ForegroundColor Green "📦 Unzipping BoxLang Quick Installer"
     Expand-Archive -Path $tmp\boxlang-installer.zip -DestinationPath $DESTINATION_BIN -Force -ErrorAction Stop
 }
-catch {
-    Write-Host -ForegroundColor Red "❌ Error: Failed to extract BoxLang Quick Installer archive"
-    Write-Host -ForegroundColor Red $_.Exception.Message
-    exit 1
+
+# Local JARs need launchers because they do not contain the ZIP runtime scripts.
+if ([System.IO.Path]::GetExtension($BOXLANG_PATH) -ieq ".jar") {
+    Set-Content -Path (Join-Path $DESTINATION_BIN "boxlang.bat") -Encoding ASCII -Value "@echo off`r`njava -jar `"$DESTINATION_LIB\boxlang.jar`" %*"
+}
+if ([System.IO.Path]::GetExtension($MINISERVER_PATH) -ieq ".jar") {
+    Set-Content -Path (Join-Path $DESTINATION_BIN "boxlang-miniserver.bat") -Encoding ASCII -Value "@echo off`r`njava -jar `"$DESTINATION_LIB\boxlang-miniserver.jar`" %*"
 }
 
 # Create Aliases
 Write-Host -ForegroundColor Blue "🔗 Creating symbolic links for executables..."
 try {
-    Remove-Item -Force -ErrorAction SilentlyContinue -Path $INSTALLATION_FOLDER\bin\bx.bat | Out-Null
-    New-Item -ItemType SymbolicLink -Target $INSTALLATION_FOLDER\bin\boxlang.bat -Path $INSTALLATION_FOLDER\bin\bx.bat | Out-Null
+    $boxLangBin = Join-Path -Path $INSTALLATION_FOLDER -ChildPath "bin"
+    $boxLangPath = Join-Path -Path $boxLangBin -ChildPath "boxlang.bat"
+    $boxLangAliasPath = Join-Path -Path $boxLangBin -ChildPath "bx.bat"
+    Remove-Item -Force -ErrorAction SilentlyContinue -Path $boxLangAliasPath | Out-Null
+    New-Item -ItemType SymbolicLink -Target $boxLangPath -Path $boxLangAliasPath -ErrorAction Stop | Out-Null
 
-    Remove-Item -Force -ErrorAction SilentlyContinue -Path $INSTALLATION_FOLDER\bin\bx-miniserver.bat | Out-Null
-    New-Item -ItemType SymbolicLink -Target $INSTALLATION_FOLDER\bin\boxlang-miniserver.bat -Path $INSTALLATION_FOLDER\bin\bx-miniserver.bat | Out-Null
+    $miniServerPath = Join-Path -Path $boxLangBin -ChildPath "boxlang-miniserver.bat"
+    $miniServerAliasPath = Join-Path -Path $boxLangBin -ChildPath "bx-miniserver.bat"
+    Remove-Item -Force -ErrorAction SilentlyContinue -Path $miniServerAliasPath | Out-Null
+    New-Item -ItemType SymbolicLink -Target $miniServerPath -Path $miniServerAliasPath -ErrorAction Stop | Out-Null
 }
 catch {
     Write-Host -ForegroundColor Red "Oh no! We weren't able to setup symlinks for the executables."
@@ -852,10 +949,9 @@ catch {
 }
 
 # Install CommandBox
-Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
+$null = Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
 
 # Create bin directory in BoxLang home for module executables
-$BOXLANG_HOME_BIN = Join-Path $env:USERPROFILE ".boxlang\bin"
 Write-Host -ForegroundColor Blue "📁 Creating BoxLang home bin directory..."
 if (-not (Test-Path $BOXLANG_HOME_BIN)) {
     New-Item -Path $BOXLANG_HOME_BIN -ItemType Directory -Force | Out-Null
@@ -867,17 +963,25 @@ Update-PathVariable -BinDir $DESTINATION_BIN -BoxLangHomeBin $BOXLANG_HOME_BIN
 
 ## Create a BOXLANG_HOME env variable that points to the $DESTINATION_HOME
 Write-Host -ForegroundColor Green "🏠 Setting the BOXLANG_HOME environment variable to [$DESTINATION_HOME]"
-[Environment]::SetEnvironmentVariable(
-	"BOXLANG_HOME",
-	$DESTINATION_HOME,
-	[EnvironmentVariableTarget]::User) | Out-Null
+try {
+    [Environment]::SetEnvironmentVariable(
+        "BOXLANG_HOME",
+        $DESTINATION_HOME,
+        [EnvironmentVariableTarget]::User) | Out-Null
+}
+catch {
+    Write-Host -ForegroundColor Yellow "⚠️  BoxLang was installed, but Windows blocked setting BOXLANG_HOME."
+    Write-Host -ForegroundColor Blue "💡 Set BOXLANG_HOME to [$DESTINATION_HOME] in your User environment variables."
+}
 
 ## Clean up
 Write-Host -ForegroundColor Green "🧹 Cleaning up..."
 Remove-Item -Force -ErrorAction SilentlyContinue -Path $tmp -Recurse | Out-Null
 
 ## Verify installation
-Test-Installation -BinDir $DESTINATION_BIN
+if (-not (Test-Installation -BinDir $DESTINATION_BIN)) {
+    exit 1
+}
 
 ## Finalization
 Write-Host -ForegroundColor Green ''

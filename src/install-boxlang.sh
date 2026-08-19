@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/bin/sh
+# IMPORTANT: This script intentionally targets POSIX /bin/sh.
+# Do not change the shebang back to Bash or reintroduce Bash-only syntax.
+# It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
 
 # BoxLang Installer Script
 # This script helps install BoxLang® runtime and tools on your system.
@@ -23,27 +26,33 @@ fi
 # Global Variables
 INSTALLER_VERSION="@build.version@"
 TEMP_DIR="${TMPDIR:-/tmp}"
-# empty = prompt, true = install, false = skip
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# prompt = ask, automatic = install, skip = require Java without installing it
 INSTALL_COMMANDBOX=""
-INSTALL_JRE=""
+JAVA_INSTALL_MODE="prompt"
+NON_INTERACTIVE=false
+# local paths to skip downloads (empty = download from remote)
+BOXLANG_PATH=""
+MINISERVER_PATH=""
+INSTALLER_SCRIPTS_PATH=""
+
+if [ ! -t 0 ]; then
+	NON_INTERACTIVE=true
+fi
+
+for arg in "$@"; do
+	if [ "$arg" = "--non-interactive" ]; then
+		NON_INTERACTIVE=true
+	fi
+done
 
 ###########################################################################
 # Get current BoxLang install home
 ###########################################################################
 get_boxlang_install_home(){
 	# Check common installation locations
-	local possible_locations=(
-		"/usr/local/boxlang"
-		"$HOME/.local/boxlang"
-	)
-
-	# Add BOXLANG_INSTALL_HOME if set
-	if [ -n "$BOXLANG_INSTALL_HOME" ]; then
-    	possible_locations+=("$BOXLANG_INSTALL_HOME")
-	fi
-
-	for location in "${possible_locations[@]}"; do
-		if [ -d "$location" ]; then
+	for location in "/usr/local/boxlang" "$HOME/.local/boxlang" "${BOXLANG_INSTALL_HOME:-}"; do
+		if [ -n "$location" ] && [ -d "$location" ]; then
 			echo "$location"
 			return 0
 		fi
@@ -57,13 +66,10 @@ get_boxlang_install_home(){
 # Check if helpers exist in BoxLang installation directory
 boxlang_home=$(get_boxlang_install_home)
 if [ -n "$boxlang_home" ] && [ -f "$boxlang_home/scripts/helpers/helpers.sh" ]; then
-	source "$boxlang_home/scripts/helpers/helpers.sh"
-elif [ -f "$(dirname "$0")/helpers/helpers.sh" ]; then
+	. "$boxlang_home/scripts/helpers/helpers.sh"
+elif [ -f "$SCRIPT_DIR/helpers/helpers.sh" ]; then
 	# Source helpers from relative path (development/local setup)
-	source "$(dirname "$0")/helpers/helpers.sh"
-elif [ -f "${BASH_SOURCE%/*}/helpers/helpers.sh" ]; then
-	# Source helpers from script directory (when run via symlink)
-	source "${BASH_SOURCE%/*}/helpers/helpers.sh"
+	. "$SCRIPT_DIR/helpers/helpers.sh"
 else
 	# Download helpers.sh if it doesn't exist locally
 	printf "${BLUE}⬇️ Downloading helper functions...${NORMAL}\n"
@@ -72,7 +78,7 @@ else
 
 	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
 		chmod +x "$helpers_file"
-		source "$helpers_file"
+		. "$helpers_file"
 		print_success "Helper functions downloaded successfully"
 	else
 		printf "${RED}🔴 Error: Failed to download helper functions from [$helpers_url] to [${TEMP_DIR}]${NORMAL}\n"
@@ -88,20 +94,12 @@ get_current_version() {
 	local current_version=""
 
 	# Try to find BoxLang in common locations
-	local boxlang_candidates=(
-		"boxlang"                              # In PATH
-		"/usr/local/bin/boxlang"               # System install (symbolic link)
-		"$HOME/.local/bin/boxlang"             # User install (symbolic link)
-		"/usr/local/boxlang/bin/boxlang"       # System BoxLang installation
-		"$HOME/.local/boxlang/bin/boxlang"     # User BoxLang installation
-	)
-
-	# Add BOXLANG_INSTALL_HOME if set
-	if [ -n "$BOXLANG_INSTALL_HOME" ]; then
-    	boxlang_candidates+=("$BOXLANG_INSTALL_HOME/bin/boxlang")
+	local boxlang_candidates="boxlang /usr/local/bin/boxlang $HOME/.local/bin/boxlang /usr/local/boxlang/bin/boxlang $HOME/.local/boxlang/bin/boxlang"
+	if [ -n "${BOXLANG_INSTALL_HOME:-}" ]; then
+		boxlang_candidates="$boxlang_candidates $BOXLANG_INSTALL_HOME/bin/boxlang"
 	fi
 
-	for candidate in "${boxlang_candidates[@]}"; do
+	for candidate in $boxlang_candidates; do
 		if command_exists "$candidate" || [ -x "$candidate" ]; then
 			local version_output=$("$candidate" --version 2>/dev/null || echo "")
 			if [ -n "$version_output" ]; then
@@ -183,8 +181,12 @@ check_for_updates() {
 			;;
 		2)
 			print_warning "🆙 A newer version of BoxLang is available!"
-			print_info "Would you like to update to version ${latest_version}? [Y/n]"
-			read -r response < /dev/tty
+			if [ "$NON_INTERACTIVE" = true ]; then
+				response=""
+			else
+				print_info "Would you like to update to version ${latest_version}? [Y/n]"
+				read -r response < /dev/tty
+			fi
 			case "$response" in
 				[nN][oO]|[nN])
 					print_warning "Update cancelled"
@@ -208,6 +210,11 @@ check_or_set_path() {
 	local bin_dir="$1"
 	local install_home="$2"
 	local boxlang_home_bin="${3:-}"
+	local current_shell="${SHELL##*/}"
+	local is_wsl=false
+	if [ -f /proc/version ] && grep -qi microsoft /proc/version; then
+		is_wsl=true
+	fi
 	# Detect the appropriate shell profile file using helper function
 	local profile_file=$(get_shell_profile_file)
 
@@ -237,7 +244,7 @@ check_or_set_path() {
 	fi
 
 	# Check if BOXLANG_INSTALL_HOME is already set in the profile
-	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file" ]; then
+	if [ -f "$profile_file" ] && grep -Fq "BOXLANG_INSTALL_HOME" "$profile_file"; then
 		install_home_exists=true
 	fi
 
@@ -337,6 +344,10 @@ check_and_install_commandbox() {
 	local system_bin="$1"
 	local boxlang_bin="$2"
 
+	if [ "$INSTALL_COMMANDBOX" = "false" ]; then
+		return 0
+	fi
+
 	print_info "🔍 Checking for CommandBox..."
 
 	# Check if CommandBox is already available
@@ -354,13 +365,14 @@ check_and_install_commandbox() {
 	if [ "$INSTALL_COMMANDBOX" = "true" ]; then
 		should_install="yes"
 		print_info "📦 Installing CommandBox (auto-install enabled)..."
-	elif [ "$INSTALL_COMMANDBOX" = "false" ]; then
-		should_install="no"
-		print_info "⏭️  Skipping CommandBox installation (--without-commandbox specified)"
 	else
 		# Interactive mode - ask user
-		print_info "❓ Would you like to install CommandBox? [Y/n]"
-		read -r response < /dev/tty
+		if [ "$NON_INTERACTIVE" = true ]; then
+			response=""
+		else
+			print_info "❓ Would you like to install CommandBox? [Y/n]"
+			read -r response < /dev/tty
+		fi
 		case "$response" in
 			[nN][oO]|[nN])
 				should_install="no"
@@ -422,9 +434,21 @@ verify_installation() {
 	print_info "🔍 Verifying installation..."
 
 	# Make sure BoxLang binary can emit version information
-	if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
+	if [ ! -x "${bin_dir}/boxlang" ]; then
 		print_error "BoxLang installation verification failed"
 		return 1
+	fi
+	local verify_binary=true
+	if [ "$JAVA_INSTALL_MODE" = "skip" ]; then
+		case "$BOXLANG_PATH" in
+			*.jar) verify_binary=false ;;
+		esac
+	fi
+	if [ "$verify_binary" = true ]; then
+		if ! "${bin_dir}/boxlang" --version >/dev/null 2>&1; then
+			print_error "BoxLang installation verification failed"
+			return 1
+		fi
 	fi
 
 	# Check system symbolic links
@@ -539,9 +563,13 @@ show_help() {
 	printf "  --force           	Force reinstallation even if already installed\n"
 	printf "  --with-commandbox 	Install CommandBox without prompting\n"
 	printf "  --without-commandbox 	Skip CommandBox installation\n"
+	printf "  --non-interactive 	Never prompt for input (also enabled when input is redirected)\n"
 	printf "  --with-jre        	Automatically install Java 21 JRE if not found\n"
 	printf "  --without-jre     	Skip Java installation (manual installation required)\n"
-	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n\n"
+	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n"
+	printf "  --boxlang-path <path>	Use local BoxLang zip instead of downloading\n"
+	printf "  --miniserver-path <path>	Use local MiniServer zip instead of downloading\n"
+	printf "  --installer-scripts-path <path>	Use local scripts zip or folder instead of downloading\n\n"
 	printf "${BOLD}EXAMPLES:${NORMAL}\n"
 	printf "  install-boxlang\n"
 	printf "  install-boxlang latest\n"
@@ -556,7 +584,8 @@ show_help() {
 	printf "  install-boxlang --yes\n"
 	printf "  install-boxlang --uninstall\n"
 	printf "  install-boxlang --check-update\n"
-	printf "  sudo install-boxlang --system\n\n"
+	printf "  sudo install-boxlang --system\n"
+	printf "  install-boxlang --boxlang-path ./boxlang.zip --miniserver-path ./miniserver.zip --installer-scripts-path ./scripts/\n\n"
 	printf "${BOLD}NON-INTERACTIVE USAGE:${NORMAL}\n"
 	printf "  🌐 Install with CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --with-commandbox${NORMAL}\n"
 	printf "  🌐 Install without CommandBox: ${GREEN}curl -fsSL https://boxlang.io/install.sh | bash -s -- --without-commandbox${NORMAL}\n"
@@ -595,23 +624,21 @@ remove_previous_installation() {
 # Handle the main installation
 ###########################################################################
 install_boxlang() {
-	local args=("$@")
-
 	# Check for --force flag in any position and remove it from args
 	local FORCE_INSTALL=false
-	local new_args=()
-	for arg in "${args[@]}"; do
+	local TARGET_VERSION="latest"
+	local has_system=false
+	for arg in "$@"; do
 		if [ "$arg" = "--force" ]; then
 			FORCE_INSTALL=true
 		elif [ "$arg" = "--system" ]; then
-			new_args+=("$arg")
-		else
-			new_args+=("$arg")
+			has_system=true
+		elif [ "$TARGET_VERSION" = "latest" ]; then
+			TARGET_VERSION="$arg"
 		fi
 	done
 
 	# Check target version argument, this could be "latest", "snapshot", or a specific version like "1.2.0" or empty for latest
-	local TARGET_VERSION=${new_args[0]:-latest}
 	# If the version is "snapshot", always force it
 	if [ "$TARGET_VERSION" = "snapshot" ]; then
 		FORCE_INSTALL=true
@@ -619,9 +646,24 @@ install_boxlang() {
 
 	###########################################################################
 	# Pre-flight Checks
-	# This function checks for necessary tools and environment
+	# Build dependency list based on what's actually needed
 	###########################################################################
-	if ! preflight_check "$INSTALL_JRE"; then
+	local preflight_deps=""
+	# curl: only if any download will happen
+	if [ -z "$BOXLANG_PATH" ] || [ -z "$MINISERVER_PATH" ] || [ -z "$INSTALLER_SCRIPTS_PATH" ]; then
+		preflight_deps="curl"
+	elif [ "$INSTALL_COMMANDBOX" != "false" ] || [ "$JAVA_INSTALL_MODE" != "skip" ]; then
+		preflight_deps="curl"
+	fi
+	# unzip: only if any zip will be extracted
+	local need_unzip=false
+	case "$BOXLANG_PATH" in ""|*.zip) need_unzip=true;; esac
+	case "$MINISERVER_PATH" in ""|*.zip) need_unzip=true;; esac
+	if [ -z "$INSTALLER_SCRIPTS_PATH" ] || ( [ -n "$INSTALLER_SCRIPTS_PATH" ] && [ ! -d "$INSTALLER_SCRIPTS_PATH" ] ); then need_unzip=true; fi
+	if [ "$INSTALL_COMMANDBOX" != "false" ]; then need_unzip=true; fi
+	if $need_unzip; then preflight_deps="$preflight_deps unzip"; fi
+
+	if ! preflight_check "$JAVA_INSTALL_MODE" -- $preflight_deps; then
 		exit 1
 	fi
 
@@ -651,7 +693,9 @@ install_boxlang() {
 			print_success "No previous BoxLang installation found, proceeding with fresh install..."
 		fi
 	else
-		print_warning "🔄 Forcing reinstallation of BoxLang..."
+		if [ -d "${SYSTEM_HOME}" ]; then
+			print_warning "🔄 Forcing reinstallation of BoxLang..."
+		fi
 		remove_previous_installation || {
 			print_error "❌ Failed to remove previous installation, please see log for more information"
 			exit 1
@@ -661,7 +705,7 @@ install_boxlang() {
 	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
 	###########################################################################
-	if [ "$EUID" -ne 0 ] && [[ ! " ${new_args[@]} " =~ " --system " ]]; then
+	if [ "$(id -u)" -ne 0 ] && [ "$has_system" = false ]; then
 		printf "${BLUE}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
 		print_warning "🥸 Installing to user directory (~/.local) since not running as root"
 		print_info "💡 Use ${GREEN}'sudo install-boxlang.sh'${BLUE} for system-wide installation"
@@ -708,39 +752,120 @@ install_boxlang() {
 	###########################################################################
 	# Start the installation
 	###########################################################################
-	print_info "🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]"
-	print_warning "⌛ Downloading Please wait..."
-	print_info "${DOWNLOAD_URL}"
+	local installation_message="🎯 Installing BoxLang® ${GREEN}[${TARGET_VERSION}]${BLUE} to ${GREEN}[${SYSTEM_HOME}]"
+	if [ -n "$BOXLANG_PATH" ] || [ -n "$MINISERVER_PATH" ]; then
+		installation_message="🎯 Installing BoxLang® from local artifacts to ${GREEN}[${SYSTEM_HOME}]"
+	fi
+	print_info "$installation_message"
 
 	###########################################################################
-	# Download BoxLang
+	# Get BoxLang (local path or download)
 	###########################################################################
-	rm -f "${TEMP_DIR}"/boxlang.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
-		print_error "Error: Download of BoxLang® binary failed"
-		exit 1
-	}
-	# Download BoxLang MiniServer
-	rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
-		print_error "Error: Download of BoxLang® MiniServer binary failed"
-		exit 1
-	}
-	# Download BoxLang Installer Bundle
-	rm -f "${TEMP_DIR}"/boxlang-installer.zip
-	env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
-		print_error "Error: Download of BoxLang® Installer bundle failed"
-		exit 1
-	}
+	if [ -n "$BOXLANG_PATH" ]; then
+		case "$BOXLANG_PATH" in
+		*.jar)
+			print_info "📦 Using local BoxLang JAR: ${BOXLANG_PATH}"
+			mkdir -p "${DESTINATION_LIB}"
+			cp "$BOXLANG_PATH" "${DESTINATION_LIB}/"
+			;;
+		*)
+			print_info "📦 Using local BoxLang zip: ${BOXLANG_PATH}"
+			cp "$BOXLANG_PATH" "${TEMP_DIR}/boxlang.zip"
+			;;
+		esac
+	else
+		print_warning "⌛ Downloading BoxLang..."
+		print_info "${DOWNLOAD_URL}"
+		rm -f "${TEMP_DIR}"/boxlang.zip
+		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
+			print_error "Error: Download of BoxLang® binary failed"
+			exit 1
+		}
+	fi
 
 	###########################################################################
-	# Inflate them
+	# Get BoxLang MiniServer (local path or download)
 	###########################################################################
-	printf "\n"
-	print_info "🛺 Unzipping Assets to ${SYSTEM_HOME}..."
-	unzip -q -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
-	unzip -q -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
-	unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
+	if [ -n "$MINISERVER_PATH" ]; then
+		case "$MINISERVER_PATH" in
+		*.jar)
+			print_info "📦 Using local MiniServer JAR: ${MINISERVER_PATH}"
+			mkdir -p "${DESTINATION_LIB}"
+			cp "$MINISERVER_PATH" "${DESTINATION_LIB}/"
+			;;
+		*)
+			print_info "📦 Using local MiniServer zip: ${MINISERVER_PATH}"
+			cp "$MINISERVER_PATH" "${TEMP_DIR}/boxlang-miniserver.zip"
+			;;
+		esac
+	else
+		print_warning "⌛ Downloading BoxLang MiniServer..."
+		print_info "${DOWNLOAD_URL_MINISERVER}"
+		rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
+		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
+			print_error "Error: Download of BoxLang® MiniServer binary failed"
+			exit 1
+		}
+	fi
+
+	###########################################################################
+	# Get Installer Scripts (local path or download)
+	###########################################################################
+	if [ -n "$INSTALLER_SCRIPTS_PATH" ]; then
+		print_info "📦 Using local installer scripts: ${INSTALLER_SCRIPTS_PATH}"
+		if [ -d "$INSTALLER_SCRIPTS_PATH" ]; then
+			# Already extracted directory - will copy directly later
+			:
+		else
+			# Zip file - copy to temp for extraction
+			cp "$INSTALLER_SCRIPTS_PATH" "${TEMP_DIR}/boxlang-installer.zip"
+		fi
+	else
+		print_warning "⌛ Downloading installer scripts..."
+		print_info "${INSTALLER_URL}"
+		rm -f "${TEMP_DIR}"/boxlang-installer.zip
+		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
+			print_error "Error: Download of BoxLang® Installer bundle failed"
+			exit 1
+		}
+	fi
+
+	###########################################################################
+	# Extract locally supplied ZIP artifacts when present.
+	###########################################################################
+	if [ -f "${TEMP_DIR}/boxlang.zip" ] || [ -f "${TEMP_DIR}/boxlang-miniserver.zip" ] || { [ -z "$INSTALLER_SCRIPTS_PATH" ] || [ ! -d "$INSTALLER_SCRIPTS_PATH" ]; }; then
+		printf "\n"
+		print_info "🛺 Unzipping Assets to ${SYSTEM_HOME}..."
+	fi
+	if [ -f "${TEMP_DIR}/boxlang.zip" ]; then
+		unzip -q -o "${TEMP_DIR}"/boxlang.zip -d "${SYSTEM_HOME}"
+	fi
+	if [ -f "${TEMP_DIR}/boxlang-miniserver.zip" ]; then
+		unzip -q -o "${TEMP_DIR}"/boxlang-miniserver.zip -d "${SYSTEM_HOME}"
+	fi
+	if [ -n "$INSTALLER_SCRIPTS_PATH" ] && [ -d "$INSTALLER_SCRIPTS_PATH" ]; then
+		print_info "📋 Copying installer scripts from directory..."
+		mkdir -p "${SYSTEM_HOME}/scripts"
+		cp -r "${INSTALLER_SCRIPTS_PATH}/"* "${SYSTEM_HOME}/scripts/"
+	else
+		unzip -q -o "${TEMP_DIR}"/boxlang-installer.zip -d "${SYSTEM_HOME}/scripts"
+	fi
+	case "$BOXLANG_PATH" in
+	*.jar)
+		cat > "${DESTINATION_BIN}/boxlang" <<EOF
+#!/bin/sh
+exec java -jar "${SYSTEM_HOME}/lib/boxlang.jar" "\$@"
+EOF
+		;;
+	esac
+	case "$MINISERVER_PATH" in
+	*.jar)
+		cat > "${DESTINATION_BIN}/boxlang-miniserver" <<EOF
+#!/bin/sh
+exec java -jar "${SYSTEM_HOME}/lib/boxlang-miniserver.jar" "\$@"
+EOF
+		;;
+	esac
 
 	###########################################################################
 	# Make them executable
@@ -781,7 +906,8 @@ install_boxlang() {
 	verify_installation "$DESTINATION_BIN" "$SYSTEM_BIN"
 
 	# Create bin directory in BoxLang home for module executables
-	local BOXLANG_HOME_BIN="$HOME/.boxlang/bin"
+	local BOXLANG_HOME="${BOXLANG_HOME:-$HOME/.boxlang}"
+	local BOXLANG_HOME_BIN="$BOXLANG_HOME/bin"
 	print_info "📁 Creating BoxLang home bin directory..."
 	mkdir -p "$BOXLANG_HOME_BIN"
 	print_success "BoxLang home bin directory created at [$BOXLANG_HOME_BIN]"
@@ -793,7 +919,7 @@ install_boxlang() {
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
 	echo "🥊 BoxLang® Installation Directory: [${SYSTEM_HOME}]"
 	echo "🔗 System Links: [${SYSTEM_BIN}]"
-	echo "🏠 BoxLang® Home is now set to your user home [~/.boxlang] by default"
+	echo "🏠 Module executable directory: [${BOXLANG_HOME_BIN}]"
 	echo "${MAGENTA}✅ Remember you can check for updates at any time with: ${GREEN}install-boxlang --check-update${NORMAL}"
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"
@@ -814,7 +940,7 @@ install_boxlang() {
 ###########################################################################
 main() {
 	local command=""
-	local args=()
+	local install_argument=""
 
 	# Initialize colors at script startup
 	setup_colors
@@ -845,18 +971,33 @@ main() {
 				INSTALL_COMMANDBOX=false
 				;;
 			"--with-jre")
-				INSTALL_JRE=true
+				JAVA_INSTALL_MODE="automatic"
 				;;
 			"--without-jre")
-				INSTALL_JRE=false
+				JAVA_INSTALL_MODE="skip"
+				;;
+			"--boxlang-path")
+				BOXLANG_PATH="$2"
+				shift
+				;;
+			"--miniserver-path")
+				MINISERVER_PATH="$2"
+				shift
+				;;
+			"--installer-scripts-path")
+				INSTALLER_SCRIPTS_PATH="$2"
+				shift
 				;;
 			"--yes"|"-y")
 				# Setup all defaults here.
 				INSTALL_COMMANDBOX=true
-				INSTALL_JRE=true
+				JAVA_INSTALL_MODE="automatic"
+				;;
+			"--non-interactive")
+				NON_INTERACTIVE=true
 				;;
 			*)
-				args+=("$1")
+				install_argument="$1"
 				;;
 		esac
 		shift
@@ -879,7 +1020,11 @@ main() {
 			check_for_updates
 			;;
 		"install")
-			install_boxlang "${args[@]}"
+			if [ -n "$install_argument" ]; then
+				install_boxlang "$install_argument"
+			else
+				install_boxlang
+			fi
 			;;
 		"version")
 			# Print the installer version

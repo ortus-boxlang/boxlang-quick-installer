@@ -206,6 +206,7 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 --list [--local]"
     Write-Host "  install-bx-module.ps1 --outdated [--local]"
     Write-Host "  install-bx-module.ps1 --update [--force] [--local]"
+    Write-Host "  install-bx-module.ps1 (no arguments, run from a directory with a box.json)"
     Write-Host "  install-bx-module.ps1 --help"
     Write-Host ""
     Write-Host "Arguments:" -ForegroundColor DarkYellow
@@ -236,6 +237,7 @@ function Show-Help {
     Write-Host "  install-bx-module.ps1 --outdated --local"
     Write-Host "  install-bx-module.ps1 --update"
     Write-Host "  install-bx-module.ps1 --update --force --local"
+    Write-Host "  install-bx-module.ps1"
     Write-Host ""
     Write-Host "Notes:" -ForegroundColor DarkYellow
     Write-Host "  - If no version is specified, the latest version from FORGEBOX will be installed"
@@ -244,6 +246,8 @@ function Show-Help {
     Write-Host "  - Use --local to work with modules in current directory's boxlang_modules folder"
     Write-Host "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)"
     Write-Host "  - Requires PowerShell to be installed"
+    Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified, including `"be`" or `"snapshot`")"
+    Write-Host "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists"
 }
 
 function Set-BoxJsonDependency {
@@ -592,8 +596,43 @@ function Get-LatestVersionFromForgebox {
     }
 }
 
+function Install-ModuleDependencies {
+    param(
+        [PSCustomObject]$BoxJson,
+        [string[]]$Visited
+    )
+
+    if (-not $BoxJson -or -not $BoxJson.dependencies) { return }
+
+    $depNames = $BoxJson.dependencies.PSObject.Properties.Name
+    if (-not $depNames -or $depNames.Count -eq 0) { return }
+
+    $depNoun = if ($depNames.Count -eq 1) { "dependency" } else { "dependencies" }
+    Write-Host "🔗 Found $($depNames.Count) module $depNoun, installing..." -ForegroundColor Blue
+
+    foreach ($depName in $depNames) {
+        if ($Visited -contains $depName) {
+            Write-Host "⚠️  Skipping circular dependency: $depName" -ForegroundColor Yellow
+            continue
+        }
+
+        $depVersion = $BoxJson.dependencies.$depName
+        $depInput = if (-not $depVersion -or $depVersion -eq "*" -or $depVersion -eq "null") {
+            $depName
+        } else {
+            "$depName@$depVersion"
+        }
+
+        Write-Host "📦 Installing dependency: $depInput" -ForegroundColor Green
+        Install-Module -moduleName $depInput -Visited $Visited
+    }
+}
+
 function Install-Module {
-    param([string]$moduleName)
+    param(
+        [string]$moduleName,
+        [string[]]$Visited = @()
+    )
 
     $targetModule = ""
     $targetVersion = ""
@@ -769,6 +808,9 @@ boxlang module:$moduleName %*
                         }
                     }
                 }
+
+                # Install any module dependencies declared in box.json
+                Install-ModuleDependencies -BoxJson $boxJson -Visited ($Visited + $targetModule)
             } catch {
                 # Silently ignore box.json parsing errors
             }
@@ -857,14 +899,6 @@ function Remove-Module {
 
 # Main execution starts here
 
-# Check if no arguments are passed
-if ($args.Count -eq 0) {
-    Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
-    Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
-	Show-Help
-    exit 1
-}
-
 # Show help if requested
 if ($args[0] -eq "--help" -or $args[0] -eq "-h") {
     Show-Help
@@ -874,7 +908,10 @@ if ($args[0] -eq "--help" -or $args[0] -eq "-h") {
 # Handle --list command (can be used with --local)
 if ($args[0] -eq "--list") {
     $LIST_MODE = $true
-    $remainingArgs = $args[1..($args.Count-1)]
+    $remainingArgs = @()
+    if ($args.Count -gt 1) {
+        $remainingArgs = $args[1..($args.Count-1)]
+    }
 
     # Check if --local is specified with --list
     $LOCAL_LIST = $false
@@ -988,7 +1025,10 @@ $currentArgs = $args
 # Check if --remove is the first argument
 if ($args[0] -eq "--remove") {
     $REMOVE_MODE = $true
-    $currentArgs = $args[1..($args.Count-1)]
+    $currentArgs = @()
+    if ($args.Count -gt 1) {
+        $currentArgs = $args[1..($args.Count-1)]
+    }
 
     # Check for --force flag
     if ($currentArgs -contains "--force") {
@@ -1041,13 +1081,38 @@ if ($REMOVE_MODE) {
     exit 0
 }
 
+# No module names were given (either no arguments at all, or only --local).
+# If a box.json exists in the current directory, treat it as a project
+# manifest and install the dependencies it declares (similar to running
+# `npm install` with no arguments), honoring --local/BoxLang HOME just like a
+# normal install would.
+$modules = Parse-ModuleList $currentArgs
+if ($modules.Count -eq 0) {
+    $projectBoxJsonPath = Join-Path (Get-Location) "box.json"
+    if (Test-Path $projectBoxJsonPath) {
+        Write-Host "📄 Found box.json in $(Get-Location), installing its declared dependencies..." -ForegroundColor Yellow
+        try {
+            $projectBoxJson = Get-Content $projectBoxJsonPath -Raw | ConvertFrom-Json
+            Install-ModuleDependencies -BoxJson $projectBoxJson -Visited @()
+        } catch {
+            Write-Host "❌ Error: Failed to parse box.json: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
+        }
+        exit 0
+    }
+
+    Write-Host "❌ Error: No module(s) specified" -ForegroundColor Red
+    Write-Host "💡 This script installs or removes BoxLang modules." -ForegroundColor Yellow
+    Show-Help
+    exit 1
+}
+
 # Inform about local installation
 if ($LOCAL_INSTALL) {
     Write-Host "📍 Installing modules locally in $(Get-Location)\boxlang_modules" -ForegroundColor Yellow
 }
 
-# Parse comma/space-delimited module list and install
-$modules = Parse-ModuleList $currentArgs
+# Install the parsed comma/space-delimited module list
 foreach ($module in $modules) {
     if ($module) {
         Write-Host "🚀 Starting installation of module: $module" -ForegroundColor Green

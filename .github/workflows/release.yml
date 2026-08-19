@@ -1,26 +1,27 @@
 name: BoxLang Quick Installers Release
 
 on:
-  # If you push to main this will trigger a stable release
-  push:
+  workflow_run:
+    workflows: [Test Installers]
+    types: [completed]
     branches:
       - main
       - development
-
   workflow_dispatch:
 
 # Cancel running builds if another push to branch is made while this build is running
 concurrency:
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
     cancel-in-progress: true
 
 env:
-  # if 'development' it's true, then it's a snapshot build
-  SNAPSHOT: ${{ github.ref == 'refs/heads/development' }}
+  RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+  SNAPSHOT: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'development' }}
 
 jobs:
   publish:
     name: Build & Publish
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     # add write permissions
     permissions:
@@ -29,13 +30,15 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Read Version File
         id: version
         run: |
           INSTALLER_VERSION=$(jq -r '.INSTALLER_VERSION' version.json)
           echo "INSTALLER_VERSION=${INSTALLER_VERSION}" >> $GITHUB_ENV
-          echo "image_version=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
+          echo "installer_version=${INSTALLER_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Update changelog [unreleased] with latest version
         uses: thomaseizinger/keep-a-changelog-new-release@3.1.0
@@ -43,7 +46,7 @@ jobs:
         if: env.SNAPSHOT == 'false'
         with:
           changelogPath: ./changelog.md
-          tag: v${{ env.INSTALLER_VERSION }}
+          tag: v${{ steps.version.outputs.installer_version }}
 
       - name: Fix Markdown on Changelog
         if: env.SNAPSHOT == 'false'
@@ -61,16 +64,16 @@ jobs:
         with:
           author_name: Github Actions
           author_email: lmajano@ortussolutions.com
-          message: "Finalized changelog for v${{ env.INSTALLER_VERSION }}"
+          message: "Finalized changelog for v${{ steps.version.outputs.installer_version }}"
           add: changelog.md
 
       - name: Tag Version
         uses: rickstaa/action-create-tag@v1.7.2
         if: env.SNAPSHOT == 'false'
         with:
-          tag: "v${{ env.INSTALLER_VERSION }}"
+          tag: "v${{ steps.version.outputs.installer_version }}"
           force_push_tag: true
-          message: "Latest Release v${{ env.INSTALLER_VERSION }}"
+          message: "Latest Release v${{ steps.version.outputs.installer_version }}"
 
       - name: Upload Build Artifacts
         if: success()
@@ -94,7 +97,7 @@ jobs:
           DEST_DIR: ${{ env.SNAPSHOT == 'true' && 'ortussolutions/boxlang-quick-installer/snapshot/' || 'ortussolutions/boxlang-quick-installer' }}
 
       - name: Invalidate CloudFront Cache
-        if: github.ref == 'refs/heads/main'
+        if: env.RELEASE_BRANCH == 'main'
         continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
@@ -111,10 +114,10 @@ jobs:
         continue-on-error: true
         id: create_release
         with:
-          title: ${{ env.INSTALLER_VERSION }}
+          title: ${{ steps.version.outputs.installer_version }}
           changelog: changelog.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/tags/v${{ env.INSTALLER_VERSION }}
+          ref: refs/tags/v${{ steps.version.outputs.installer_version }}
 
       - name: Inform Slack
         if: ${{ always() }}
@@ -123,7 +126,7 @@ jobs:
           SLACK_CHANNEL: coding
           SLACK_COLOR: ${{ job.status }} # or a specific color like 'green' or '#ff00ff'
           SLACK_ICON_EMOJI: ":bell:"
-          SLACK_MESSAGE: "BoxLang ${{ env.INSTALLER_VERSION }} Built with ${{ job.status }}!"
+          SLACK_MESSAGE: "BoxLang ${{ steps.version.outputs.installer_version }} Built with ${{ job.status }}!"
           SLACK_TITLE: "BoxLang Build"
           SLACK_USERNAME: CI
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -133,7 +136,7 @@ jobs:
   ##########################################################################################
   prep_next_release:
     name: Prep Next Release
-    if: github.ref != 'refs/heads/development'
+    if: needs.publish.result == 'success' && (github.event.workflow_run.head_branch || github.ref_name) != 'development'
     runs-on: ubuntu-latest
     needs: [publish]
     # add write permissions
@@ -176,7 +179,7 @@ jobs:
   ##########################################################################################
   notify_homebrew:
     name: Notify Homebrew Tap
-    if: github.ref != 'refs/heads/development'
+    if: needs.publish.result == 'success' && (github.event.workflow_run.head_branch || github.ref_name) != 'development'
     runs-on: ubuntu-latest
     needs: [publish]
     permissions: {}
