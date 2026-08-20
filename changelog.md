@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-08-20
+
 ### Added
 
 - Added `--non-interactive` to the BoxLang installers. It skips prompts using their existing defaults and is enabled automatically when standard input is redirected.
@@ -484,7 +486,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.32.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.33.0...HEAD
+[1.33.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.32.0...v1.33.0
 [1.32.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.30.0...v1.31.0
 [1.30.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.29.0...v1.30.0
