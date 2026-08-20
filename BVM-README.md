@@ -19,10 +19,10 @@ BVM is an advanced version manager for BoxLang, similar to `jenv` or `nvm`. It a
 - 🏢 Are setting up production servers with a specific BoxLang version
 - ⚡ Want the fastest installation with minimal overhead
 
-**Both installers provide identical functionality:**
+**Both installers provide the same core functionality:**
 
 - ✅ Same BoxLang runtime and MiniServer
-- ✅ Same helper scripts (`install-bx-module`, `install-bx-site`, etc.)
+- ✅ Same helper scripts (`install-bx-module`, `install-bx-site`, etc.; `install-bx-site` is still in development)
 - ✅ Same command-line tools (`boxlang`, `bx`, `boxlang-miniserver`, etc.)
 - ✅ Same installation quality and reliability
 
@@ -40,7 +40,7 @@ The only difference is that BVM adds version management capabilities on top.
 - 🚀 **Execute BoxLang components** - run BoxLang, MiniServer through BVM with version management
 - 🔗 **Seamless integration** - wrapper scripts make all tools available in PATH
 - ⚡ **Command aliases** - convenient short aliases for all major commands
-- 🛠️ **Helper script integration** - all BoxLang helper scripts work with active version
+- 🛠️ **Helper script integration** - BoxLang helper scripts work with the active version; `install-bx-site` is still in development
 - 📦 **Module dependency tracking** - module installs and removals maintain a `box.json` manifest
 - 🔄 **Module updates** - find outdated modules with `--outdated` and update them with `--update`
 - 🎯 **Smart version detection** - automatically detects actual version numbers from installations
@@ -52,6 +52,18 @@ The only difference is that BVM adds version management capabilities on top.
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
 
 ## 🚀 Quick Start
+
+```bash
+# Install BVM and add its initialization to your shell profile
+curl -fsSL https://install-bvm.boxlang.io | bash
+
+# Start a new terminal or reload the profile, then install and activate BoxLang
+bvm install latest
+bvm use latest
+boxlang --version
+```
+
+For a local checkout, run `./src/install-bvm.sh --local` from the project root.
 
 ## 📋 Prerequisites
 
@@ -838,14 +850,18 @@ boxlang --version
 
 - Close and reopen PowerShell or Command Prompt
 - Check that `%USERPROFILE%\.bvm\bin` is in your **User PATH**:
-  ```powershell
+
+```powershell
   [Environment]::GetEnvironmentVariable("Path", "User")
-  ```
+```
+
 - If missing, add it manually:
-  ```powershell
+
+```powershell
   $p = [Environment]::GetEnvironmentVariable("Path","User")
   [Environment]::SetEnvironmentVariable("Path","$p;$env:USERPROFILE\.bvm\bin","User")
-  ```
+```
+
 - Restart your terminal after making PATH changes
 
 ### Windows: `Access Denied` when installing or switching versions
@@ -856,9 +872,10 @@ boxlang --version
 ### Windows: `bvm.ps1 cannot be loaded because running scripts is disabled`
 
 - Run this once in an elevated PowerShell to allow scripts:
-  ```powershell
-  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-  ```
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
 ### BoxLang not found after switching versions
 
