@@ -66,7 +66,7 @@ The installer will attempt to install any missing prerequisites automatically, b
 
 - **POSIX-compatible `sh`** - Required shell execution environment
 - **curl** - For downloading releases
-- **PowerShell 6+** - Required for Windows installations
+- **PowerShell 5.1+** - Required for Windows installations
 
 **Alpine Linux** includes a compatible `sh`; install `curl` before using the remote installer.
 
@@ -194,6 +194,7 @@ Here are the available options for the install command.
 
 - **install-bx-module** - Install modules from ForgeBox.
 - **install-boxlang** - Single-version BoxLang installer, so you can reinstall, install specific versions, uninstall and more.
+- **install-bx-site** - Site-template installer script currently in development.
 
 ### Directory Structure
 
@@ -276,10 +277,10 @@ Non-Interactive Usage:
 install-boxlang
 
 # Install specific version
-install-boxlang --version 1.2.0
+install-boxlang 1.2.0
 
 # Install snapshot version
-install-boxlang --snapshot
+install-boxlang snapshot
 
 # ✨ NEW: Auto-install with Java (if not found)
 install-boxlang --with-jre
@@ -313,7 +314,7 @@ install-bx-module bx-orm
 install-bx-module bx-orm,bx-mail,bx-db
 
 # Install to specific directory
-install-bx-module bx-orm --directory ./modules
+install-bx-module bx-orm --local
 
 # Install specific version
 install-bx-module bx-orm@1.0.0
