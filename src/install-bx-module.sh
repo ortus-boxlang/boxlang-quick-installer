@@ -590,6 +590,24 @@ install_module_dependencies() {
 				;;
 		esac
 
+		# This installer only knows how to resolve plain ForgeBox module slugs.
+		# A box.json dependencies entry can also be a CommandBox-style Maven,
+		# URL, or git dependency (e.g. "org.jline:jline": "maven:org.jline:jline:3.21.0"),
+		# which this script cannot install. Detect those and skip them instead
+		# of attempting -- and always failing -- a ForgeBox lookup for them.
+		case "$dep_name" in
+			*:*)
+				printf "${YELLOW}⚠️  Skipping non-ForgeBox dependency '${dep_name}': not a plain module slug${NORMAL}\n"
+				continue
+				;;
+		esac
+		case "$dep_version" in
+			maven:*|http://*|https://*|git+*|file:*)
+				printf "${YELLOW}⚠️  Skipping non-ForgeBox dependency '${dep_name}': unsupported source '${dep_version}'${NORMAL}\n"
+				continue
+				;;
+		esac
+
 		local dep_input
 		if [ -z "$dep_version" ] || [ "$dep_version" = "null" ] || [ "$dep_version" = "*" ]; then
 			dep_input="${dep_name}"
@@ -598,7 +616,12 @@ install_module_dependencies() {
 		fi
 
 		printf "${GREEN}📦 Installing dependency: ${dep_input}${NORMAL}\n"
-		install_module "$dep_input" "${VISITED}"
+		# Run in a subshell so a hard `exit 1` inside install_module (e.g. a
+		# failed download) only ends this one dependency attempt, not the
+		# whole module installation.
+		if ! ( install_module "$dep_input" "${VISITED}" ); then
+			printf "${YELLOW}⚠️  Warning: Failed to install dependency '${dep_input}', continuing...${NORMAL}\n"
+		fi
 	done
 }
 

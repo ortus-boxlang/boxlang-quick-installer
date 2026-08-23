@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Updated GitHub Actions dispatch for homebrew
+- `install-bx-module` no longer aborts installing a module when one of its `box.json` `dependencies` entries is a CommandBox-style Maven/URL/git dependency (e.g. `"org.jline:jline": "maven:org.jline:jline:3.21.0"`) rather than a plain ForgeBox module slug. Those entries are now detected and skipped with a warning instead of being attempted -- and always failing -- as a ForgeBox install. A ForgeBox-looking dependency whose install genuinely fails (e.g. a transient download error) now also just warns and continues on to the remaining dependencies instead of failing the whole module installation.
 
 ## [1.33.0] - 2026-08-20
 
