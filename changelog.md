@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `install-bx-module` now installs bash completions declared by a module. A module's `box.json` can point `boxlang.completions` at a bash completion script shipped inside the module; on install it's copied to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`) and removed again when the module is removed. `bvm-init.sh` auto-sources every script in that directory in new Bash/Zsh sessions.
+
 ### Fixed
 
 - Updated GitHub Actions dispatch for homebrew

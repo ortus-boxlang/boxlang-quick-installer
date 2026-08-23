@@ -361,6 +361,123 @@ EOF
 }
 
 ###########################################################################
+# Tests for install_module_completions / remove_module_completions
+###########################################################################
+
+test_install_module_completions_copies_declared_script() {
+    run_test_group "install_module_completions with a declared completions script"
+
+    local MODULE_DIR="$TEST_TMP/module-with-completions"
+    mkdir -p "$MODULE_DIR/completions"
+    echo '{"boxlang": {"completions": "completions/bx-demo.bash"}}' > "$MODULE_DIR/box.json"
+    printf '#!/usr/bin/env bash\ncomplete -F _bx_demo_complete bx-demo\n' > "$MODULE_DIR/completions/bx-demo.bash"
+
+    local BIN_JQ="$TEST_TMP/bin-jqcompl"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*completions*) echo "completions/bx-demo.bash" ;;
+	*) echo "" ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local BOXLANG_HOME="$TEST_TMP/boxlang-home-completions"
+    mkdir -p "$BOXLANG_HOME"
+
+    (
+        LOCAL_INSTALL=false
+        BOXLANG_HOME="$BOXLANG_HOME"
+        PATH="$BIN_JQ:$PATH"
+        install_module_completions "$MODULE_DIR" "bx-demo"
+    )
+
+    local installed_file="$BOXLANG_HOME/completions/bx-demo.sh"
+    assert_equals "1" "$([ -f "$installed_file" ] && echo 1 || echo 0)" "install_module_completions() copies the declared script into BOXLANG_HOME/completions"
+    assert_contains "_bx_demo_complete" "$(cat "$installed_file" 2>/dev/null)" "install_module_completions() preserves the completion script's content"
+}
+
+test_install_module_completions_warns_when_declared_file_missing() {
+    run_test_group "install_module_completions with a missing declared script"
+
+    local MODULE_DIR="$TEST_TMP/module-with-missing-completions"
+    mkdir -p "$MODULE_DIR"
+    echo '{"boxlang": {"completions": "completions/does-not-exist.bash"}}' > "$MODULE_DIR/box.json"
+
+    local BIN_JQ="$TEST_TMP/bin-jqcomplmissing"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*completions*) echo "completions/does-not-exist.bash" ;;
+	*) echo "" ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local BOXLANG_HOME="$TEST_TMP/boxlang-home-completions-missing"
+    mkdir -p "$BOXLANG_HOME"
+
+    local output rc
+    output=$(
+        LOCAL_INSTALL=false
+        BOXLANG_HOME="$BOXLANG_HOME"
+        PATH="$BIN_JQ:$PATH"
+        install_module_completions "$MODULE_DIR" "bx-demo" 2>&1
+    )
+    rc=$?
+
+    assert_return_code 0 "$rc" "install_module_completions() does not fail when the declared file is missing"
+    assert_contains "was not found in the module" "$output" "install_module_completions() warns when the declared completions file is missing"
+    assert_equals "0" "$([ -f "$BOXLANG_HOME/completions/bx-demo.sh" ] && echo 1 || echo 0)" "install_module_completions() installs nothing when the declared file is missing"
+}
+
+test_install_module_completions_noop_without_declaration() {
+    run_test_group "install_module_completions without a boxlang.completions declaration"
+
+    local MODULE_DIR="$TEST_TMP/module-without-completions"
+    mkdir -p "$MODULE_DIR"
+    echo '{"name": "bx-demo"}' > "$MODULE_DIR/box.json"
+
+    local BIN_JQ="$TEST_TMP/bin-jqcomplnone"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+echo ""
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local BOXLANG_HOME="$TEST_TMP/boxlang-home-completions-none"
+    mkdir -p "$BOXLANG_HOME"
+
+    (
+        LOCAL_INSTALL=false
+        BOXLANG_HOME="$BOXLANG_HOME"
+        PATH="$BIN_JQ:$PATH"
+        install_module_completions "$MODULE_DIR" "bx-demo"
+    )
+
+    assert_equals "0" "$([ -d "$BOXLANG_HOME/completions" ] && echo 1 || echo 0)" "install_module_completions() creates no completions directory without a declaration"
+}
+
+test_remove_module_completions_deletes_installed_script() {
+    run_test_group "remove_module_completions"
+
+    local BOXLANG_HOME="$TEST_TMP/boxlang-home-completions-remove"
+    mkdir -p "$BOXLANG_HOME/completions"
+    echo 'complete -F _bx_demo_complete bx-demo' > "$BOXLANG_HOME/completions/bx-demo.sh"
+
+    (
+        LOCAL_INSTALL=false
+        BOXLANG_HOME="$BOXLANG_HOME"
+        remove_module_completions "bx-demo"
+    )
+
+    assert_equals "0" "$([ -f "$BOXLANG_HOME/completions/bx-demo.sh" ] && echo 1 || echo 0)" "remove_module_completions() deletes the installed completion script"
+}
+
+###########################################################################
 # Tests for `main` with no arguments (project box.json auto-install)
 ###########################################################################
 
@@ -456,6 +573,10 @@ run_all_tests() {
     test_install_module_dependencies_installs_be_and_snapshot_versions
     test_install_module_dependencies_no_box_json
     test_install_module_dependencies_skips_circular_dependency
+    test_install_module_completions_copies_declared_script
+    test_install_module_completions_warns_when_declared_file_missing
+    test_install_module_completions_noop_without_declaration
+    test_remove_module_completions_deletes_installed_script
     test_main_no_args_installs_project_box_json_dependencies
     test_main_no_args_without_box_json_shows_usage_error
     test_main_local_flag_only_installs_project_box_json_dependencies_locally

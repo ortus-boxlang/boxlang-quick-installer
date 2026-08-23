@@ -34,3 +34,13 @@ export PATH
 if [ -s "$BVM_HOME/scripts/bvm-completions.sh" ]; then
     . "$BVM_HOME/scripts/bvm-completions.sh"
 fi
+
+# Load bash completions contributed by installed BoxLang modules (see
+# `boxlang.completions` in a module's box.json). Each module's script is
+# expected to self-register its own `complete` binding.
+if [ -n "${BASH_VERSION:-}${ZSH_VERSION:-}" ] && [ -d "$BOXLANG_HOME/completions" ]; then
+    for bx_completion_file in "$BOXLANG_HOME"/completions/*.sh; do
+        [ -f "$bx_completion_file" ] && . "$bx_completion_file"
+    done
+    unset bx_completion_file
+fi
