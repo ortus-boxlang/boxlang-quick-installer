@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `install-bx-module` now installs bash completions declared by a module. A module's `box.json` can point `boxlang.completions` at a bash completion script shipped inside the module; on install it's copied to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`) and removed again when the module is removed. `bvm-init.sh` auto-sources every script in that directory in new Bash/Zsh sessions.
+
+### Fixed
+
+- Updated GitHub Actions dispatch for homebrew
+- `install-bx-module` no longer aborts installing a module when one of its `box.json` `dependencies` entries is a CommandBox-style Maven/URL/git dependency (e.g. `"org.jline:jline": "maven:org.jline:jline:3.21.0"`) rather than a plain ForgeBox module slug. Those entries are now detected and skipped with a warning instead of being attempted -- and always failing -- as a ForgeBox install. A ForgeBox-looking dependency whose install genuinely fails (e.g. a transient download error) now also just warns and continues on to the remaining dependencies instead of failing the whole module installation.
+
+## [1.33.0] - 2026-08-20
+
+### Added
+
 - Added `--non-interactive` to the BoxLang installers. It skips prompts using their existing defaults and is enabled automatically when standard input is redirected.
 - `install-bx-module` now installs module dependencies automatically. When an installed module's own `box.json` declares a `dependencies` entry, each one is installed too: a `"*"` (or empty/null) version resolves to the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
 - Running `install-bx-module` with no module names now checks the current directory for a `box.json`. If one exists, its declared `dependencies` are installed, the same way `npm install` installs a project's dependencies with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). Without a `box.json` present, the usual usage error is shown.

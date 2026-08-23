@@ -116,6 +116,7 @@ show_help() {
 	printf "  - Requires curl and jq to be installed\n"
 	printf "  - Dependencies declared in a module's box.json are installed automatically (latest version for \"*\", otherwise the version specified, including \"be\" or \"snapshot\")\n"
 	printf "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists\n"
+	printf "  - A module can declare \"boxlang\": { \"completions\": \"<path-to-bash-completion-script>\" } in its box.json to have a bash completion script installed and auto-loaded in new shells\n"
 }
 
 list_modules() {
@@ -487,6 +488,9 @@ EOF
 				done
 			fi
 		fi
+
+		# Check for boxlang.completions (a bash completion script shipped with the module)
+		install_module_completions "${DESTINATION}" "${TARGET_MODULE}"
 	fi
 
 	# Install any module dependencies declared in the extracted module's box.json
@@ -497,6 +501,57 @@ EOF
 
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
+}
+
+# Resolves the shared completions directory for the current install mode
+# (global BoxLang HOME, or the local boxlang_modules folder with --local).
+completions_dir() {
+	if [ "$LOCAL_INSTALL" = true ]; then
+		echo "$(pwd)/boxlang_modules/.completions"
+	else
+		echo "${BOXLANG_HOME}/completions"
+	fi
+}
+
+# Reads a module's own box.json (as extracted to MODULE_DIR) and, if it
+# declares a `boxlang.completions` path (a bash completion script shipped
+# inside the module, relative to its root), copies that script into the
+# shared completions directory as "<module-name>.sh". bvm-init.sh sources
+# every script in that directory on shell startup, so the completion script
+# is expected to register itself (e.g. via `complete -F ... <command>`).
+install_module_completions() {
+	local MODULE_DIR=${1}
+	local MODULE_NAME=${2}
+	local BOX_JSON_PATH="${MODULE_DIR}/box.json"
+
+	[ -f "${BOX_JSON_PATH}" ] || return 0
+
+	local COMPLETIONS_REL
+	COMPLETIONS_REL=$(jq -r '.boxlang.completions // empty' "${BOX_JSON_PATH}" 2>/dev/null)
+	if [ -z "${COMPLETIONS_REL}" ] || [ "${COMPLETIONS_REL}" = "null" ]; then
+		return 0
+	fi
+
+	local COMPLETIONS_SRC="${MODULE_DIR}/${COMPLETIONS_REL}"
+	if [ ! -f "${COMPLETIONS_SRC}" ]; then
+		printf "${YELLOW}⚠️  Warning: box.json declares completions at '${COMPLETIONS_REL}' but the file was not found in the module${NORMAL}\n"
+		return 0
+	fi
+
+	local COMPLETIONS_DIR
+	COMPLETIONS_DIR=$(completions_dir)
+	mkdir -p "${COMPLETIONS_DIR}"
+	printf "${BLUE}⌨️  Installing bash completions for: ${MODULE_NAME}${NORMAL}\n"
+	cp "${COMPLETIONS_SRC}" "${COMPLETIONS_DIR}/${MODULE_NAME}.sh"
+	chmod 644 "${COMPLETIONS_DIR}/${MODULE_NAME}.sh"
+}
+
+# Removes any bash completion script previously installed for MODULE_NAME.
+remove_module_completions() {
+	local MODULE_NAME=${1}
+	local COMPLETIONS_DIR
+	COMPLETIONS_DIR=$(completions_dir)
+	rm -f "${COMPLETIONS_DIR}/${MODULE_NAME}.sh"
 }
 
 # Reads a module's own box.json (as extracted to MODULE_DIR) and installs any
@@ -535,6 +590,24 @@ install_module_dependencies() {
 				;;
 		esac
 
+		# This installer only knows how to resolve plain ForgeBox module slugs.
+		# A box.json dependencies entry can also be a CommandBox-style Maven,
+		# URL, or git dependency (e.g. "org.jline:jline": "maven:org.jline:jline:3.21.0"),
+		# which this script cannot install. Detect those and skip them instead
+		# of attempting -- and always failing -- a ForgeBox lookup for them.
+		case "$dep_name" in
+			*:*)
+				printf "${YELLOW}⚠️  Skipping non-ForgeBox dependency '${dep_name}': not a plain module slug${NORMAL}\n"
+				continue
+				;;
+		esac
+		case "$dep_version" in
+			maven:*|http://*|https://*|git+*|file:*)
+				printf "${YELLOW}⚠️  Skipping non-ForgeBox dependency '${dep_name}': unsupported source '${dep_version}'${NORMAL}\n"
+				continue
+				;;
+		esac
+
 		local dep_input
 		if [ -z "$dep_version" ] || [ "$dep_version" = "null" ] || [ "$dep_version" = "*" ]; then
 			dep_input="${dep_name}"
@@ -543,7 +616,12 @@ install_module_dependencies() {
 		fi
 
 		printf "${GREEN}📦 Installing dependency: ${dep_input}${NORMAL}\n"
-		install_module "$dep_input" "${VISITED}"
+		# Run in a subshell so a hard `exit 1` inside install_module (e.g. a
+		# failed download) only ends this one dependency attempt, not the
+		# whole module installation.
+		if ! ( install_module "$dep_input" "${VISITED}" ); then
+			printf "${YELLOW}⚠️  Warning: Failed to install dependency '${dep_input}', continuing...${NORMAL}\n"
+		fi
 	done
 }
 
@@ -603,6 +681,8 @@ remove_module() {
 		printf "${GREEN}✅ Module '${MODULE_NAME}' removed successfully!${NORMAL}\n"
 		# Untrack this module from the modules manifest
 		box_json_remove_dependency "${MODULES_HOME}/box.json" "${MODULE_NAME}"
+		# Remove any bash completions installed for this module
+		remove_module_completions "${MODULE_NAME}"
 	else
 		printf "${RED}❌ Error: Failed to remove module '${MODULE_NAME}'${NORMAL}\n"
 		exit 1

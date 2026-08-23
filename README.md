@@ -351,6 +351,32 @@ If an installed module's own `box.json` declares a `dependencies` entry, those d
 
 Running `install-bx-module` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
 
+#### Shipping Bash Completions With a Module
+
+A module can ship its own bash completion script and have it installed and auto-loaded automatically. In the module's `box.json`, point `boxlang.completions` at the completion script's path relative to the module root:
+
+```json
+{
+    "name": "bx-orm",
+    "boxlang": {
+        "completions": "completions/bx-orm.bash"
+    }
+}
+```
+
+The script itself (`completions/bx-orm.bash` in the example above) ships inside the module's zip like any other file, and is a normal bash completion script that registers itself, e.g.:
+
+```bash
+#!/usr/bin/env bash
+_bx_orm_complete() {
+    local current_word="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=($(compgen -W "migrate seed generate" -- "$current_word"))
+}
+complete -F _bx_orm_complete bx-orm
+```
+
+On install, `install-bx-module` copies that file to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`); removing the module deletes it again. Files in that directory are sourced automatically by `bvm-init.sh` in any new Bash or Zsh session, so no extra setup is needed beyond having BVM's shell initialization installed (see [Shell Initialization](BVM-README.md#-shell-initialization) in the BVM guide). To pick up completions for a module installed in the current terminal session without opening a new one, run `source ~/.bvm/scripts/bvm-init.sh` (or `source ~/.bashrc` / `source ~/.zshrc`).
+
 ## 🌐 Running Applications
 
 ### BoxLang Runtime

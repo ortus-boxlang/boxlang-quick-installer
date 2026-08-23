@@ -191,4 +191,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: Bearer ${{ secrets.GHA_WORKFLOW_DISPATCHER_PAT_BOXLANG }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            -d '{ "event_type":"installer-released" }'
+            -d '{ "ref":"main" }'
