@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-08-23
+
+## [1.33.0] - 2026-08-20
+
 ### Added
 
 - `install-bx-module` now installs bash completions declared by a module. A module's `box.json` can point `boxlang.completions` at a bash completion script shipped inside the module; on install it's copied to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`) and removed again when the module is removed. `bvm-init.sh` auto-sources every script in that directory in new Bash/Zsh sessions.
@@ -495,7 +499,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.33.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.34.0...HEAD
+[1.34.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.32.0...v1.33.0
 [1.32.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.31.0...v1.32.0
 [1.31.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.30.0...v1.31.0
