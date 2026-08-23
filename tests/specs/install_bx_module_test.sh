@@ -360,6 +360,91 @@ EOF
     set +e
 }
 
+test_install_module_dependencies_skips_non_forgebox_maven_dependency() {
+    run_test_group "install_module_dependencies with a Maven-style dependency"
+
+    local MODULE_DIR="$TEST_TMP/module-maven-dep"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"org.jline:jline": "maven:org.jline:jline:3.21.0", "bx-orm": "*"}}' > "$MODULE_DIR/box.json"
+
+    # Fake jq reporting a Maven coordinate dependency alongside a normal one
+    local BIN_JQ="$TEST_TMP/bin-jqmaven"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'org.jline:jline	maven:org.jline:jline:3.21.0
+bx-orm	*
+' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_maven.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE"
+    }
+
+    # A Maven coordinate is not a ForgeBox module slug and must be skipped
+    # (with a warning) rather than attempted -- and failed -- as one.
+    local output
+    output=$(PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "" 2>&1)
+
+    assert_contains "Skipping non-ForgeBox dependency" "$output" "install_module_dependencies() reports a skipped Maven dependency"
+    assert_not_contains "org.jline:jline" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not attempt to install a Maven coordinate as a ForgeBox module"
+    assert_contains "bx-orm" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() still installs a normal ForgeBox dependency alongside a skipped one"
+
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
+test_install_module_dependencies_continues_after_a_failed_dependency() {
+    run_test_group "install_module_dependencies with a failing dependency install"
+
+    local MODULE_DIR="$TEST_TMP/module-failing-dep"
+    mkdir -p "$MODULE_DIR"
+    echo '{"dependencies": {"bx-orm": "*", "bx-ai": "2.1.0"}}' > "$MODULE_DIR/box.json"
+
+    local BIN_JQ="$TEST_TMP/bin-jqfailing"
+    mkdir -p "$BIN_JQ"
+    cat > "$BIN_JQ/jq" <<'EOF'
+#!/bin/sh
+case "$*" in
+	*length*) echo "2" ;;
+	*to_entries*) printf 'bx-orm	*
+bx-ai	2.1.0
+' ;;
+	*) echo '{}' ;;
+esac
+EOF
+    chmod +x "$BIN_JQ/jq"
+
+    # Simulate a ForgeBox-looking dependency whose install still fails (e.g. a
+    # transient download error): bx-orm exits 1, bx-ai succeeds.
+    local INSTALL_CALLS_FILE="$TEST_TMP/install_calls_failing.txt"
+    : > "$INSTALL_CALLS_FILE"
+    install_module() {
+        case "$1" in
+            bx-orm) return 1 ;;
+            *) printf '%s\n' "$1" >> "$INSTALL_CALLS_FILE" ;;
+        esac
+    }
+
+    local output
+    output=$(PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "" 2>&1)
+    local rc=$?
+
+    assert_return_code 0 "$rc" "install_module_dependencies() does not abort when a dependency install fails"
+    assert_contains "Warning: Failed to install dependency 'bx-orm'" "$output" "install_module_dependencies() warns about the failed dependency"
+    assert_contains "bx-ai@2.1.0" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() still installs the next dependency after a failure"
+
+    . "$SITE_DIR/install-bx-module.sh"
+    set +e
+}
+
 ###########################################################################
 # Tests for install_module_completions / remove_module_completions
 ###########################################################################
@@ -573,6 +658,8 @@ run_all_tests() {
     test_install_module_dependencies_installs_be_and_snapshot_versions
     test_install_module_dependencies_no_box_json
     test_install_module_dependencies_skips_circular_dependency
+    test_install_module_dependencies_skips_non_forgebox_maven_dependency
+    test_install_module_dependencies_continues_after_a_failed_dependency
     test_install_module_completions_copies_declared_script
     test_install_module_completions_warns_when_declared_file_missing
     test_install_module_completions_noop_without_declaration
