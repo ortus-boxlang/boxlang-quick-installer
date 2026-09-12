@@ -390,6 +390,26 @@ install_version() {
 
     ensure_bvm_dirs
 
+    local original_version="$version"
+    local resolved_alias_version=""
+
+    # Resolve latest alias to concrete version before downloading artifacts
+    # so checksum verification uses immutable, version-specific files.
+    if [ "$original_version" = "latest" ]; then
+        if resolved_alias_version=$(fetch_remote_version "latest"); then
+            resolved_alias_version=$(echo "$resolved_alias_version" | sed 's/+.*//')
+            if [ -z "$resolved_alias_version" ]; then
+                print_error "Failed to parse latest version information"
+                return 1
+            fi
+            version="$resolved_alias_version"
+        else
+            print_error "Failed to fetch latest version info from remote"
+            print_info "Please check your internet connection and try again"
+            return 1
+        fi
+    fi
+
     local has_installed_versions=false
     for installed_version_dir in "$BVM_VERSIONS_DIR"/*; do
         if [ -d "$installed_version_dir" ]; then
@@ -426,16 +446,15 @@ install_version() {
     local boxlang_cache=""
     local miniserver_cache=""
     local install_dir="$version_dir"
-    local original_version="$version"
 
-    case "$version" in
+    case "$original_version" in
         "latest")
-            boxlang_url="$LATEST_URL"
-            miniserver_url="$LATEST_MINISERVER_URL"
-            boxlang_cache="$BVM_CACHE_DIR/boxlang-latest.zip"
-            miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-latest.zip"
+            boxlang_url="$DOWNLOAD_BASE_URL/$version/boxlang-$version.zip"
+            miniserver_url="$MINISERVER_BASE_URL/$version/boxlang-miniserver-$version.zip"
+            boxlang_cache="$BVM_CACHE_DIR/boxlang-$version.zip"
+            miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-$version.zip"
             # Use temporary directory for latest/snapshot to detect actual version
-            install_dir="$BVM_CACHE_DIR/temp-$version-$$"
+            install_dir="$BVM_CACHE_DIR/temp-$original_version-$$"
             ;;
         "snapshot")
             boxlang_url="$SNAPSHOT_URL"
@@ -520,42 +539,47 @@ install_version() {
     # Detect actual version for latest/snapshot installations
     local actual_version="$version"
     if [ "$original_version" = "latest" ] || [ "$original_version" = "snapshot" ]; then
-        print_info "🔎 Version alias requested, fetching actual version from remote..."
-
-        # Fetch version from remote property file
-        if actual_version=$(fetch_remote_version "$original_version"); then
-            # Clean up version string - remove any build metadata after +
-            actual_version=$(echo "$actual_version" | sed 's/+.*//')
+        if [ -n "$resolved_alias_version" ]; then
+            actual_version="$resolved_alias_version"
             print_info "Detected version: $actual_version"
-
-            # Check if this version already exists
-            local actual_version_dir="$BVM_VERSIONS_DIR/$actual_version"
-            if [ -d "$actual_version_dir" ] && [ "$force_install" != "--force" ]; then
-                print_warning "BoxLang $actual_version is already installed"
-                print_info "Use 'bvm use $actual_version' to switch to this version"
-                print_info "Use 'bvm install $original_version --force' to reinstall"
-                rm -rf "$install_dir"
-                return 0
-            fi
-
-            # If force install and version exists, remove it first
-            if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
-                print_warning "Force reinstalling - removing existing $actual_version..."
-                rm -rf "$actual_version_dir"
-            fi
-
-            # Move from temporary to actual version directory
-            version_dir="$actual_version_dir"
-            mkdir -p "$(dirname "$version_dir")"
-            mv "$install_dir" "$version_dir"
-            version="$actual_version"
         else
-            print_error "Failed to fetch version info from remote"
-            print_info "This is required for $original_version installations to determine the actual version number"
-            print_info "Please check your internet connection and try again"
-            rm -rf "$install_dir"
-            return 1
+            print_info "🔎 Version alias requested, fetching actual version from remote..."
+
+            # Fetch version from remote property file
+            if actual_version=$(fetch_remote_version "$original_version"); then
+                # Clean up version string - remove any build metadata after +
+                actual_version=$(echo "$actual_version" | sed 's/+.*//')
+                print_info "Detected version: $actual_version"
+            else
+                print_error "Failed to fetch version info from remote"
+                print_info "This is required for $original_version installations to determine the actual version number"
+                print_info "Please check your internet connection and try again"
+                rm -rf "$install_dir"
+                return 1
+            fi
         fi
+
+        # Check if this version already exists
+        local actual_version_dir="$BVM_VERSIONS_DIR/$actual_version"
+        if [ -d "$actual_version_dir" ] && [ "$force_install" != "--force" ]; then
+            print_warning "BoxLang $actual_version is already installed"
+            print_info "Use 'bvm use $actual_version' to switch to this version"
+            print_info "Use 'bvm install $original_version --force' to reinstall"
+            rm -rf "$install_dir"
+            return 0
+        fi
+
+        # If force install and version exists, remove it first
+        if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
+            print_warning "Force reinstalling - removing existing $actual_version..."
+            rm -rf "$actual_version_dir"
+        fi
+
+        # Move from temporary to actual version directory
+        version_dir="$actual_version_dir"
+        mkdir -p "$(dirname "$version_dir")"
+        mv "$install_dir" "$version_dir"
+        version="$actual_version"
     fi
 
     # Create internal symlinks (bx -> boxlang, bx-miniserver -> boxlang-miniserver)
