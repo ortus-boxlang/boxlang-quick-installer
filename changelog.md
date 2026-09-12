@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.34.0] - 2026-08-23
+## [1.35.0] - 2026-09-12
 
-## [1.33.0] - 2026-08-20
+### Fixed
+
+- Fixed the Windows elevation flow in `install-boxlang.bat` so running with no arguments preserves the default `latest` install target when relaunching as administrator.
+- Fixed the PowerShell update flow to re-run `install-boxlang.ps1` with `latest --force`, preventing repeated update prompts during self-update.
+- Fixed CommandBox installation in `install-boxlang.ps1` so `box.exe` is copied from nested archive paths correctly instead of creating an incorrect destination.
+
+## [1.34.0] - 2026-08-23
 
 ### Added
 
@@ -499,7 +505,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.34.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.35.0...HEAD
+[1.35.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.32.0...v1.33.0
 [1.32.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.31.0...v1.32.0
