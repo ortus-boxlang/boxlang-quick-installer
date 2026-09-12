@@ -379,7 +379,7 @@ function Test-ForUpdates {
             if ($response -notmatch "^[nN]") {
                 Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
                 # Call the script again with latest version
-                & $PSCommandPath "latest"
+                & $PSCommandPath @("latest","--force")
                 exit 0
             }
             else {
