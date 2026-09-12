@@ -17,11 +17,16 @@ setlocal
 :: Get the script directory
 set "curdir=%~dp0"
 
+set "allArgs=@('%*')"
+if "%~1"=="" (
+	set "allArgs='latest'"
+)
+
 :: Check for admin rights
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo Requesting administrative privileges...
-    powershell -Command "Start-Process -FilePath '%~f0' -ArgumentList @('%*') -Verb RunAs"
+    powershell -Command "Start-Process -FilePath '%~f0' -ArgumentList @(%allArgs%) -Verb RunAs"
     exit /b
 )
 
