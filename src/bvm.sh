@@ -1292,7 +1292,7 @@ fetch_remote_version() {
     esac
 
     # Create temporary file for version properties
-    local temp_version_file=$(mktemp "/tmp/bvm_version.XXXXXX.properties")
+    local temp_version_file=$(mktemp "/tmp/bvm_version.XXXXXX")
     trap 'rm -f "$temp_version_file"' EXIT
 
     # Download version properties file with shorter timeout for responsiveness
