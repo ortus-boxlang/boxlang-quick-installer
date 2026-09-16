@@ -379,7 +379,7 @@ function Test-ForUpdates {
             if ($response -notmatch "^[nN]") {
                 Write-Host -ForegroundColor Green "Starting update to BoxLang $latestVersion..."
                 # Call the script again with latest version
-                & $PSCommandPath "latest"
+                & $PSCommandPath @("latest","--force")
                 exit 0
             }
             else {
@@ -738,16 +738,14 @@ function Check-And-Install-CommandBox {
         Write-Host -ForegroundColor Blue "🗂️ Installing CommandBox to $BinDir\box.exe..."
         $boxExePath = Get-ChildItem -Path $commandboxExtractPath -Name "box.exe" -Recurse | Select-Object -First 1
         if ($boxExePath) {
-            $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxExePath.Name
-            $destBoxPath = Join-Path -Path $BinDir -ChildPath "box.exe"
-            Copy-Item -Path $sourceBoxPath -Destination $destBoxPath -Force
+            $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxExePath
+            Copy-Item -Path $sourceBoxPath -Destination $BinDir -Force
         } else {
             # Look for box.bat as fallback
             $boxBatPath = Get-ChildItem -Path $commandboxExtractPath -Name "box.bat" -Recurse | Select-Object -First 1
             if ($boxBatPath) {
                 $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxBatPath.Name
-                $destBoxPath = Join-Path -Path $BinDir -ChildPath "box.bat"
-                Copy-Item -Path $sourceBoxPath -Destination $destBoxPath -Force
+                Copy-Item -Path $sourceBoxPath -Destination $BinDir -Force
             } else {
                 throw "Could not find box.exe or box.bat in the extracted CommandBox archive"
             }
@@ -769,6 +767,7 @@ function Check-And-Install-CommandBox {
         Remove-Item -Path $commandboxExtractPath -Recurse -Force -ErrorAction SilentlyContinue
 
         Write-Host -ForegroundColor Green "✅ CommandBox installed successfully"
+        Write-Host -ForegroundColor Green "Point shortcuts to 'box.exe'"
         return $true
     }
     catch {
