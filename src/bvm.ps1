@@ -532,8 +532,14 @@ function Install-Version {
         if (($originalVersion -eq "latest" -or $originalVersion -eq "snapshot") -and $detected) {
             # Create alias symlink: versions/latest -> versions/1.x.x or versions/snapshot -> versions/1.x.x-snapshot
             $aliasDir = Join-Path $BVM_VERSIONS_DIR $originalVersion
-            if (Test-Path $aliasDir) {
-                Remove-Item $aliasDir -Force -Recurse -ErrorAction SilentlyContinue
+            $existingAlias = Get-Item -LiteralPath $aliasDir -Force -ErrorAction SilentlyContinue
+            if ($existingAlias) {
+                if ($existingAlias.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                    # Unlink junctions without traversing their targets on PowerShell 5.1
+                    [System.IO.Directory]::Delete($aliasDir)
+                } else {
+                    Remove-Item $aliasDir -Force -Recurse -ErrorAction Stop
+                }
             }
             try {
                 New-Item -ItemType Junction -Path $aliasDir -Target $versionDir | Out-Null

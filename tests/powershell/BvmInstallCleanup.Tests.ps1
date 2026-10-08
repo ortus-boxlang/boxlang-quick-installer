@@ -12,6 +12,10 @@ function Test-InstallCleanup {
         if ($Force) {
             New-Item -ItemType Directory -Path (Join-Path $versionDir 'bin') -Force | Out-Null
             Set-Content (Join-Path $versionDir 'bin/boxlang.bat') 'original'
+            if ($Version -eq 'latest' -or $Version -eq 'snapshot') {
+                $linkType = if ($env:OS -eq 'Windows_NT') { 'Junction' } else { 'SymbolicLink' }
+                New-Item -ItemType $linkType -Path (Join-Path $root "versions/$Version") -Target $versionDir | Out-Null
+            }
         }
         $null = $pipeline.AddScript({
             param($Repo, $Root, $Mode, $Phase, $Force, $Version)
@@ -117,4 +121,6 @@ Invoke-Test 'successful install publishes runtime and MiniServer' { Test-Install
 Invoke-Test 'successful forced install replaces existing version' { Test-InstallCleanup success '' $true }
 Invoke-Test 'successful latest install publishes detected version' { Test-InstallCleanup success '' $false latest }
 Invoke-Test 'successful snapshot install publishes detected version' { Test-InstallCleanup success '' $false snapshot }
+Invoke-Test 'forced latest reinstall unlinks old alias without deleting the published runtime' { Test-InstallCleanup success '' $true latest }
+Invoke-Test 'forced snapshot reinstall unlinks old alias without deleting the published runtime' { Test-InstallCleanup success '' $true snapshot }
 Complete-TestSuite
