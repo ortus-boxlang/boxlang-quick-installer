@@ -421,11 +421,6 @@ function Install-Version {
         return
     }
 
-    if ((Test-Path $versionDir) -and $Force) {
-        Write-BvmInfo "Removing existing installation of [$Version]..."
-        Remove-Item -Path $versionDir -Recurse -Force
-    }
-
     Write-BvmInfo "Installing BoxLang [$Version]..."
 
     $originalVersion = $Version
@@ -453,93 +448,88 @@ function Install-Version {
     # Network check
     Test-NetworkConnectivity | Out-Null
 
-    # Create install dir
-    New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
-
-    # Download BoxLang runtime
-    Write-BvmInfo "⬇️  Downloading BoxLang runtime..."
+    # Stage outside versions so interrupted installs are never listed
+    $installDir = Join-Path $BVM_CACHE_DIR ("install-" + [guid]::NewGuid())
     try {
-        Invoke-WebRequest -Uri $boxlangUrl -OutFile $boxlangCache -UseBasicParsing -ErrorAction Stop
-    }
-    catch {
-        Write-BvmError "Failed to download BoxLang runtime: $($_.Exception.Message)"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        New-Item -ItemType Directory -Path $installDir -ErrorAction Stop | Out-Null
 
-    # Verify checksum
-    if (-not (Verify-DownloadChecksum -FilePath $boxlangCache -BaseUrl (Split-Path $boxlangUrl -Parent) -MinSize 5000000)) {
-        Write-BvmError "Checksum verification failed for BoxLang runtime"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        # Download BoxLang runtime
+        Write-BvmInfo "⬇️  Downloading BoxLang runtime..."
+        try {
+            Invoke-WebRequest -Uri $boxlangUrl -OutFile $boxlangCache -UseBasicParsing -ErrorAction Stop
+        }
+        catch {
+            Write-BvmError "Failed to download BoxLang runtime: $($_.Exception.Message)"
+            exit 1
+        }
 
-    # Download MiniServer
-    Write-Host ""
-    Write-BvmInfo "⬇️  Downloading BoxLang MiniServer..."
-    try {
-        Invoke-WebRequest -Uri $miniserverUrl -OutFile $miniserverCache -UseBasicParsing -ErrorAction Stop
-    }
-    catch {
-        Write-BvmError "Failed to download BoxLang MiniServer: $($_.Exception.Message)"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        # Verify checksum
+        if (-not (Verify-DownloadChecksum -FilePath $boxlangCache -BaseUrl (Split-Path $boxlangUrl -Parent) -MinSize 5000000)) {
+            Write-BvmError "Checksum verification failed for BoxLang runtime"
+            exit 1
+        }
 
-    # Verify MiniServer checksum
-    if (-not (Verify-DownloadChecksum -FilePath $miniserverCache -BaseUrl (Split-Path $miniserverUrl -Parent) -MinSize 8000000)) {
-        Write-BvmError "Checksum verification failed for BoxLang MiniServer"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        # Download MiniServer
+        Write-Host ""
+        Write-BvmInfo "⬇️  Downloading BoxLang MiniServer..."
+        try {
+            Invoke-WebRequest -Uri $miniserverUrl -OutFile $miniserverCache -UseBasicParsing -ErrorAction Stop
+        }
+        catch {
+            Write-BvmError "Failed to download BoxLang MiniServer: $($_.Exception.Message)"
+            exit 1
+        }
 
-    # Extract BoxLang runtime
-    Write-Host ""
-    Write-BvmInfo "📦 Extracting BoxLang runtime..."
-    try {
-        Expand-Archive -Path $boxlangCache -DestinationPath $versionDir -Force -ErrorAction Stop
-    }
-    catch {
-        Write-BvmError "Failed to extract BoxLang runtime: $($_.Exception.Message)"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        # Verify MiniServer checksum
+        if (-not (Verify-DownloadChecksum -FilePath $miniserverCache -BaseUrl (Split-Path $miniserverUrl -Parent) -MinSize 8000000)) {
+            Write-BvmError "Checksum verification failed for BoxLang MiniServer"
+            exit 1
+        }
 
-    # Extract BoxLang MiniServer
-    Write-BvmInfo "📦 Extracting BoxLang MiniServer..."
-    try {
-        Expand-Archive -Path $miniserverCache -DestinationPath $versionDir -Force -ErrorAction Stop
-    }
-    catch {
-        Write-BvmError "Failed to extract BoxLang MiniServer: $($_.Exception.Message)"
-        Remove-Item $versionDir -Recurse -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+        # Extract BoxLang runtime
+        Write-Host ""
+        Write-BvmInfo "📦 Extracting BoxLang runtime..."
+        try {
+            Expand-Archive -Path $boxlangCache -DestinationPath $installDir -Force -ErrorAction Stop
+        }
+        catch {
+            Write-BvmError "Failed to extract BoxLang runtime: $($_.Exception.Message)"
+            exit 1
+        }
 
-    # Detect actual version for latest/snapshot
-    $actualVersion = $Version
-    if ($originalVersion -eq "latest" -or $originalVersion -eq "snapshot") {
-        $detected = Fetch-RemoteVersion -VersionType $originalVersion
-        if ($detected) {
-            $actualVersion = $detected
-            $actualVersionDir = Join-Path $BVM_VERSIONS_DIR $actualVersion
+        # Extract BoxLang MiniServer
+        Write-BvmInfo "📦 Extracting BoxLang MiniServer..."
+        try {
+            Expand-Archive -Path $miniserverCache -DestinationPath $installDir -Force -ErrorAction Stop
+        }
+        catch {
+            Write-BvmError "Failed to extract BoxLang MiniServer: $($_.Exception.Message)"
+            exit 1
+        }
 
-            # If the detected version dir already exists in versions, remove it
-            if ((Test-Path $actualVersionDir) -and $Force) {
-                Remove-Item $actualVersionDir -Recurse -Force -ErrorAction SilentlyContinue
+        # Detect actual version for latest/snapshot
+        $actualVersion = $Version
+        $detected = $null
+        if ($originalVersion -eq "latest" -or $originalVersion -eq "snapshot") {
+            $detected = Fetch-RemoteVersion -VersionType $originalVersion
+            if ($detected) {
+                $actualVersion = $detected
+                $versionDir = Join-Path $BVM_VERSIONS_DIR $actualVersion
+
+                Write-BvmInfo "Detected actual version: $actualVersion"
             }
+        }
 
-            # Rename the install dir to the actual version
-            if (-not (Test-Path $actualVersionDir)) {
-                Move-Item -Path $versionDir -Destination $actualVersionDir
-                $versionDir = $actualVersionDir
-            } else {
-                # Just keep current place but update alias
-                $versionDir = $actualVersionDir
-            }
+        # Publish only after downloads and extraction have completed
+        if ((Test-Path $versionDir) -and $Force) {
+            Write-BvmInfo "Removing existing installation of [$actualVersion]..."
+            Remove-Item -Path $versionDir -Recurse -Force -ErrorAction Stop
+        }
+        if (-not (Test-Path $versionDir)) {
+            Move-Item -Path $installDir -Destination $versionDir -ErrorAction Stop
+        }
 
-            Write-BvmInfo "Detected actual version: $actualVersion"
-
+        if (($originalVersion -eq "latest" -or $originalVersion -eq "snapshot") -and $detected) {
             # Create alias symlink: versions/latest -> versions/1.x.x or versions/snapshot -> versions/1.x.x-snapshot
             $aliasDir = Join-Path $BVM_VERSIONS_DIR $originalVersion
             if (Test-Path $aliasDir) {
@@ -553,17 +543,20 @@ function Install-Version {
                 Write-BvmWarning "Could not create version alias (may require admin privileges)"
             }
         }
-    }
 
-    # Clean up cache for specific versions
-    if ($originalVersion -ne "latest" -and $originalVersion -ne "snapshot") {
-        Remove-Item $boxlangCache -Force -ErrorAction SilentlyContinue
-        Remove-Item $miniserverCache -Force -ErrorAction SilentlyContinue
-    }
+        # Clean up cache for specific versions
+        if ($originalVersion -ne "latest" -and $originalVersion -ne "snapshot") {
+            Remove-Item $boxlangCache -Force -ErrorAction SilentlyContinue
+            Remove-Item $miniserverCache -Force -ErrorAction SilentlyContinue
+        }
 
-    Write-Host ""
-    Write-BvmSuccess "BoxLang $actualVersion installed successfully"
-    Write-BvmInfo "Use 'bvm use $originalVersion' to switch to this version"
+        Write-Host ""
+        Write-BvmSuccess "BoxLang $actualVersion installed successfully"
+        Write-BvmInfo "Use 'bvm use $originalVersion' to switch to this version"
+    }
+    finally {
+        Remove-Item -LiteralPath $installDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 ###########################################################################
