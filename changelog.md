@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed interrupted `bvm install` commands on Linux and Windows leaving partial version folders that appeared in `bvm list`. Installations now stage outside `versions` and clean up on interruption, publishing only after downloads and extraction complete.
+- Fixed forced BVM reinstalls removing existing runtimes before replacements were ready, and made Windows alias junction cleanup safe for PowerShell 5.1.
+
+## [1.35.0] - 2026-09-16
+
+### Fixed
+
 - Fixed `bvm install latest` so it resolves `latest` to a concrete version before downloading and validating checksums, avoiding alias hash mismatches.
 - Fixed `fetch_remote_version` temp-file creation to use a BusyBox-compatible `mktemp` pattern, resolving Alpine CI failures.
 

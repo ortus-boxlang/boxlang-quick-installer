@@ -428,11 +428,9 @@ install_version() {
         return 0
     fi
 
-    # If force install and version exists, remove it first
+    # Keep the existing installation until its replacement is ready
     if [ -d "$version_dir" ] && [ "$force_install" = "--force" ]; then
         print_info "Force reinstalling BoxLang $version..."
-        print_info "Removing existing installation..."
-        rm -rf "$version_dir"
     fi
 
     print_info "Installing BoxLang [$version]..."
@@ -445,7 +443,9 @@ install_version() {
     local miniserver_url=""
     local boxlang_cache=""
     local miniserver_cache=""
-    local install_dir="$version_dir"
+    local install_dir
+    install_dir=$(mktemp -d "$BVM_CACHE_DIR/install.XXXXXX")
+    INSTALLING_DIR="$install_dir"
 
     case "$original_version" in
         "latest")
@@ -453,16 +453,12 @@ install_version() {
             miniserver_url="$MINISERVER_BASE_URL/$version/boxlang-miniserver-$version.zip"
             boxlang_cache="$BVM_CACHE_DIR/boxlang-$version.zip"
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-$version.zip"
-            # Use temporary directory for latest/snapshot to detect actual version
-            install_dir="$BVM_CACHE_DIR/temp-$original_version-$$"
             ;;
         "snapshot")
             boxlang_url="$SNAPSHOT_URL"
             miniserver_url="$SNAPSHOT_MINISERVER_URL"
             boxlang_cache="$BVM_CACHE_DIR/boxlang-snapshot.zip"
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-snapshot.zip"
-            # Use temporary directory for latest/snapshot to detect actual version
-            install_dir="$BVM_CACHE_DIR/temp-$version-$$"
 			force_install="--force"  # Force install for snapshot to ensure fresh download
             ;;
         *)
@@ -472,9 +468,6 @@ install_version() {
             miniserver_cache="$BVM_CACHE_DIR/boxlang-miniserver-$version.zip"
             ;;
     esac
-
-    # Create installation directory
-    mkdir -p "$install_dir"
 
     # Check network connectivity before attempting downloads
     if ! check_network_connectivity; then
@@ -569,27 +562,28 @@ install_version() {
             return 0
         fi
 
-        # If force install and version exists, remove it first
-        if [ -d "$actual_version_dir" ] && [ "$force_install" = "--force" ]; then
-            print_warning "Force reinstalling - removing existing $actual_version..."
-            rm -rf "$actual_version_dir"
-        fi
-
-        # Move from temporary to actual version directory
         version_dir="$actual_version_dir"
-        mkdir -p "$(dirname "$version_dir")"
-        mv "$install_dir" "$version_dir"
         version="$actual_version"
     fi
 
     # Create internal symlinks (bx -> boxlang, bx-miniserver -> boxlang-miniserver)
     print_info "Creating internal symlinks..."
-    if [ -f "$version_dir/bin/boxlang" ]; then
-        ln -sf "boxlang" "$version_dir/bin/bx"
+    if [ -f "$install_dir/bin/boxlang" ]; then
+        ln -sf "boxlang" "$install_dir/bin/bx"
     fi
-    if [ -f "$version_dir/bin/boxlang-miniserver" ]; then
-        ln -sf "boxlang-miniserver" "$version_dir/bin/bx-miniserver"
+    if [ -f "$install_dir/bin/boxlang-miniserver" ]; then
+        ln -sf "boxlang-miniserver" "$install_dir/bin/bx-miniserver"
     fi
+
+    # Publish only after downloads and extraction have completed
+    if [ -d "$version_dir" ] && [ "$force_install" = "--force" ]; then
+        rm -rf "$version_dir"
+    fi
+    if ! mv "$install_dir" "$version_dir"; then
+        print_error "Failed to publish BoxLang installation"
+        return 1
+    fi
+    unset INSTALLING_DIR INSTALLING_VERSION
 
     # Create version alias symlinks
     if [ "$original_version" = "latest" ]; then
@@ -617,9 +611,7 @@ install_version() {
         rm -f "$boxlang_cache" "$miniserver_cache"
     fi
 
-    # Clear installation tracking
     print_success "BoxLang $version installed successfully"
-    unset INSTALLING_VERSION
 
     if [ "$has_installed_versions" = false ]; then
         print_info "No BoxLang versions were installed, activating $version as the default"
@@ -1329,6 +1321,9 @@ fetch_remote_version() {
 ###########################################################################
 cleanup_on_error() {
     local exit_code=$?
+    if [ -n "${INSTALLING_DIR:-}" ]; then
+        rm -rf "$INSTALLING_DIR" 2>/dev/null || true
+    fi
     if [ $exit_code -ne 0 ]; then
         print_error "An error occurred. Cleaning up..."
         # Clean up any temporary files
@@ -1336,13 +1331,14 @@ cleanup_on_error() {
         # Clean up any incomplete installations
         if [ -n "${INSTALLING_VERSION:-}" ]; then
             print_info "Cleaning up incomplete installation of $INSTALLING_VERSION..."
-            rm -rf "$BVM_VERSIONS_DIR/$INSTALLING_VERSION" 2>/dev/null || true
         fi
     fi
 }
 
 # Run cleanup on shell exit; it checks whether the exit status indicates failure.
 trap 'cleanup_on_error' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ###########################################################################
 # Main Function
