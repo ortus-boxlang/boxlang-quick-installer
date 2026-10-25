@@ -22,6 +22,12 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # tab-delimited jq output. `$'\t'` is a bash/ksh-ism that POSIX /bin/sh
 # (dash, BusyBox ash) does not expand, so it must be built with printf instead.
 TAB="$(printf '\t')"
+# Nested install state. A module's box.json dependencies are installed as nested
+# modules inside "<module>/modules/". While installing one, NESTED_INSTALL is true
+# (so the shared modules manifest is left alone) and ROOT_MODULES_HOME remembers the
+# top-level modules directory so duplicate installs can be flagged.
+NESTED_INSTALL=false
+ROOT_MODULES_HOME=""
 
 # We need this in case the target OS we are installing in does not have a `TERM` implementation declared
 # or when TERM is set to problematic values like "unknown" (common in CI environments like GitHub Actions or Docker containers)
@@ -114,9 +120,47 @@ show_help() {
 	printf "  - Use --local to work with modules in current directory's boxlang_modules folder\n"
 	printf "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)\n"
 	printf "  - Requires curl and jq to be installed\n"
-	printf "  - Dependencies declared in a module's box.json are installed automatically (latest version for \"*\", otherwise the version specified, including \"be\" or \"snapshot\")\n"
+	printf "  - Dependencies declared in a module's box.json are installed automatically as nested modules inside the module's own modules/ folder (latest version for \"*\", otherwise the version specified, including \"be\" or \"snapshot\")\n"
+	printf "  - Nested dependencies are shown (indented) by --list, --outdated and --update, and are removed together with their parent module\n"
 	printf "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists\n"
 	printf "  - A module can declare \"boxlang\": { \"completions\": \"<path-to-bash-completion-script>\" } in its box.json to have a bash completion script installed and auto-loaded in new shells\n"
+}
+
+# Reads the version of an installed module from its own box.json ("unknown" if absent).
+read_module_version() {
+	local MODULE_DIR=${1}
+	local VERSION=""
+	if [ -f "${MODULE_DIR}/box.json" ]; then
+		VERSION=$(jq -r '.version // empty' "${MODULE_DIR}/box.json" 2>/dev/null || true)
+	fi
+	if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+		VERSION="unknown"
+	fi
+	echo "$VERSION"
+}
+
+# Prints the modules nested inside a modules/ directory, indented by depth,
+# recursing into each nested module's own modules/ folder.
+print_nested_modules() {
+	local NESTED_DIR=${1}
+	local DEPTH=${2:-1}
+
+	[ -d "${NESTED_DIR}" ] || return 0
+
+	local INDENT="" i=0
+	while [ "$i" -lt "$DEPTH" ]; do
+		INDENT="${INDENT}  "
+		i=$((i + 1))
+	done
+
+	local dir name
+	for dir in "${NESTED_DIR}"/*/; do
+		[ -d "$dir" ] || continue
+		dir="${dir%/}"
+		name="${dir##*/}"
+		printf -- "%s↳ %s (%s)\n" "$INDENT" "$name" "$(read_module_version "$dir")"
+		print_nested_modules "${dir}/modules" $((DEPTH + 1))
+	done
 }
 
 list_modules() {
@@ -149,6 +193,7 @@ list_modules() {
 		jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
 		while IFS="$TAB" read -r module_name module_version; do
 			printf -- "✓ %s (%s)\n" "$module_name" "$module_version"
+			print_nested_modules "${MODULES_PATH}/${module_name}/modules" 1
 		done
 	fi
 }
@@ -494,10 +539,14 @@ EOF
 	fi
 
 	# Install any module dependencies declared in the extracted module's box.json
-	install_module_dependencies "${DESTINATION}" "${VISITED} ${TARGET_MODULE}"
+	# as nested modules inside this module's own modules/ folder
+	install_module_dependencies "${DESTINATION}" "${VISITED} ${TARGET_MODULE}" true
 
-	# Track this install in the modules manifest
-	box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
+	# Track this install in the modules manifest. Nested dependencies are tracked by
+	# their parent module's own box.json, so they never touch the shared manifest.
+	if [ "$NESTED_INSTALL" != true ]; then
+		box_json_set_dependency "${MODULES_HOME}/box.json" "${TARGET_MODULE}" "${TARGET_VERSION}"
+	fi
 
 	# Success message
 	printf "${GREEN}✅ BoxLang® Module [${TARGET_MODULE}@${TARGET_VERSION}] installed!${NORMAL}\n"
@@ -554,13 +603,49 @@ remove_module_completions() {
 	rm -f "${COMPLETIONS_DIR}/${MODULE_NAME}.sh"
 }
 
+# Runs install_module with MODULES_HOME pointed at a parent module's modules/
+# folder. Runs in a subshell so the override (and a hard `exit 1` on failure)
+# never leaks back to the caller.
+install_nested_module() {
+	local NESTED_HOME=${1}
+	local INPUT=${2}
+	local VISITED=${3:-""}
+	(
+		ROOT_MODULES_HOME="${ROOT_MODULES_HOME:-$MODULES_HOME}"
+		MODULES_HOME="${NESTED_HOME}"
+		NESTED_INSTALL=true
+		install_module "$INPUT" "$VISITED"
+	)
+}
+
+# Warns when a module about to be nested is already installed somewhere else
+# under the top-level modules directory (top level or inside another module).
+warn_duplicate_module() {
+	local DEP_NAME=${1}
+	local DEST=${2}
+	local ROOT="${ROOT_MODULES_HOME:-$MODULES_HOME}"
+
+	[ -d "${ROOT}" ] || return 0
+
+	find "${ROOT}" -type d -name "${DEP_NAME}" 2>/dev/null | while IFS= read -r found; do
+		[ "$found" = "$DEST" ] && continue
+		[ -f "${found}/box.json" ] || continue
+		printf "${YELLOW}⚠️  Dependency '${DEP_NAME}' is also installed at ${found}, installing another copy at ${DEST}${NORMAL}\n"
+	done
+	return 0
+}
+
 # Reads a module's own box.json (as extracted to MODULE_DIR) and installs any
 # declared dependencies. A dependency version of "*" (or empty/null) installs
 # the latest version from FORGEBOX; any other value is installed as-is
 # (e.g. an exact version, "be", or "snapshot").
+# When NEST is "true", dependencies are installed as nested modules inside
+# "${MODULE_DIR}/modules"; otherwise they go to the current MODULES_HOME
+# (used for a project box.json that is not itself a module).
 install_module_dependencies() {
 	local MODULE_DIR=${1}
 	local VISITED=${2:-""}
+	local NEST=${3:-false}
 	local BOX_JSON_PATH="${MODULE_DIR}/box.json"
 
 	[ -f "${BOX_JSON_PATH}" ] || return 0
@@ -619,7 +704,16 @@ install_module_dependencies() {
 		# Run in a subshell so a hard `exit 1` inside install_module (e.g. a
 		# failed download) only ends this one dependency attempt, not the
 		# whole module installation.
-		if ! ( install_module "$dep_input" "${VISITED}" ); then
+		local install_ok=true
+		if [ "$NEST" = true ]; then
+			local dep_slug
+			dep_slug=$(echo "$dep_name" | tr '[:upper:]' '[:lower:]')
+			warn_duplicate_module "$dep_slug" "${MODULE_DIR}/modules/${dep_slug}"
+			install_nested_module "${MODULE_DIR}/modules" "$dep_input" "${VISITED}" || install_ok=false
+		else
+			( install_module "$dep_input" "${VISITED}" ) || install_ok=false
+		fi
+		if [ "$install_ok" != true ]; then
 			printf "${YELLOW}⚠️  Warning: Failed to install dependency '${dep_input}', continuing...${NORMAL}\n"
 		fi
 	done
@@ -784,9 +878,63 @@ fetch_forgebox_latest_version() {
 	echo "$VERSION"
 }
 
-# Emits one tab-separated line per dependency: name<TAB>current<TAB>latest<TAB>status
+# Emits one tab-separated report line for a single installed module:
+# name<TAB>current<TAB>latest<TAB>status<TAB>modules_dir<TAB>depth
 # status is one of: uptodate, ahead, outdated, unreachable
-# Dependencies whose current version isn't a parseable semver are skipped entirely.
+# Modules whose current version isn't a parseable semver emit nothing.
+outdated_report_line() {
+	local module_name=${1}
+	local current_version=${2}
+	local modules_dir=${3}
+	local depth=${4}
+
+	local current_semver
+	current_semver=$(extract_semantic_version "$current_version")
+	[ -z "$current_semver" ] && return 0
+
+	local latest_version status latest_semver
+	# `|| true` keeps a failed lookup (e.g. module removed from FORGEBOX, network
+	# hiccup) from tripping `set -e` and silently truncating the rest of the report.
+	latest_version=$(fetch_forgebox_latest_version "$module_name") || true
+	if [ -z "$latest_version" ]; then
+		status="unreachable"
+		latest_version="?"
+	else
+		latest_semver=$(extract_semantic_version "$latest_version")
+		if [ -z "$latest_semver" ]; then
+			status="unreachable"
+		else
+			local cmp_result
+			compare_versions "$current_semver" "$latest_semver" && cmp_result=0 || cmp_result=$?
+			case "$cmp_result" in
+				0) status="uptodate" ;;
+				1) status="ahead" ;;
+				2) status="outdated" ;;
+			esac
+		fi
+	fi
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$module_name" "$current_version" "$latest_version" "$status" "$modules_dir" "$depth"
+}
+
+# Emits report lines for every module nested inside a modules/ directory, recursively.
+nested_outdated_report() {
+	local NESTED_DIR=${1}
+	local DEPTH=${2:-1}
+
+	[ -d "${NESTED_DIR}" ] || return 0
+
+	local dir name
+	for dir in "${NESTED_DIR}"/*/; do
+		[ -d "$dir" ] || continue
+		dir="${dir%/}"
+		name="${dir##*/}"
+		outdated_report_line "$name" "$(read_module_version "$dir")" "${NESTED_DIR}" "$DEPTH"
+		nested_outdated_report "${dir}/modules" $((DEPTH + 1))
+	done
+}
+
+# Emits one report line per module in the manifest, each followed by the modules
+# nested inside it (see outdated_report_line for the format).
 compute_outdated_report() {
 	local MODULES_PATH=${1}
 	local BOX_JSON_PATH
@@ -794,32 +942,40 @@ compute_outdated_report() {
 
 	jq -r '.dependencies // {} | to_entries[] | "\(.key)\t\(.value)"' "${BOX_JSON_PATH}" 2>/dev/null |
 	while IFS="$TAB" read -r module_name current_version; do
-		local current_semver
-		current_semver=$(extract_semantic_version "$current_version")
-		[ -z "$current_semver" ] && continue
+		outdated_report_line "$module_name" "$current_version" "${MODULES_PATH}" 0
+		nested_outdated_report "${MODULES_PATH}/${module_name}/modules" 1
+	done
+}
 
-		local latest_version status latest_semver
-		# `|| true` keeps a failed lookup (e.g. module removed from FORGEBOX, network
-		# hiccup) from tripping `set -e` and silently truncating the rest of the report.
-		latest_version=$(fetch_forgebox_latest_version "$module_name") || true
-		if [ -z "$latest_version" ]; then
-			status="unreachable"
-			latest_version="?"
+# Indents a module name by its nesting depth for report output.
+report_label() {
+	local NAME=${1}
+	local DEPTH=${2:-0}
+	local INDENT="" i=0
+	while [ "$i" -lt "$DEPTH" ]; do
+		INDENT="${INDENT}  "
+		i=$((i + 1))
+	done
+	printf '%s%s' "$INDENT" "$NAME"
+}
+
+# Installs the outdated modules collected as "name|latest|modules_dir|depth" lines.
+# Nested entries are reinstalled into their parent's modules/ folder. A parent update
+# reinstalls its own nested dependencies, so nested entries that are already current
+# (or no longer present) are skipped.
+apply_outdated_updates() {
+	local ENTRIES=${1}
+
+	printf '%s' "$ENTRIES" | while IFS='|' read -r module_name latest_version modules_dir depth; do
+		[ -z "$module_name" ] && continue
+		if [ "${depth:-0}" -gt 0 ]; then
+			[ -d "${modules_dir}/${module_name}" ] || continue
+			[ "$(read_module_version "${modules_dir}/${module_name}")" = "$latest_version" ] && continue
+			install_nested_module "${modules_dir}" "${module_name}@${latest_version}" ||
+				printf "${YELLOW}⚠️  Warning: Failed to update nested module '${module_name}' in ${modules_dir}${NORMAL}\n"
 		else
-			latest_semver=$(extract_semantic_version "$latest_version")
-			if [ -z "$latest_semver" ]; then
-				status="unreachable"
-			else
-				local cmp_result
-				compare_versions "$current_semver" "$latest_semver" && cmp_result=0 || cmp_result=$?
-				case "$cmp_result" in
-					0) status="uptodate" ;;
-					1) status="ahead" ;;
-					2) status="outdated" ;;
-				esac
-			fi
+			install_module "${module_name}@${latest_version}"
 		fi
-		printf '%s\t%s\t%s\t%s\n' "$module_name" "$current_version" "$latest_version" "$status"
 	done
 }
 
@@ -854,20 +1010,20 @@ outdated_modules() {
 
 	local OUTDATED_MODULES=""
 	local OUTDATED_COUNT=0
-	while IFS="$TAB" read -r module_name current_version latest_version status; do
+	while IFS="$TAB" read -r module_name current_version latest_version status modules_dir depth; do
 		local status_label
 		case "$status" in
 			uptodate) status_label="✅ up to date" ;;
 			ahead) status_label="🔄 ahead (dev/snapshot)" ;;
 			outdated)
 				status_label="🆙 outdated"
-				OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+				OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}|${modules_dir}|${depth}
 "
 				OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 				;;
 			*) status_label="⚠️  unable to check" ;;
 		esac
-		printf "%-25s %-15s %-15s %s\n" "$module_name" "$current_version" "$latest_version" "$status_label"
+		printf "%-25s %-15s %-15s %s\n" "$(report_label "$module_name" "$depth")" "$current_version" "$latest_version" "$status_label"
 	done < "${REPORT_FILE}"
 	rm -f "${REPORT_FILE}"
 
@@ -882,9 +1038,7 @@ outdated_modules() {
 	read -r confirmation < /dev/tty
 	case "$confirmation" in
 		[yY]|[yY][eE][sS])
-			printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
-				install_module "${module_name}@${latest_version}"
-			done
+			apply_outdated_updates "$OUTDATED_MODULES"
 			;;
 		*)
 			printf "${YELLOW}Skipping updates.${NORMAL}\n"
@@ -915,10 +1069,10 @@ update_modules() {
 
 	local OUTDATED_MODULES=""
 	local OUTDATED_COUNT=0
-	while IFS="$TAB" read -r module_name current_version latest_version status; do
+	while IFS="$TAB" read -r module_name current_version latest_version status modules_dir depth; do
 		if [ "$status" = "outdated" ]; then
-			printf -- "🆙 %s: %s → %s\n" "$module_name" "$current_version" "$latest_version"
-			OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}
+			printf -- "🆙 %s: %s → %s\n" "$(report_label "$module_name" "$depth")" "$current_version" "$latest_version"
+			OUTDATED_MODULES="${OUTDATED_MODULES}${module_name}|${latest_version}|${modules_dir}|${depth}
 "
 			OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
 		fi
@@ -943,9 +1097,7 @@ update_modules() {
 		esac
 	fi
 
-	printf '%s' "$OUTDATED_MODULES" | while IFS='|' read -r module_name latest_version; do
-		install_module "${module_name}@${latest_version}"
-	done
+	apply_outdated_updates "$OUTDATED_MODULES"
 
 	printf "${GREEN}✅ Updated ${OUTDATED_COUNT} module(s)!${NORMAL}\n"
 }

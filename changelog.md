@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `install-bx-module` now installs a module's `box.json` `dependencies` as **nested modules** inside the module's own `modules/` folder (for example `~/.boxlang/modules/bx-sites/modules/bx-markdown`) instead of beside it in the shared modules folder. Nesting is recursive, nested modules are not added to the shared manifest, and a warning is printed when a nested dependency is already installed elsewhere. Removing a module removes its nested dependencies. A project `box.json` installed with no module names is unchanged. Applies to the bash and PowerShell installers.
+- `install-bx-module --list`, `--outdated` and `--update` now include nested modules, indented under their parent. `--update` reinstalls outdated nested modules in their parent's `modules/` folder.
+
 ## [1.36.0] - 2026-10-08
 
 ## [1.35.0] - 2026-09-16

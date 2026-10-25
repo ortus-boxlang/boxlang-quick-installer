@@ -349,6 +349,27 @@ Module installations are tracked in a `box.json` dependencies manifest. Global m
 
 If an installed module's own `box.json` declares a `dependencies` entry, those dependencies are installed automatically right after it: a `"*"` (or empty/null) version installs the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
 
+Dependencies are installed as **nested modules** inside the parent module's own `modules/` folder, which the BoxLang runtime loads before the parent. For example, installing `bx-sites` produces:
+
+```
+~/.boxlang/modules/
+  box.json                  # manifest: only top-level modules (bx-sites)
+  bx-sites/
+    box.json
+    modules/
+      bx-markdown/
+      bx-esapi/
+      bx-yaml/
+      ...
+```
+
+- Nesting is recursive: a dependency's own dependencies nest inside it.
+- Each module is self-contained, so the same dependency is nested again under every module that needs it. A warning is printed when a nested dependency is already installed elsewhere.
+- Nested modules are not added to the shared manifest. Their parent's `box.json` declares them.
+- `--list`, `--outdated` and `--update` show nested modules indented under their parent, and `--update` reinstalls outdated nested modules in place.
+- Removing a module removes its nested dependencies with it.
+- A project `box.json` installed with no module names is not nested: its dependencies go to BoxLang HOME (or `./boxlang_modules` with `--local`).
+
 Running `install-bx-module` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
 
 #### Shipping Bash Completions With a Module

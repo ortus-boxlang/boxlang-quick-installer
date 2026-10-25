@@ -5,11 +5,12 @@ Initialize-TestSuite 'PowerShell module installer argument parsing'
 $moduleInstaller = Join-Path $repoRoot 'src\install-bx-module.ps1'
 
 function Invoke-ModuleInstaller {
-    param([string[]]$InstallerArguments)
+    param([string[]]$InstallerArguments, [scriptblock]$Setup)
 
     $root = Join-Path ([System.IO.Path]::GetTempPath()) ('bx-module-installer-' + [guid]::NewGuid())
     $fakeHome = Join-Path $root 'home'
     [System.IO.Directory]::CreateDirectory($fakeHome) | Out-Null
+    if ($Setup) { & $Setup $fakeHome }
 
     $previousLocation = Get-Location
     $previousBoxlangHome = $env:BOXLANG_HOME
@@ -54,6 +55,21 @@ Invoke-Test '--list --local still succeeds' {
     $result = Invoke-ModuleInstaller -InstallerArguments @('--list', '--local')
     Assert-Equal 0 $result.ExitCode '--list --local should succeed'
     Assert-Match 'Local' $result.Output '--list --local did not report the local location'
+}
+
+Invoke-Test '--list shows modules nested inside their parent module' {
+    $result = Invoke-ModuleInstaller -InstallerArguments @('--list') -Setup {
+        param($fakeHome)
+        $modules = Join-Path $fakeHome 'modules'
+        $nested = Join-Path $modules 'bx-sites\modules\bx-markdown'
+        [System.IO.Directory]::CreateDirectory($nested) | Out-Null
+        '{"dependencies": {"bx-sites": "1.0.0"}}' | Set-Content (Join-Path $modules 'box.json')
+        '{"version": "1.0.0"}' | Set-Content (Join-Path $modules 'bx-sites\box.json')
+        '{"version": "2.0.0"}' | Set-Content (Join-Path $nested 'box.json')
+    }
+    Assert-Equal 0 $result.ExitCode '--list with nested modules should succeed'
+    Assert-Match 'bx-sites \(1\.0\.0\)' $result.Output '--list did not show the top-level module'
+    Assert-Match '(?m)^\s{2}\S+ bx-markdown \(2\.0\.0\)' $result.Output '--list did not show the nested module indented under its parent'
 }
 
 Complete-TestSuite
