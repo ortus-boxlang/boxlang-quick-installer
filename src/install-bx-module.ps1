@@ -13,6 +13,11 @@ $REMOVE_MODE = $false
 $FORCE_REMOVE = $false
 $LIST_MODE = $false
 $MODULES_HOME = ""
+# Nested install state: a module's box.json dependencies are installed as nested modules
+# inside "<module>/modules/". NESTED_INSTALL leaves the shared manifest alone while doing so,
+# and ROOT_MODULES_HOME remembers the top-level modules directory to flag duplicate installs.
+$NESTED_INSTALL = $false
+$ROOT_MODULES_HOME = ""
 
 # Enable UTF-8 encoding for emoji support
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -247,6 +252,7 @@ function Show-Help {
     Write-Host "  - Without --local, modules are managed in BoxLang HOME (~/.boxlang/modules)"
     Write-Host "  - Requires PowerShell to be installed"
     Write-Host "  - Dependencies declared in a module's box.json are installed automatically (latest version for `"*`", otherwise the version specified, including `"be`" or `"snapshot`")"
+    Write-Host "  - Dependencies are installed as nested modules inside the module's own modules/ folder, shown (indented) by --list, --outdated and --update, and removed together with their parent module"
     Write-Host "  - Running with no arguments installs the dependencies declared in a box.json in the current directory, if one exists"
 }
 
@@ -312,6 +318,34 @@ function Get-ModulesManifestPath {
     return $boxJsonPath
 }
 
+# Reads the version of an installed module from its own box.json ("unknown" if absent).
+function Get-ModuleVersion {
+    param([string]$ModuleDir)
+
+    $boxJsonPath = Join-Path $ModuleDir "box.json"
+    if (Test-Path $boxJsonPath) {
+        try {
+            $boxJson = Get-Content $boxJsonPath -Raw | ConvertFrom-Json
+            if ($boxJson.version) { return [string]$boxJson.version }
+        } catch { }
+    }
+    return "unknown"
+}
+
+# Prints the modules nested inside a modules/ directory, indented by depth,
+# recursing into each nested module's own modules/ folder.
+function Write-NestedModules {
+    param([string]$NestedDir, [int]$Depth = 1)
+
+    if (-not (Test-Path $NestedDir)) { return }
+
+    $indent = "  " * $Depth
+    foreach ($dir in (Get-ChildItem -Path $NestedDir -Directory -ErrorAction SilentlyContinue)) {
+        Write-Host "$indent↳ $($dir.Name) ($(Get-ModuleVersion $dir.FullName))" -ForegroundColor Green
+        Write-NestedModules (Join-Path $dir.FullName "modules") ($Depth + 1)
+    }
+}
+
 function List-Modules {
     param(
         [string]$ModulesPath,
@@ -345,6 +379,7 @@ function List-Modules {
     } else {
         foreach ($prop in $dependencies.PSObject.Properties) {
             Write-Host "✓ $($prop.Name) ($($prop.Value))" -ForegroundColor Green
+            Write-NestedModules (Join-Path (Join-Path $ModulesPath $prop.Name) "modules") 1
         }
     }
 }
@@ -404,8 +439,60 @@ function Get-ForgeboxLatestVersion {
     return $null
 }
 
-# Returns an array of [PSCustomObject]@{ Name; Current; Latest; Status } for every
-# dependency in the manifest. Status is one of: uptodate, ahead, outdated, unreachable.
+# Builds one outdated-report entry for a single installed module, or $null when its
+# current version isn't a parseable semver. Status is one of: uptodate, ahead, outdated, unreachable.
+function New-OutdatedEntry {
+    param([string]$ModuleName, [string]$CurrentVersion, [string]$ModulesDir, [int]$Depth)
+
+    $currentSemver = Get-SemanticVersion $CurrentVersion
+    if (-not $currentSemver) { return $null }
+
+    $latestVersion = Get-ForgeboxLatestVersion $ModuleName
+    $status = $null
+    if (-not $latestVersion) {
+        $status = "unreachable"
+        $latestVersion = "?"
+    } else {
+        $latestSemver = Get-SemanticVersion $latestVersion
+        if (-not $latestSemver) {
+            $status = "unreachable"
+        } else {
+            $cmp = Compare-Versions -Version1 $currentSemver -Version2 $latestSemver
+            switch ($cmp) {
+                0  { $status = "uptodate" }
+                1  { $status = "ahead" }
+                -1 { $status = "outdated" }
+            }
+        }
+    }
+
+    return [PSCustomObject]@{
+        Name = $ModuleName
+        Current = $CurrentVersion
+        Latest = $latestVersion
+        Status = $status
+        ModulesDir = $ModulesDir
+        Depth = $Depth
+    }
+}
+
+# Returns report entries for every module nested inside a modules/ directory, recursively.
+function Get-NestedOutdatedReport {
+    param([string]$NestedDir, [int]$Depth = 1)
+
+    $report = @()
+    if (-not (Test-Path $NestedDir)) { return $report }
+
+    foreach ($dir in (Get-ChildItem -Path $NestedDir -Directory -ErrorAction SilentlyContinue)) {
+        $entry = New-OutdatedEntry $dir.Name (Get-ModuleVersion $dir.FullName) $NestedDir $Depth
+        if ($entry) { $report += $entry }
+        $report += @(Get-NestedOutdatedReport (Join-Path $dir.FullName "modules") ($Depth + 1))
+    }
+    return $report
+}
+
+# Returns an array of [PSCustomObject]@{ Name; Current; Latest; Status; ModulesDir; Depth } for every
+# dependency in the manifest, each followed by the modules nested inside it (Depth > 0).
 # Dependencies whose current version isn't a parseable semver are skipped entirely.
 function Get-OutdatedReport {
     param([string]$ModulesPath)
@@ -421,40 +508,34 @@ function Get-OutdatedReport {
     if (-not $dependencies) { return $report }
 
     foreach ($prop in $dependencies.PSObject.Properties) {
-        $moduleName = $prop.Name
-        $currentVersion = $prop.Value
-
-        $currentSemver = Get-SemanticVersion $currentVersion
-        if (-not $currentSemver) { continue }
-
-        $latestVersion = Get-ForgeboxLatestVersion $moduleName
-        $status = $null
-        if (-not $latestVersion) {
-            $status = "unreachable"
-            $latestVersion = "?"
-        } else {
-            $latestSemver = Get-SemanticVersion $latestVersion
-            if (-not $latestSemver) {
-                $status = "unreachable"
-            } else {
-                $cmp = Compare-Versions -Version1 $currentSemver -Version2 $latestSemver
-                switch ($cmp) {
-                    0  { $status = "uptodate" }
-                    1  { $status = "ahead" }
-                    -1 { $status = "outdated" }
-                }
-            }
-        }
-
-        $report += [PSCustomObject]@{
-            Name = $moduleName
-            Current = $currentVersion
-            Latest = $latestVersion
-            Status = $status
-        }
+        $entry = New-OutdatedEntry $prop.Name $prop.Value $ModulesPath 0
+        if ($entry) { $report += $entry }
+        $report += @(Get-NestedOutdatedReport (Join-Path (Join-Path $ModulesPath $prop.Name) "modules") 1)
     }
 
     return $report
+}
+
+# Indents a module name by its nesting depth for report output.
+function Get-ReportLabel {
+    param([string]$Name, [int]$Depth = 0)
+    return ("  " * $Depth) + $Name
+}
+
+# Installs one outdated report entry. Nested entries are reinstalled into their parent's
+# modules/ folder. A parent update reinstalls its own nested dependencies, so nested entries
+# that are already current (or no longer present) are skipped.
+function Invoke-OutdatedUpdate {
+    param([PSCustomObject]$Entry)
+
+    if ($Entry.Depth -gt 0) {
+        $moduleDir = Join-Path $Entry.ModulesDir $Entry.Name
+        if (-not (Test-Path $moduleDir)) { return }
+        if ((Get-ModuleVersion $moduleDir) -eq $Entry.Latest) { return }
+        Install-NestedModule -NestedHome $Entry.ModulesDir -ModuleName "$($Entry.Name)@$($Entry.Latest)"
+    } else {
+        Install-Module "$($Entry.Name)@$($Entry.Latest)"
+    }
 }
 
 function Show-Outdated {
@@ -489,7 +570,7 @@ function Show-Outdated {
             "outdated" { $outdated += $entry; "🆙 outdated" }
             default { "⚠️  unable to check" }
         }
-        "{0,-25} {1,-15} {2,-15} {3}" -f $entry.Name, $entry.Current, $entry.Latest, $statusLabel | Write-Host
+        "{0,-25} {1,-15} {2,-15} {3}" -f (Get-ReportLabel $entry.Name $entry.Depth), $entry.Current, $entry.Latest, $statusLabel | Write-Host
     }
 
     Write-Host ""
@@ -502,7 +583,7 @@ function Show-Outdated {
     $confirmation = Read-Host "⬆️  Would you like to update $($outdated.Count) outdated module(s) now? [y/N]"
     if ($confirmation -match "^[yY]([eE][sS])?$") {
         foreach ($entry in $outdated) {
-            Install-Module "$($entry.Name)@$($entry.Latest)"
+            Invoke-OutdatedUpdate $entry
         }
     } else {
         Write-Host "Skipping updates." -ForegroundColor Yellow
@@ -528,7 +609,7 @@ function Update-Modules {
     $outdated = $report | Where-Object { $_.Status -eq "outdated" }
 
     foreach ($entry in $outdated) {
-        Write-Host "🆙 $($entry.Name): $($entry.Current) → $($entry.Latest)"
+        Write-Host "🆙 $(Get-ReportLabel $entry.Name $entry.Depth): $($entry.Current) → $($entry.Latest)"
     }
 
     if (-not $outdated -or $outdated.Count -eq 0) {
@@ -546,7 +627,7 @@ function Update-Modules {
     }
 
     foreach ($entry in $outdated) {
-        Install-Module "$($entry.Name)@$($entry.Latest)"
+        Invoke-OutdatedUpdate $entry
     }
 
     Write-Host "✅ Updated $($outdated.Count) module(s)!" -ForegroundColor Green
@@ -596,10 +677,54 @@ function Get-LatestVersionFromForgebox {
     }
 }
 
+# Runs Install-Module with MODULES_HOME pointed at a parent module's modules/ folder,
+# restoring the previous install state afterwards.
+function Install-NestedModule {
+    param(
+        [string]$NestedHome,
+        [string]$ModuleName,
+        [string[]]$Visited = @()
+    )
+
+    $previousHome = $script:MODULES_HOME
+    $previousNested = $script:NESTED_INSTALL
+    $previousRoot = $script:ROOT_MODULES_HOME
+    try {
+        if (-not $script:ROOT_MODULES_HOME) { $script:ROOT_MODULES_HOME = $script:MODULES_HOME }
+        $script:MODULES_HOME = $NestedHome
+        $script:NESTED_INSTALL = $true
+        Install-Module -moduleName $ModuleName -Visited $Visited
+    } finally {
+        $script:MODULES_HOME = $previousHome
+        $script:NESTED_INSTALL = $previousNested
+        $script:ROOT_MODULES_HOME = $previousRoot
+    }
+}
+
+# Warns when a module about to be nested is already installed somewhere else
+# under the top-level modules directory (top level or inside another module).
+function Write-DuplicateModuleWarning {
+    param([string]$DepName, [string]$Destination)
+
+    $root = if ($script:ROOT_MODULES_HOME) { $script:ROOT_MODULES_HOME } else { $script:MODULES_HOME }
+    if (-not $root -or -not (Test-Path $root)) { return }
+
+    $destinationFull = [System.IO.Path]::GetFullPath($Destination)
+    $found = Get-ChildItem -Path $root -Directory -Recurse -Filter $DepName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $DepName -and $_.FullName -ine $destinationFull -and (Test-Path (Join-Path $_.FullName "box.json")) }
+    foreach ($dir in $found) {
+        Write-Host "⚠️  Dependency '$DepName' is also installed at $($dir.FullName), installing another copy at $destinationFull" -ForegroundColor Yellow
+    }
+}
+
+# Installs the dependencies declared in a box.json. When NestedHome is given, they are
+# installed as nested modules inside that folder (a module's own "modules" directory);
+# otherwise they go to the current MODULES_HOME (used for a project box.json).
 function Install-ModuleDependencies {
     param(
         [PSCustomObject]$BoxJson,
-        [string[]]$Visited
+        [string[]]$Visited,
+        [string]$NestedHome = ""
     )
 
     if (-not $BoxJson -or -not $BoxJson.dependencies) { return }
@@ -624,7 +749,13 @@ function Install-ModuleDependencies {
         }
 
         Write-Host "📦 Installing dependency: $depInput" -ForegroundColor Green
-        Install-Module -moduleName $depInput -Visited $Visited
+        if ($NestedHome) {
+            $depSlug = $depName.ToLower()
+            Write-DuplicateModuleWarning $depSlug (Join-Path $NestedHome $depSlug)
+            Install-NestedModule -NestedHome $NestedHome -ModuleName $depInput -Visited $Visited
+        } else {
+            Install-Module -moduleName $depInput -Visited $Visited
+        }
     }
 }
 
@@ -809,15 +940,19 @@ boxlang module:$moduleName %*
                     }
                 }
 
-                # Install any module dependencies declared in box.json
-                Install-ModuleDependencies -BoxJson $boxJson -Visited ($Visited + $targetModule)
+                # Install any module dependencies declared in box.json as nested modules
+                # inside this module's own modules/ folder
+                Install-ModuleDependencies -BoxJson $boxJson -Visited ($Visited + $targetModule) -NestedHome (Join-Path $destination "modules")
             } catch {
                 # Silently ignore box.json parsing errors
             }
         }
 
-        # Track this install in the modules manifest
-        Set-BoxJsonDependency (Join-Path $MODULES_HOME "box.json") $targetModule $targetVersion
+        # Track this install in the modules manifest. Nested dependencies are tracked by
+        # their parent module's own box.json, so they never touch the shared manifest.
+        if (-not $NESTED_INSTALL) {
+            Set-BoxJsonDependency (Join-Path $MODULES_HOME "box.json") $targetModule $targetVersion
+        }
 
         # Success message
         Write-Host ""
