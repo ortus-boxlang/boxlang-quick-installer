@@ -449,6 +449,34 @@ EOF
 # Tests for nested dependency installs
 ###########################################################################
 
+# Builds a minimal fake jq (CI containers do not reliably ship the real one) that
+# understands just what the nested-module code reads from single-line JSON files:
+# dependency counts, dependency entries, and a module's "version".
+make_fake_jq() {
+    local DIR="$1"
+    mkdir -p "$DIR"
+    cat > "$DIR/jq" <<'FAKEJQ'
+#!/bin/sh
+for last; do :; done
+deps=$(sed -n 's/.*"dependencies": *{\([^}]*\)}.*/\1/p' "$last" 2>/dev/null)
+case "$*" in
+	*length*)
+		if [ -z "$deps" ]; then echo 0; else echo "$deps" | tr ',' '\n' | grep -c .; fi
+		;;
+	*to_entries*)
+		[ -n "$deps" ] && echo "$deps" | tr ',' '\n' | sed 's/[" ]//g' | while IFS=: read -r k v; do
+			printf '%s\t%s\n' "$k" "$v"
+		done
+		;;
+	*.version*)
+		sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$last" 2>/dev/null
+		;;
+	*) echo '{}' ;;
+esac
+FAKEJQ
+    chmod +x "$DIR/jq"
+}
+
 test_install_module_dependencies_nests_when_requested() {
     run_test_group "install_module_dependencies nests dependencies inside the module"
 
@@ -463,8 +491,11 @@ test_install_module_dependencies_nests_when_requested() {
         printf '%s|%s|%s\n' "$1" "$MODULES_HOME" "$NESTED_INSTALL" >> "$CALLS_FILE"
     }
 
+    local BIN_JQ="$TEST_TMP/bin-jqnest"
+    make_fake_jq "$BIN_JQ"
+
     MODULES_HOME="$ROOT"
-    install_module_dependencies "$MODULE_DIR" "bx-sites" true >/dev/null 2>&1
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "bx-sites" true >/dev/null 2>&1
 
     local calls
     calls=$(cat "$CALLS_FILE")
@@ -491,8 +522,11 @@ test_install_module_dependencies_default_is_not_nested() {
         printf '%s|%s|%s\n' "$1" "$MODULES_HOME" "$NESTED_INSTALL" >> "$CALLS_FILE"
     }
 
+    local BIN_JQ="$TEST_TMP/bin-jqflat"
+    make_fake_jq "$BIN_JQ"
+
     MODULES_HOME="$ROOT"
-    install_module_dependencies "$PROJECT_DIR" "" >/dev/null 2>&1
+    PATH="$BIN_JQ:$PATH" install_module_dependencies "$PROJECT_DIR" "" >/dev/null 2>&1
 
     assert_contains "bx-markdown|$ROOT|false" "$(cat "$CALLS_FILE")" "project box.json dependencies still install into the shared modules dir"
 
@@ -511,9 +545,12 @@ test_install_module_dependencies_warns_about_duplicates() {
 
     install_module() { :; }
 
+    local BIN_JQ="$TEST_TMP/bin-jqdup"
+    make_fake_jq "$BIN_JQ"
+
     MODULES_HOME="$ROOT"
     local output
-    output=$(install_module_dependencies "$MODULE_DIR" "bx-sites" true 2>&1)
+    output=$(PATH="$BIN_JQ:$PATH" install_module_dependencies "$MODULE_DIR" "bx-sites" true 2>&1)
 
     assert_contains "Dependency 'bx-markdown' is also installed at $ROOT/bx-markdown" "$output" "warns that the dependency already exists elsewhere"
     assert_not_contains "Dependency 'bx-yaml' is also installed" "$output" "does not warn about a dependency that is not duplicated"
@@ -532,8 +569,11 @@ test_list_modules_shows_nested_modules() {
     echo '{"version": "2.0.0"}' > "$ROOT/bx-sites/modules/bx-markdown/box.json"
     echo '{"version": "3.0.0"}' > "$ROOT/bx-sites/modules/bx-markdown/modules/bx-deep/box.json"
 
+    local BIN_JQ="$TEST_TMP/bin-jqlist"
+    make_fake_jq "$BIN_JQ"
+
     local output
-    output=$(list_modules "$ROOT" "Test" 2>&1)
+    output=$(PATH="$BIN_JQ:$PATH" list_modules "$ROOT" "Test" 2>&1)
 
     assert_contains "✓ bx-sites (1.0.0)" "$output" "lists the top-level module"
     assert_contains "  ↳ bx-markdown (2.0.0)" "$output" "lists a nested module indented under its parent"
@@ -552,8 +592,11 @@ test_nested_outdated_report_includes_nested_modules() {
     # Stub the network lookup: everything is at 2.0.0 on ForgeBox
     fetch_forgebox_latest_version() { echo "2.0.0"; }
 
+    local BIN_JQ="$TEST_TMP/bin-jqreport"
+    make_fake_jq "$BIN_JQ"
+
     local report
-    report=$(compute_outdated_report "$ROOT")
+    report=$(PATH="$BIN_JQ:$PATH" compute_outdated_report "$ROOT")
 
     assert_contains "bx-sites${TAB}1.0.0${TAB}2.0.0${TAB}outdated${TAB}$ROOT${TAB}0" "$report" "reports the top-level module at depth 0"
     assert_contains "bx-markdown${TAB}1.1.0${TAB}2.0.0${TAB}outdated${TAB}$ROOT/bx-sites/modules${TAB}1" "$report" "reports the nested module at depth 1 with its parent modules dir"
@@ -576,8 +619,11 @@ test_apply_outdated_updates_reinstalls_nested_modules_in_place() {
         printf '%s|%s|%s\n' "$1" "$MODULES_HOME" "$NESTED_INSTALL" >> "$CALLS_FILE"
     }
 
+    local BIN_JQ="$TEST_TMP/bin-jqapply"
+    make_fake_jq "$BIN_JQ"
+
     MODULES_HOME="$ROOT"
-    apply_outdated_updates "bx-sites|3.0.0|$ROOT|0
+    PATH="$BIN_JQ:$PATH" apply_outdated_updates "bx-sites|3.0.0|$ROOT|0
 bx-markdown|2.0.0|$ROOT/bx-sites/modules|1
 bx-yaml|2.0.0|$ROOT/bx-sites/modules|1
 " >/dev/null 2>&1
