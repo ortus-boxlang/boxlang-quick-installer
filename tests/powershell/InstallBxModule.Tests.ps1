@@ -110,6 +110,27 @@ Invoke-Test 'update warns about a named module that is not installed' {
     }
     Assert-Equal 0 $result.ExitCode 'update of a missing module should exit 0'
     Assert-Match "Module 'bx-nope' was not found" $result.Output 'update did not warn about the missing module'
+    Assert-Match 'None of the requested modules are installed' $result.Output 'update claimed everything was up to date when no named module matched'
+}
+
+Invoke-Test 'remove deletes the launcher scripts the module installed' {
+    $result = Invoke-ModuleInstaller -InstallerArguments @('remove', 'bx-demo', '--force') -Setup {
+        param($fakeHome)
+        $modules = Join-Path $fakeHome 'modules'
+        $module = Join-Path $modules 'bx-demo'
+        $bin = Join-Path $fakeHome 'bin'
+        [System.IO.Directory]::CreateDirectory($module) | Out-Null
+        [System.IO.Directory]::CreateDirectory($bin) | Out-Null
+        '{"dependencies": {"bx-demo": "1.0.0"}}' | Set-Content (Join-Path $modules 'box.json')
+        '{"version": "1.0.0", "boxlang": {"executable": "bxdemo"}}' | Set-Content (Join-Path $module 'box.json')
+        '# launcher' | Set-Content (Join-Path $bin 'bxdemo')
+        '@echo off' | Set-Content (Join-Path $bin 'bxdemo.bat')
+        '# unrelated' | Set-Content (Join-Path $bin 'keepme')
+    }
+    Assert-Equal 0 $result.ExitCode 'remove of a module with launchers should succeed'
+    Assert-Match 'Removed launcher script: bxdemo' $result.Output 'remove did not report removing the launcher'
+    Assert-Match 'Removed launcher script: bxdemo.bat' $result.Output 'remove did not report removing the .bat wrapper'
+    Assert-True ($result.Output -notmatch 'Removed launcher script: keepme') 'remove touched an unrelated bin script'
 }
 
 Invoke-Test 'the legacy install-bx-module command forwards to bx-module with a deprecation notice' {

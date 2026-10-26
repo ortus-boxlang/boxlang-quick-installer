@@ -656,9 +656,12 @@ function Update-Modules {
     $report = Get-OutdatedReport $ModulesPath
 
     # When module names were given, only update those (at any nesting depth)
+    $foundCount = 0
     if ($Filter -and $Filter.Count -gt 0) {
         foreach ($requested in $Filter) {
-            if (-not ($report | Where-Object { $_.Name -eq $requested })) {
+            if ($report | Where-Object { $_.Name -eq $requested }) {
+                $foundCount++
+            } else {
                 Write-Host "⚠️  Module '$requested' was not found among the installed modules (or has no parseable version)" -ForegroundColor Yellow
             }
         }
@@ -672,7 +675,13 @@ function Update-Modules {
     }
 
     if (-not $outdated -or $outdated.Count -eq 0) {
-        Write-Host "✅ All modules are up to date, nothing to update" -ForegroundColor Green
+        if ($Filter -and $Filter.Count -gt 0 -and $foundCount -eq 0) {
+            Write-Host "⚠️  None of the requested modules are installed, nothing to update" -ForegroundColor Yellow
+        } elseif ($Filter -and $Filter.Count -gt 0) {
+            Write-Host "✅ The requested module(s) are up to date, nothing to update" -ForegroundColor Green
+        } else {
+            Write-Host "✅ All modules are up to date, nothing to update" -ForegroundColor Green
+        }
         return
     }
 
@@ -1028,6 +1037,61 @@ boxlang module:$moduleName %*
     }
 }
 
+# Returns the launcher script names a module's box.json declares through
+# boxlang.executable and boxlang.executables.
+function Get-ModuleLauncherNames {
+    param([string]$BoxJsonPath)
+
+    $names = @()
+    if (-not (Test-Path $BoxJsonPath)) { return $names }
+    try {
+        $boxJson = Get-Content $BoxJsonPath -Raw | ConvertFrom-Json
+        if ($boxJson.boxlang) {
+            if ($boxJson.boxlang.executable) { $names += [string]$boxJson.boxlang.executable }
+            if ($boxJson.boxlang.executables) { $names += @($boxJson.boxlang.executables.PSObject.Properties.Name) }
+        }
+    } catch { }
+    return $names
+}
+
+# Deletes the launcher scripts (and their .bat wrappers) that Install-Module created in the
+# bin directory for a module. They are left in place when another copy of the module (for
+# example one nested inside another module) is still installed, because that copy uses the
+# same launchers.
+function Remove-ModuleLaunchers {
+    param([string]$ModuleName, [string]$ModulePath, [string[]]$Names)
+
+    if (-not $Names -or $Names.Count -eq 0) { return }
+
+    if ($LOCAL_INSTALL) {
+        $binDir = Join-Path (Get-Location) "boxlang_modules\.bin"
+    } else {
+        $boxlangHome = if ($env:BOXLANG_HOME) { $env:BOXLANG_HOME } else { Join-Path $env:USERPROFILE ".boxlang" }
+        $binDir = Join-Path $boxlangHome "bin"
+    }
+    if (-not (Test-Path $binDir)) { return }
+
+    $modulePathFull = [System.IO.Path]::GetFullPath($ModulePath)
+    $other = Get-ChildItem -Path $MODULES_HOME -Directory -Recurse -Filter $ModuleName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $ModuleName -and $_.FullName -ine $modulePathFull -and (Test-Path (Join-Path $_.FullName "box.json")) } |
+        Select-Object -First 1
+    if ($other) {
+        Write-Host "⚠️  Keeping the launcher script(s) of '$ModuleName': another copy is still installed at $($other.FullName)" -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($name in $Names) {
+        if (-not $name -or $name -match '[\\/]' -or $name -match '\.\.') { continue }
+        foreach ($candidate in @($name, "$name.bat")) {
+            $launcherPath = Join-Path $binDir $candidate
+            if (Test-Path $launcherPath) {
+                Remove-Item -Path $launcherPath -Force
+                Write-Host "🔧 Removed launcher script: $candidate" -ForegroundColor Blue
+            }
+        }
+    }
+}
+
 function Remove-Module {
     param(
         [string]$ModuleName,
@@ -1078,11 +1142,16 @@ function Remove-Module {
         }
     }
 
+    # Remember the launcher scripts the module installed (its box.json goes away with it)
+    $launchers = @(Get-ModuleLauncherNames $boxJsonPath)
+
     # Remove the module directory
     Write-Host "🗑️  Removing module $ModuleName..." -ForegroundColor Blue
     try {
         Remove-Item -Path $modulePath -Recurse -Force
         Write-Host "✅ Module '$ModuleName' removed successfully!" -ForegroundColor Green
+        # Remove the launcher scripts installed from its box.json executables
+        Remove-ModuleLaunchers $ModuleName $modulePath $launchers
         # Untrack this module from the modules manifest
         Remove-BoxJsonDependency (Join-Path $MODULES_HOME "box.json") $ModuleName
     } catch {
