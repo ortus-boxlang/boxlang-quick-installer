@@ -111,7 +111,8 @@ install_bvm() {
 	###########################################################################
 
 	print_info "Creating internal links for BoxLang scripts..."
-	# Create symlinks for install-bx-module, install-bx-site, bvm
+	# Create symlinks for bx-module (install-bx-module is its legacy alias), install-bx-site, bvm
+	ln -sf "$scripts_dir/bx-module.sh" "$BVM_HOME/bin/bx-module"
 	ln -sf "$scripts_dir/install-bx-module.sh" "$BVM_HOME/bin/install-bx-module"
 	ln -sf "$scripts_dir/install-bx-site.sh" "$BVM_HOME/bin/install-bx-site"
 	ln -sf "$scripts_dir/install-bvm.sh" "$BVM_HOME/bin/install-bvm"
@@ -203,7 +204,7 @@ show_help() {
     print_info "Direct BoxLang commands (after setup):"
     printf "  ${GREEN}boxlang${NORMAL} or ${GREEN}bx${NORMAL}              # Run BoxLang REPL\n"
     printf "  ${GREEN}boxlang-miniserver${NORMAL}      # Start MiniServer\n"
-    printf "  ${GREEN}install-bx-module${NORMAL}       # Install BoxLang modules\n"
+    printf "  ${GREEN}bx-module${NORMAL}               # Install and manage BoxLang modules (install-bx-module is the legacy alias)\n"
     printf "  ${GREEN}install-bx-site${NORMAL}         # Install BoxLang site templates\n"
     printf "\n"
     print_info "Quick start:"

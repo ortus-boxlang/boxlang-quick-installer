@@ -3,14 +3,14 @@
 # Do not change the shebang back to Bash or reintroduce Bash-only syntax.
 # It must remain compatible with Alpine BusyBox ash and standard /bin/sh.
 
-# Test suite for install-bx-module.sh (list_modules manifest handling)
+# Test suite for bx-module.sh (list_modules manifest handling)
 # Author: BoxLang Team
 # License: Apache License, Version 2.0
 
 # Get the directory of this script
 TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$TEST_DIR")")"
-INSTALL_BX_MODULE="$PROJECT_ROOT/src/install-bx-module.sh"
+BX_MODULE="$PROJECT_ROOT/src/bx-module.sh"
 
 # Test results tracking
 TESTS_PASSED=0
@@ -111,7 +111,7 @@ run_test_group() {
 ###########################################################################
 # Setup
 ###########################################################################
-# install-bx-module.sh ends with `main "$@"`, which would execute immediately
+# bx-module.sh ends with `main "$@"`, which would execute immediately
 # if the file were sourced. Copy it to a temp location with the final line
 # stripped so its functions can be exercised directly. The script resolves
 # helpers.sh via SCRIPT_DIR ($0-based, i.e. this test's directory), so we also
@@ -123,10 +123,10 @@ SITE_DIR="$TEST_TMP/site"
 mkdir -p "$SITE_DIR/scripts/helpers"
 cp "$PROJECT_ROOT/src/helpers/helpers.sh" "$SITE_DIR/scripts/helpers/helpers.sh"
 # Strip the final `main "$@"` line so sourcing doesn't run it
-sed '$d' "$INSTALL_BX_MODULE" > "$SITE_DIR/install-bx-module.sh"
+sed '$d' "$BX_MODULE" > "$SITE_DIR/bx-module.sh"
 
 export BOXLANG_INSTALL_HOME="$SITE_DIR"
-. "$SITE_DIR/install-bx-module.sh"
+. "$SITE_DIR/bx-module.sh"
 # The sourced script enables `set -e`; turn it back off so an assertion
 # failure does not kill the whole suite before it can report.
 set +e
@@ -259,7 +259,7 @@ EOF
     assert_contains "bx-ai@2.1.0" "$calls" "install_module_dependencies() installs a pinned dependency with its exact version"
 
     # Restore the real install_module for subsequent tests
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -297,7 +297,7 @@ EOF
     assert_contains "bx-orm@be" "$calls" "install_module_dependencies() passes through a 'be' dependency version"
     assert_contains "bx-ai@snapshot" "$calls" "install_module_dependencies() passes through a 'snapshot' dependency version"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -319,7 +319,7 @@ test_install_module_dependencies_no_box_json() {
     assert_return_code 0 "$rc" "install_module_dependencies() returns 0 when box.json is missing"
     assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() installs nothing when box.json is missing"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -356,7 +356,7 @@ EOF
     assert_contains "Skipping circular dependency" "$output" "install_module_dependencies() reports a skipped circular dependency"
     assert_equals "" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not install an already-visited dependency"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -397,7 +397,7 @@ EOF
     assert_not_contains "org.jline:jline" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() does not attempt to install a Maven coordinate as a ForgeBox module"
     assert_contains "bx-orm" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() still installs a normal ForgeBox dependency alongside a skipped one"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -441,7 +441,7 @@ EOF
     assert_contains "Warning: Failed to install dependency 'bx-orm'" "$output" "install_module_dependencies() warns about the failed dependency"
     assert_contains "bx-ai@2.1.0" "$(cat "$INSTALL_CALLS_FILE")" "install_module_dependencies() still installs the next dependency after a failure"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -504,7 +504,7 @@ test_install_module_dependencies_nests_when_requested() {
     assert_equals "$ROOT" "$MODULES_HOME" "the caller's MODULES_HOME is not changed by a nested install"
     assert_equals "false" "$NESTED_INSTALL" "the caller's NESTED_INSTALL is not changed by a nested install"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -530,7 +530,7 @@ test_install_module_dependencies_default_is_not_nested() {
 
     assert_contains "bx-markdown|$ROOT|false" "$(cat "$CALLS_FILE")" "project box.json dependencies still install into the shared modules dir"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -555,7 +555,7 @@ test_install_module_dependencies_warns_about_duplicates() {
     assert_contains "Dependency 'bx-markdown' is also installed at $ROOT/bx-markdown" "$output" "warns that the dependency already exists elsewhere"
     assert_not_contains "Dependency 'bx-yaml' is also installed" "$output" "does not warn about a dependency that is not duplicated"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -601,7 +601,7 @@ test_nested_outdated_report_includes_nested_modules() {
     assert_contains "bx-sites${TAB}1.0.0${TAB}2.0.0${TAB}outdated${TAB}$ROOT${TAB}0" "$report" "reports the top-level module at depth 0"
     assert_contains "bx-markdown${TAB}1.1.0${TAB}2.0.0${TAB}outdated${TAB}$ROOT/bx-sites/modules${TAB}1" "$report" "reports the nested module at depth 1 with its parent modules dir"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -634,7 +634,7 @@ bx-yaml|2.0.0|$ROOT/bx-sites/modules|1
     assert_contains "bx-markdown@2.0.0|$ROOT/bx-sites/modules|true" "$calls" "updates a stale nested module inside its parent"
     assert_not_contains "bx-yaml@" "$calls" "skips a nested module that is already current"
 
-    . "$SITE_DIR/install-bx-module.sh"
+    . "$SITE_DIR/bx-module.sh"
     set +e
 }
 
@@ -760,7 +760,7 @@ test_remove_module_completions_deletes_installed_script() {
 ###########################################################################
 
 test_main_no_args_installs_project_box_json_dependencies() {
-    run_test_group "main() with no arguments and a project box.json"
+    run_test_group "main() install with no modules and a project box.json"
 
     local PROJECT_DIR="$TEST_TMP/project-with-box-json"
     mkdir -p "$PROJECT_DIR"
@@ -778,7 +778,7 @@ test_main_no_args_installs_project_box_json_dependencies() {
         install_module_dependencies() {
             printf '%s\t%s\n' "$1" "$2" >> "$CALLS_FILE"
         }
-        cd "$PROJECT_DIR" && main 2>&1
+        cd "$PROJECT_DIR" && main install 2>&1
     )
     rc=$?
 
@@ -788,7 +788,7 @@ test_main_no_args_installs_project_box_json_dependencies() {
 }
 
 test_main_no_args_without_box_json_shows_usage_error() {
-    run_test_group "main() with no arguments and no box.json"
+    run_test_group "main() install with no modules and no box.json"
 
     local EMPTY_DIR="$TEST_TMP/project-without-box-json"
     mkdir -p "$EMPTY_DIR"
@@ -796,7 +796,7 @@ test_main_no_args_without_box_json_shows_usage_error() {
     local output rc
     output=$(
         preflight_check() { return 0; }
-        cd "$EMPTY_DIR" && main 2>&1
+        cd "$EMPTY_DIR" && main install 2>&1
     )
     rc=$?
 
@@ -805,7 +805,7 @@ test_main_no_args_without_box_json_shows_usage_error() {
 }
 
 test_main_local_flag_only_installs_project_box_json_dependencies_locally() {
-    run_test_group "main() with only --local and a project box.json"
+    run_test_group "main() install with only --local and a project box.json"
 
     local PROJECT_DIR="$TEST_TMP/project-local-box-json"
     mkdir -p "$PROJECT_DIR"
@@ -833,7 +833,7 @@ EOF
         install_module() {
             printf 'module=%s MODULES_HOME=%s LOCAL_INSTALL=%s\n' "$1" "$MODULES_HOME" "$LOCAL_INSTALL" >> "$CALLS_FILE"
         }
-        cd "$PROJECT_DIR" && PATH="$BIN_JQ:$PATH" main --local 2>&1
+        cd "$PROJECT_DIR" && PATH="$BIN_JQ:$PATH" main install --local 2>&1
     )
     rc=$?
 
@@ -841,6 +841,186 @@ EOF
     assert_contains "Found box.json" "$output" "main() reports finding the project box.json under --local"
     assert_contains "MODULES_HOME=$PROJECT_DIR/boxlang_modules" "$(cat "$CALLS_FILE")" "main() installs project dependencies into the local boxlang_modules directory"
     assert_contains "LOCAL_INSTALL=true" "$(cat "$CALLS_FILE")" "main() keeps LOCAL_INSTALL true when installing project dependencies via --local"
+}
+
+###########################################################################
+# Tests for the verb-based command line (bx-module <verb>)
+###########################################################################
+
+# Runs main in a subshell with every side-effecting function stubbed to record
+# its call into $VERB_CALLS_FILE, so we assert on dispatch and arguments only.
+run_main_stubbed() {
+    (
+        preflight_check() { return 0; }
+        install_module() { printf 'install_module %s|%s|%s\n' "$1" "$MODULES_HOME" "$LOCAL_INSTALL" >> "$VERB_CALLS_FILE"; }
+        remove_module() { printf 'remove_module %s|%s|%s\n' "$1" "$2" "$MODULES_HOME" >> "$VERB_CALLS_FILE"; }
+        list_modules() { printf 'list_modules %s|%s\n' "$1" "$2" >> "$VERB_CALLS_FILE"; }
+        outdated_modules() { printf 'outdated_modules %s|%s\n' "$1" "$2" >> "$VERB_CALLS_FILE"; }
+        update_modules() { printf 'update_modules %s|%s|%s|%s\n' "$1" "$2" "$3" "$4" >> "$VERB_CALLS_FILE"; }
+        cd "$VERB_WORK_DIR" && main "$@" 2>&1
+    )
+}
+
+test_main_verb_help_and_unknown_commands() {
+    run_test_group "main() help and unknown commands"
+
+    VERB_WORK_DIR="$TEST_TMP/verb-work"
+    mkdir -p "$VERB_WORK_DIR"
+    VERB_CALLS_FILE="$TEST_TMP/verb_calls_help.txt"
+    : > "$VERB_CALLS_FILE"
+
+    local output rc
+
+    output=$(run_main_stubbed); rc=$?
+    assert_return_code 0 "$rc" "main() with no arguments shows help and exits 0"
+    assert_contains "bx-module <command>" "$output" "main() with no arguments shows the command usage"
+
+    output=$(run_main_stubbed help); rc=$?
+    assert_return_code 0 "$rc" "main() help exits 0"
+    assert_contains "install [<module>" "$output" "main() help lists the install command"
+    assert_contains "update [<module> ...]" "$output" "main() help lists the update command"
+
+    output=$(run_main_stubbed help update); rc=$?
+    assert_return_code 0 "$rc" "main() help <command> exits 0"
+    assert_contains "bx-module update [<module> ...]" "$output" "main() help <command> shows that command's usage"
+
+    output=$(run_main_stubbed install --help); rc=$?
+    assert_return_code 0 "$rc" "main() <command> --help exits 0"
+    assert_contains "bx-module install <module>" "$output" "main() <command> --help shows that command's usage"
+    assert_equals "" "$(cat "$VERB_CALLS_FILE")" "main() help never runs a command"
+
+    output=$(run_main_stubbed help nope); rc=$?
+    assert_return_code 1 "$rc" "main() help for an unknown command exits 1"
+    assert_contains "Unknown command 'nope'" "$output" "main() help for an unknown command reports it"
+
+    output=$(run_main_stubbed bx-orm); rc=$?
+    assert_return_code 1 "$rc" "main() with a bare module name exits 1"
+    assert_contains "Unknown command 'bx-orm'" "$output" "main() with a bare module name reports an unknown command"
+    assert_contains "Did you mean: bx-module install bx-orm" "$output" "main() suggests the install command for a bare module name"
+
+    output=$(run_main_stubbed --list); rc=$?
+    assert_return_code 1 "$rc" "main() rejects a legacy flag as a command"
+    assert_contains "Did you mean: bx-module list" "$output" "main() suggests the verb for a legacy flag"
+    assert_equals "" "$(cat "$VERB_CALLS_FILE")" "main() unknown commands never run a command"
+}
+
+test_main_verb_install_and_remove() {
+    run_test_group "main() install and remove"
+
+    VERB_WORK_DIR="$TEST_TMP/verb-work"
+    mkdir -p "$VERB_WORK_DIR"
+    VERB_CALLS_FILE="$TEST_TMP/verb_calls_install.txt"
+    : > "$VERB_CALLS_FILE"
+    local output calls rc
+
+    output=$(BOXLANG_HOME="$TEST_TMP/bxhome" run_main_stubbed install bx-orm@2.5.0 "bx-ai,bx-esapi"); rc=$?
+    calls=$(cat "$VERB_CALLS_FILE")
+    assert_return_code 0 "$rc" "main() install exits 0"
+    assert_contains "install_module bx-orm@2.5.0|$TEST_TMP/bxhome/modules|false" "$calls" "main() install installs a pinned module into BoxLang HOME"
+    assert_contains "install_module bx-ai|" "$calls" "main() install splits comma-delimited modules (first)"
+    assert_contains "install_module bx-esapi|" "$calls" "main() install splits comma-delimited modules (second)"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed install bx-orm --local); rc=$?
+    assert_contains "install_module bx-orm|$VERB_WORK_DIR/boxlang_modules|true" "$(cat "$VERB_CALLS_FILE")" "main() install --local installs into ./boxlang_modules"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed install bx-orm --verbose --force); rc=$?
+    assert_return_code 0 "$rc" "main() install tolerates unknown options and --force like the legacy command"
+    assert_contains "Ignoring unknown option(s): --verbose" "$output" "main() install warns about an ignored option"
+    assert_contains "install_module bx-orm|" "$(cat "$VERB_CALLS_FILE")" "main() install still installs when options are ignored"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(BOXLANG_HOME="$TEST_TMP/bxhome" run_main_stubbed remove bx-orm bx-ai --force); rc=$?
+    calls=$(cat "$VERB_CALLS_FILE")
+    assert_return_code 0 "$rc" "main() remove exits 0"
+    assert_contains "remove_module bx-orm|true|$TEST_TMP/bxhome/modules" "$calls" "main() remove passes --force through (first module)"
+    assert_contains "remove_module bx-ai|true|" "$calls" "main() remove passes --force through (second module)"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed remove bx-orm); rc=$?
+    assert_contains "remove_module bx-orm|false|" "$(cat "$VERB_CALLS_FILE")" "main() remove without --force asks for confirmation"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed remove --force); rc=$?
+    assert_return_code 1 "$rc" "main() remove with no modules exits 1"
+    assert_contains "No module(s) specified for removal" "$output" "main() remove with no modules shows a usage error"
+
+    output=$(run_main_stubbed remove bx-orm --bogus); rc=$?
+    assert_return_code 1 "$rc" "main() remove rejects unknown options"
+    assert_contains "Unknown option(s) for 'remove': --bogus" "$output" "main() remove names the unknown option"
+    assert_equals "" "$(cat "$VERB_CALLS_FILE")" "main() remove errors never run a removal"
+}
+
+test_main_verb_list_outdated_update() {
+    run_test_group "main() list, outdated and update"
+
+    VERB_WORK_DIR="$TEST_TMP/verb-work"
+    mkdir -p "$VERB_WORK_DIR"
+    VERB_CALLS_FILE="$TEST_TMP/verb_calls_listing.txt"
+    : > "$VERB_CALLS_FILE"
+    local output calls rc
+
+    output=$(BOXLANG_HOME="$TEST_TMP/bxhome" run_main_stubbed list); rc=$?
+    assert_return_code 0 "$rc" "main() list exits 0"
+    assert_contains "list_modules $TEST_TMP/bxhome/modules|Global - $TEST_TMP/bxhome/modules" "$(cat "$VERB_CALLS_FILE")" "main() list reads BoxLang HOME"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed list --local); rc=$?
+    assert_contains "list_modules $VERB_WORK_DIR/boxlang_modules|Local - $VERB_WORK_DIR/boxlang_modules" "$(cat "$VERB_CALLS_FILE")" "main() list --local reads ./boxlang_modules"
+
+    output=$(run_main_stubbed list bx-orm); rc=$?
+    assert_return_code 1 "$rc" "main() list rejects module names"
+    output=$(run_main_stubbed list --force); rc=$?
+    assert_return_code 1 "$rc" "main() list rejects --force"
+    assert_contains "'list' does not accept additional arguments" "$output" "main() list explains the rejected arguments"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(BOXLANG_HOME="$TEST_TMP/bxhome" run_main_stubbed outdated); rc=$?
+    assert_return_code 0 "$rc" "main() outdated exits 0"
+    assert_contains "outdated_modules $TEST_TMP/bxhome/modules|Global" "$(cat "$VERB_CALLS_FILE")" "main() outdated checks BoxLang HOME"
+    output=$(run_main_stubbed outdated extra); rc=$?
+    assert_return_code 1 "$rc" "main() outdated rejects extra arguments"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(BOXLANG_HOME="$TEST_TMP/bxhome" run_main_stubbed update); rc=$?
+    assert_return_code 0 "$rc" "main() update exits 0"
+    assert_contains "update_modules $TEST_TMP/bxhome/modules|Global - $TEST_TMP/bxhome/modules|false|" "$(cat "$VERB_CALLS_FILE")" "main() update with no names updates everything, with confirmation"
+
+    : > "$VERB_CALLS_FILE"
+    output=$(run_main_stubbed update BX-Sites bx-orm --force --local); rc=$?
+    assert_contains "update_modules $VERB_WORK_DIR/boxlang_modules|Local - $VERB_WORK_DIR/boxlang_modules|true|bx-sites bx-orm" "$(cat "$VERB_CALLS_FILE")" "main() update passes --force, --local, and lowercased module names"
+
+    output=$(run_main_stubbed update --bogus); rc=$?
+    assert_return_code 1 "$rc" "main() update rejects unknown options"
+}
+
+test_update_modules_limits_to_named_modules() {
+    run_test_group "update_modules with a module filter"
+
+    local ROOT="$TEST_TMP/update-filter"
+    mkdir -p "$ROOT"
+    local APPLIED_FILE="$TEST_TMP/update_filter_applied.txt"
+    : > "$APPLIED_FILE"
+
+    (
+        command_exists() { return 0; }
+        compute_outdated_report() {
+            printf 'bx-sites\t1.0.0\t2.0.0\toutdated\t%s\t0\n' "$ROOT"
+            printf 'bx-markdown\t1.0.0\t2.0.0\toutdated\t%s/bx-sites/modules\t1\n' "$ROOT"
+            printf 'bx-yaml\t1.0.0\t2.0.0\toutdated\t%s\t0\n' "$ROOT"
+        }
+        apply_outdated_updates() { printf '%s' "$1" > "$APPLIED_FILE"; }
+        update_modules "$ROOT" "Test" true "bx-markdown bx-missing" > "$TEST_TMP/update_filter_out.txt" 2>&1
+    )
+
+    local applied output
+    applied=$(cat "$APPLIED_FILE")
+    output=$(cat "$TEST_TMP/update_filter_out.txt")
+    assert_contains "bx-markdown|2.0.0|$ROOT/bx-sites/modules|1" "$applied" "update_modules updates a named nested module"
+    assert_not_contains "bx-sites|" "$applied" "update_modules skips modules that were not named (top-level)"
+    assert_not_contains "bx-yaml|" "$applied" "update_modules skips modules that were not named (other)"
+    assert_contains "Module 'bx-missing' was not found" "$output" "update_modules warns about a named module that is not installed"
 }
 
 run_all_tests() {
@@ -866,6 +1046,10 @@ run_all_tests() {
     test_main_no_args_installs_project_box_json_dependencies
     test_main_no_args_without_box_json_shows_usage_error
     test_main_local_flag_only_installs_project_box_json_dependencies_locally
+    test_main_verb_help_and_unknown_commands
+    test_main_verb_install_and_remove
+    test_main_verb_list_outdated_update
+    test_update_modules_limits_to_named_modules
 
     # Print summary
     echo ""

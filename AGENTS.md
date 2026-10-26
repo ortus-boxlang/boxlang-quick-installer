@@ -72,8 +72,8 @@ This project provides cross-platform installation scripts for BoxLang, a next-ge
 
 Build output lands in `build/` and includes:
 
-- Shell scripts (`install-boxlang.sh`, `install-bx-module.sh`, `install-bx-site.sh`)
-- Windows scripts (`install-boxlang.bat`, `install-boxlang.ps1`, `install-bx-module.bat`, `install-bx-module.ps1`, `install-jre.ps1`)
+- Shell scripts (`install-boxlang.sh`, `bx-module.sh`, `install-bx-module.sh` (legacy shim), `install-bx-site.sh`)
+- Windows scripts (`install-boxlang.bat`, `install-boxlang.ps1`, `bx-module.bat`, `bx-module.ps1`, `install-bx-module.bat`, `install-bx-module.ps1` (legacy shims), `install-jre.ps1`)
 - `boxlang-installer.zip` bundling all artifacts
 - `boxlang-installer.md5` and `boxlang-installer.sha256` checksums
 - `version.json` and `changelog.md`
@@ -156,7 +156,7 @@ Scripts check multiple locations for helpers in priority order:
 ### External Dependencies
 
 - **BoxLang downloads**: downloads.ortussolutions.com with version-specific URLs
-- **ForgeBox modules**: Modules installed via `install-bx-module` scripts
+- **ForgeBox modules**: Modules installed via `bx-module` scripts (`install-bx-module` is the legacy alias)
 - **Java detection**: Platform-specific Java version checking and JAVA_HOME handling
 - **Package managers**: Homebrew (macOS), apt/dnf (Linux) for prerequisite installation
 

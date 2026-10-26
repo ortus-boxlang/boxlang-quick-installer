@@ -12,6 +12,7 @@ function Invoke-BvmInstallerWithMockDownloads {
     try {
         $bundleDirectory = Join-Path $root 'bundle'
         New-Item -ItemType Directory -Path $bundleDirectory -Force | Out-Null
+        Set-Content -Path (Join-Path $bundleDirectory 'bx-module.ps1') -Value '# test bundle' -Encoding UTF8
         Set-Content -Path (Join-Path $bundleDirectory 'install-bx-module.ps1') -Value '# test bundle' -Encoding UTF8
         $bundle = Join-Path $root 'bundle.zip'
         Compress-Archive -Path (Join-Path $bundleDirectory '*') -DestinationPath $bundle

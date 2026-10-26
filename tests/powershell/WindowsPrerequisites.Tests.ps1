@@ -4,7 +4,8 @@
 Initialize-TestSuite 'PowerShell prerequisites and module parsing'
 $boxlangInstaller = Join-Path $repoRoot 'src\install-boxlang.ps1'
 $bvmInstaller = Join-Path $repoRoot 'src\install-bvm.ps1'
-$moduleInstaller = Join-Path $repoRoot 'src\install-bx-module.ps1'
+$moduleInstaller = Join-Path $repoRoot 'src\bx-module.ps1'
+$legacyModuleInstaller = Join-Path $repoRoot 'src\install-bx-module.ps1'
 Import-ScriptFunctions -Path $moduleInstaller -Names @('Parse-ModuleList')
 
 Invoke-Test 'provides native download, JSON, and archive commands' {
@@ -29,7 +30,7 @@ Invoke-Test 'documents BVM Java modes' {
 }
 
 Invoke-Test 'parses every Windows installer script' {
-    foreach ($script in @($boxlangInstaller, $bvmInstaller, $moduleInstaller, (Join-Path $repoRoot 'src\bvm.ps1'), (Join-Path $repoRoot 'src\helpers\install-jre.ps1'))) {
+    foreach ($script in @($boxlangInstaller, $bvmInstaller, $moduleInstaller, $legacyModuleInstaller, (Join-Path $repoRoot 'src\bvm.ps1'), (Join-Path $repoRoot 'src\helpers\install-jre.ps1'))) {
         $tokens = $null
         $errors = $null
         [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
