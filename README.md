@@ -192,7 +192,7 @@ Here are the available options for the install command.
 
 ### Helper Scripts
 
-- **install-bx-module** - Install modules from ForgeBox.
+- **bx-module** - Install and manage BoxLang modules from ForgeBox (`bx-module install|remove|list|outdated|update`). The previous `install-bx-module` command still works: it prints a deprecation notice and forwards to `bx-module`.
 - **install-boxlang** - Single-version BoxLang installer, so you can reinstall, install specific versions, uninstall and more.
 - **install-bx-site** - Site-template installer script currently in development.
 
@@ -306,50 +306,96 @@ install-boxlang --help
 
 ### Module Management
 
+`bx-module` takes a command (`install`, `remove`, `list`, `outdated`, `update`, `help`) followed by its arguments and options.
+
 ```bash
 # Install a module globally
-install-bx-module bx-orm
+bx-module install bx-orm
 
 # Install multiple modules
-install-bx-module bx-orm,bx-mail,bx-db
+bx-module install bx-orm,bx-mail,bx-db
 
-# Install to specific directory
-install-bx-module bx-orm --local
+# Install to the local boxlang_modules directory
+bx-module install bx-orm --local
 
 # Install specific version
-install-bx-module bx-orm@1.0.0
+bx-module install bx-orm@1.0.0
+
+# Remove a module (add --force to skip the confirmation)
+bx-module remove bx-orm
 
 # List installed modules
-install-bx-module --list
+bx-module list
 
 # Check for outdated modules
-install-bx-module --outdated
+bx-module outdated
 
 # Update all outdated modules
-install-bx-module --update
+bx-module update
+
+# Update only specific modules
+bx-module update bx-sites bx-orm
 
 # Update without confirmation
-install-bx-module --update --force
+bx-module update --force
 
 # Use the local boxlang_modules directory
-install-bx-module --outdated --local
-install-bx-module --update --force --local
+bx-module outdated --local
+bx-module update --force --local
 
 # Install a project's dependencies (reads ./box.json, like `npm install`)
-install-bx-module
+bx-module install
 
 # Same, but into the local boxlang_modules folder instead of BoxLang HOME
-install-bx-module --local
+bx-module install --local
 
-# Get help
-install-bx-module --help
+# Get help, or help for one command
+bx-module help
+bx-module help update
 ```
+
+#### Migrating from `install-bx-module`
+
+`install-bx-module` is the previous name of this tool. It is kept as an alias that prints a deprecation notice (to stderr in bash, as a warning in PowerShell) and forwards to `bx-module`, so existing scripts keep working:
+
+| Previous | Now |
+|---|---|
+| `install-bx-module bx-orm --local` | `bx-module install bx-orm --local` |
+| `install-bx-module` (reads `./box.json`) | `bx-module install` |
+| `install-bx-module --list` | `bx-module list` |
+| `install-bx-module --outdated` | `bx-module outdated` |
+| `install-bx-module --update [--force]` | `bx-module update [--force]` |
+| `install-bx-module --remove bx-orm [--force]` | `bx-module remove bx-orm [--force]` |
+| `install-bx-module --help` | `bx-module help` |
+
+`bx-module` itself does not accept the old flag style: `bx-module --list` fails with a hint to use `bx-module list`.
 
 Module installations are tracked in a `box.json` dependencies manifest. Global modules use `~/.boxlang/modules/box.json`, while `--local` modules use `./boxlang_modules/box.json`. Installing and removing modules updates the manifest, and `--list` can generate a missing manifest from modules that were installed previously.
 
 If an installed module's own `box.json` declares a `dependencies` entry, those dependencies are installed automatically right after it: a `"*"` (or empty/null) version installs the latest ForgeBox version, while any other value — an exact version, `be`, or `snapshot` — is installed as specified. Circular dependency chains are detected and skipped.
 
-Running `install-bx-module` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
+Dependencies are installed as **nested modules** inside the parent module's own `modules/` folder, which the BoxLang runtime loads before the parent. For example, installing `bx-sites` produces:
+
+```
+~/.boxlang/modules/
+  box.json                  # manifest: only top-level modules (bx-sites)
+  bx-sites/
+    box.json
+    modules/
+      bx-markdown/
+      bx-esapi/
+      bx-yaml/
+      ...
+```
+
+- Nesting is recursive: a dependency's own dependencies nest inside it.
+- Each module is self-contained, so the same dependency is nested again under every module that needs it. A warning is printed when a nested dependency is already installed elsewhere.
+- Nested modules are not added to the shared manifest. Their parent's `box.json` declares them.
+- `--list`, `--outdated` and `--update` show nested modules indented under their parent, and `--update` reinstalls outdated nested modules in place.
+- Removing a module removes its nested dependencies with it.
+- A project `box.json` installed with no module names is not nested: its dependencies go to BoxLang HOME (or `./boxlang_modules` with `--local`).
+
+Running `bx-module install` with no module names checks the current directory for its own `box.json`. If one is found, its declared `dependencies` are installed the same way, so a project's dependencies can be installed with a single command, similar to running `npm install` with no arguments. This works both with no arguments at all (installs to BoxLang HOME) and with `--local` alone (installs into `./boxlang_modules`). If no `box.json` is present, the usual usage help is shown instead.
 
 #### Shipping Bash Completions With a Module
 
@@ -375,7 +421,7 @@ _bx_orm_complete() {
 complete -F _bx_orm_complete bx-orm
 ```
 
-On install, `install-bx-module` copies that file to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`); removing the module deletes it again. Files in that directory are sourced automatically by `bvm-init.sh` in any new Bash or Zsh session, so no extra setup is needed beyond having BVM's shell initialization installed (see [Shell Initialization](BVM-README.md#-shell-initialization) in the BVM guide). To pick up completions for a module installed in the current terminal session without opening a new one, run `source ~/.bvm/scripts/bvm-init.sh` (or `source ~/.bashrc` / `source ~/.zshrc`).
+On install, `bx-module` copies that file to `~/.boxlang/completions/<module-name>.sh` (or `./boxlang_modules/.completions/<module-name>.sh` with `--local`); removing the module deletes it again. Files in that directory are sourced automatically by `bvm-init.sh` in any new Bash or Zsh session, so no extra setup is needed beyond having BVM's shell initialization installed (see [Shell Initialization](BVM-README.md#-shell-initialization) in the BVM guide). To pick up completions for a module installed in the current terminal session without opening a new one, run `source ~/.bvm/scripts/bvm-init.sh` (or `source ~/.bashrc` / `source ~/.zshrc`).
 
 ## 🌐 Running Applications
 
@@ -488,8 +534,6 @@ curl -I https://forgebox.io
 # Clear module cache
 rm -rf ~/.boxlang/modules/.cache
 
-# Install with verbose output
-install-bx-module bx-orm --verbose
 ```
 
 ### Getting Help
@@ -497,7 +541,7 @@ install-bx-module bx-orm --verbose
 ```bash
 # Command-specific help
 install-boxlang --help
-install-bx-module --help
+bx-module help
 bvm help
 
 # Health check (BVM only)
@@ -505,7 +549,6 @@ bvm doctor
 
 # Verbose output for debugging
 install-boxlang --verbose
-install-bx-module --verbose
 ```
 
 ## 📚 Resources

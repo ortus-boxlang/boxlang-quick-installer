@@ -15,6 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `bx-module` now resolves its helper scripts when it is run through a symlink (such as the `/usr/local/bin/bx-module` link the quick installer creates) even if `BOXLANG_INSTALL_HOME` and `BVM_HOME` are not set, for example under `sudo`, cron, or CI. The legacy `install-bx-module` shim now also follows chains of symlinks addressed by a bare name.
+- `bx-module remove` now deletes the launcher scripts a module installed from its `box.json` `boxlang.executable` / `boxlang.executables` (and their `.bat` wrappers on Windows) from `~/.boxlang/bin` or `./boxlang_modules/.bin`. They are kept, with a warning, when another copy of the module is still installed.
+- `bx-module update <module>` no longer says "All modules are up to date" when nothing matched. It now says the requested modules are up to date, or that none of them are installed.
+
+### Added
+
+- New `bx-module` command, the BoxLang module manager, with verbs instead of flags: `bx-module install`, `remove`, `list`, `outdated`, `update` and `help` (`bx-module help <command>` for one command). Options (`--local`, `--force`) follow the verb. A bare module name or a legacy flag (`bx-module --list`) fails with a hint naming the right command. It is installed next to `install-bx-module` by the Unix installer, BVM (`bx-module.bat` on Windows), and removed again by `install-boxlang --uninstall`.
+- `bx-module update <module> ...` updates only the named modules (at any nesting depth) and warns about names that are not installed. Plain `bx-module update` still updates everything.
+
+### Changed
+
+- `install-bx-module` is now a thin legacy alias. It translates its old flags (`--list`, `--outdated`, `--update`, `--remove`, `--help`, or module names) into the equivalent `bx-module` command, prints a deprecation notice to stderr, and forwards to `bx-module`. Existing scripts keep working. Bash, PowerShell and the Windows `.bat` launchers are covered.
+- `install-bx-module` now installs a module's `box.json` `dependencies` as **nested modules** inside the module's own `modules/` folder (for example `~/.boxlang/modules/bx-sites/modules/bx-markdown`) instead of beside it in the shared modules folder. Nesting is recursive, nested modules are not added to the shared manifest, and a warning is printed when a nested dependency is already installed elsewhere. Removing a module removes its nested dependencies. A project `box.json` installed with no module names is unchanged. Applies to the bash and PowerShell installers.
+- `install-bx-module --list`, `--outdated` and `--update` now include nested modules, indented under their parent. `--update` reinstalls outdated nested modules in their parent's `modules/` folder.
+
+## [1.36.0] - 2026-10-08
+
+## [1.35.0] - 2026-09-16
+
+### Fixed
+
 - Fixed interrupted `bvm install` commands on Linux and Windows leaving partial version folders that appeared in `bvm list`. Installations now stage outside `versions` and clean up on interruption, publishing only after downloads and extraction complete.
 - Fixed forced BVM reinstalls removing existing runtimes before replacements were ready, and made Windows alias junction cleanup safe for PowerShell 5.1.
 

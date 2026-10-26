@@ -5,7 +5,7 @@ set -e
 TEST_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$TEST_DIR")")"
 INSTALLER_SCRIPT="$PROJECT_ROOT/src/install-boxlang.sh"
-MODULE_INSTALLER_SCRIPT="$PROJECT_ROOT/src/install-bx-module.sh"
+MODULE_INSTALLER_SCRIPT="$PROJECT_ROOT/src/bx-module.sh"
 
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -291,11 +291,11 @@ printf '%s\n' 'Linux'
 EOF
 	chmod +x "$mock_bin/dirname" "$mock_bin/uname"
 
-	output=$(PATH="$mock_bin:/bin:/usr/bin" TERM="xterm-256color" sh "$MODULE_INSTALLER_SCRIPT" 2>&1 || true)
+	output=$(PATH="$mock_bin:/bin:/usr/bin" TERM="xterm-256color" sh "$MODULE_INSTALLER_SCRIPT" install 2>&1 || true)
 	assert_contains "No module(s) specified" "$output" "module installer skips Java when dependencies are present"
 
 	rm -f "$mock_bin/jq"
-	output=$(PATH="$mock_bin" TERM="xterm-256color" /bin/sh "$MODULE_INSTALLER_SCRIPT" 2>&1 || true)
+	output=$(PATH="$mock_bin" TERM="xterm-256color" /bin/sh "$MODULE_INSTALLER_SCRIPT" install 2>&1 || true)
 	assert_contains "jq" "$output" "module installer still requires jq"
 	rm -rf "$sandbox"
 }
@@ -303,7 +303,7 @@ EOF
 test_module_installer_parses_versions_with_posix_sh() {
 	local sandbox
 	sandbox="$(mktemp -d)"
-	local module_library="$sandbox/install-bx-module-lib.sh"
+	local module_library="$sandbox/bx-module-lib.sh"
 	local output
 	local exit_code=0
 
@@ -320,7 +320,7 @@ test_module_installer_parses_versions_with_posix_sh() {
 test_module_installer_preserves_escaped_json_control_characters() {
 	local sandbox
 	sandbox="$(mktemp -d)"
-	local module_library="$sandbox/install-bx-module-lib.sh"
+	local module_library="$sandbox/bx-module-lib.sh"
 	local mock_bin="$sandbox/mock-bin"
 	local output
 

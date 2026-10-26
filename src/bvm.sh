@@ -1055,7 +1055,7 @@ check_health() {
     fi
     print_info "Checking BVM helper scripts..."
     local bvm_scripts_dir="${BVM_SCRIPTS_DIR}"
-    local expected_bvm_scripts="install-bx-module.sh install-bx-site.sh install-bvm.sh bvm.sh"
+    local expected_bvm_scripts="bx-module.sh install-bx-module.sh install-bx-site.sh install-bvm.sh bvm.sh"
     local missing_bvm_scripts=""
     for script in $expected_bvm_scripts; do
         if [ ! -x "$bvm_scripts_dir/$script" ]; then

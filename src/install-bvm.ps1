@@ -299,7 +299,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%BVM_PS1%' miniserver
     Set-Content -Path (Join-Path $binDir "boxlang-miniserver.bat") -Value $miniServerBat -Encoding ASCII
     Set-Content -Path (Join-Path $binDir "bx-miniserver.bat") -Value $miniServerBat -Encoding ASCII
 
-    # install-bx-module.bat - link to helper script
+    # bx-module.bat - link to the module manager script
+    $bxModuleBat = @"
+@echo off
+setlocal
+if not defined BVM_HOME set "BVM_HOME=%USERPROFILE%\.bvm"
+set "PS1_SCRIPT=%BVM_HOME%\scripts\bx-module.ps1"
+if not exist "%PS1_SCRIPT%" (
+    echo Error: bx-module.ps1 not found. Please reinstall BVM.
+    exit /b 1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PS1_SCRIPT%' %*"
+"@
+    Set-Content -Path (Join-Path $binDir "bx-module.bat") -Value $bxModuleBat -Encoding ASCII
+
+    # install-bx-module.bat - legacy alias, forwards to bx-module through its shim script
     $installModuleBat = @"
 @echo off
 setlocal
