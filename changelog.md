@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-10-26
+
+## [1.36.0] - 2026-10-08
+
+## [1.35.0] - 2026-09-16
+
 ### Fixed
 
 - `bx-module` now resolves its helper scripts when it is run through a symlink (such as the `/usr/local/bin/bx-module` link the quick installer creates) even if `BOXLANG_INSTALL_HOME` and `BVM_HOME` are not set, for example under `sudo`, cron, or CI. The legacy `install-bx-module` shim now also follows chains of symlinks addressed by a bare name.
@@ -532,7 +538,8 @@ The installer scripts are now installed to: `/usr/local/bin`. So you can reuse t
 
 - Initial release
 
-[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.36.0...HEAD
+[unreleased]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.37.0...HEAD
+[1.37.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/ortus-boxlang/boxlang-quick-installer/compare/v1.33.0...v1.34.0
