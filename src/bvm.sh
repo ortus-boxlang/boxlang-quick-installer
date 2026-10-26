@@ -476,7 +476,7 @@ install_version() {
 
     # Download BoxLang runtime
     print_info "⬇️  Downloading BoxLang runtime... (this may take a moment)"
-    if ! curl -fL --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
+    if ! curl -fL --retry 3 --retry-delay 2 --progress-bar -o "$boxlang_cache" "$boxlang_url"; then
         print_error "Failed to download BoxLang runtime"
         rm -rf "$install_dir"
         return 1
@@ -493,7 +493,7 @@ install_version() {
     # Download BoxLang MiniServer
 	printf "\n"
     print_info "⬇️  Downloading BoxLang MiniServer... (this may take a moment)"
-    if ! curl -fL --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
+    if ! curl -fL --retry 3 --retry-delay 2 --progress-bar -o "$miniserver_cache" "$miniserver_url"; then
         print_error "Failed to download BoxLang MiniServer"
         rm -rf "$install_dir"
         return 1
