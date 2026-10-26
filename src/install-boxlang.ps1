@@ -123,7 +123,7 @@ function Show-Help {
     Write-Host -NoNewline " or "
     Write-Host -ForegroundColor Green "bx-miniserver"
     Write-Host -NoNewline "  📦 Install modules: "
-    Write-Host -ForegroundColor Green "install-bx-module <module-name>"
+    Write-Host -ForegroundColor Green "bx-module install <module-name>"
     Write-Host -NoNewline "  📦 Package Manager: "
     Write-Host -ForegroundColor Green "box"
     Write-Host " (if CommandBox was installed)"

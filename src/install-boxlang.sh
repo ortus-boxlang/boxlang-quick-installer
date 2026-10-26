@@ -469,6 +469,9 @@ verify_installation() {
 	fi
 
 	# Check helper scripts
+	if [ ! -L "${system_bin}/bx-module" ]; then
+		print_warning "System symbolic link 'bx-module' was not created properly"
+	fi
 	if [ ! -L "${system_bin}/install-bx-module" ]; then
 		print_warning "System symbolic link 'install-bx-module' was not created properly"
 	fi
@@ -501,6 +504,7 @@ uninstall_boxlang() {
 	rm -fv /usr/local/bin/bx
 	rm -fv /usr/local/bin/boxlang-miniserver
 	rm -fv /usr/local/bin/bx-miniserver
+	rm -fv /usr/local/bin/bx-module
 	rm -fv /usr/local/bin/install-bx-module
 	rm -fv /usr/local/bin/install-boxlang
 	rm -fv /usr/local/bin/install-bvm
@@ -520,6 +524,7 @@ uninstall_boxlang() {
 		rm -fv "$HOME/.local/bin/bx"
 		rm -fv "$HOME/.local/bin/boxlang-miniserver"
 		rm -fv "$HOME/.local/bin/bx-miniserver"
+		rm -fv "$HOME/.local/bin/bx-module"
 		rm -fv "$HOME/.local/bin/install-bx-module"
 		rm -fv "$HOME/.local/bin/install-boxlang"
 		rm -fv "$HOME/.local/bin/install-boxlang"
@@ -609,6 +614,7 @@ remove_previous_installation() {
 		rm -f "${SYSTEM_BIN}/bx"
 		rm -f "${SYSTEM_BIN}/boxlang-miniserver"
 		rm -f "${SYSTEM_BIN}/bx-miniserver"
+		rm -f "${SYSTEM_BIN}/bx-module"
 		rm -f "${SYSTEM_BIN}/install-bx-module"
 		rm -f "${SYSTEM_BIN}/install-boxlang"
 		rm -f "${SYSTEM_BIN}/install-bx-site"
@@ -885,6 +891,7 @@ EOF
 	ln -sf "${SYSTEM_BIN}/boxlang-miniserver" "${SYSTEM_BIN}/bx-miniserver"
 	# Helper scripts
 	ln -sf "${DESTINATION_SCRIPTS}/install-boxlang.sh" "${SYSTEM_BIN}/install-boxlang"
+	ln -sf "${DESTINATION_SCRIPTS}/bx-module.sh" "${SYSTEM_BIN}/bx-module"
 	ln -sf "${DESTINATION_SCRIPTS}/install-bx-module.sh" "${SYSTEM_BIN}/install-bx-module"
 	ln -sf "${DESTINATION_SCRIPTS}/install-bx-site.sh" "${SYSTEM_BIN}/install-bx-site"
 	ln -sf "${DESTINATION_SCRIPTS}/install-bvm.sh" "${SYSTEM_BIN}/install-bvm"

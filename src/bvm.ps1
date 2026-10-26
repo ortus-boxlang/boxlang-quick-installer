@@ -960,7 +960,7 @@ function Invoke-Doctor {
 
     # Helper scripts
     Write-BvmInfo "Checking BVM helper scripts..."
-    $expectedScripts = @("bvm.ps1", "install-bx-module.ps1", "install-bvm.ps1", "helpers\helpers.sh")
+    $expectedScripts = @("bvm.ps1", "bx-module.ps1", "install-bx-module.ps1", "install-bvm.ps1", "helpers\helpers.sh")
     $missingScripts = @()
     foreach ($script in $expectedScripts) {
         if (-not (Test-Path (Join-Path $BVM_SCRIPTS_DIR $script))) {
