@@ -15,13 +15,17 @@ function Invoke-ModuleInstaller {
 
     $previousLocation = Get-Location
     $previousBoxlangHome = $env:BOXLANG_HOME
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        # Windows PowerShell turns child stderr output into terminating errors under 'Stop'
+        $ErrorActionPreference = 'Continue'
         Set-Location $root
         $env:BOXLANG_HOME = $fakeHome
         $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Script @InstallerArguments 2>&1 | Out-String
         return @{ Output = $output; ExitCode = $LASTEXITCODE }
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Set-Location $previousLocation
         if ($null -eq $previousBoxlangHome) { Remove-Item Env:BOXLANG_HOME -ErrorAction SilentlyContinue } else { $env:BOXLANG_HOME = $previousBoxlangHome }
         Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue

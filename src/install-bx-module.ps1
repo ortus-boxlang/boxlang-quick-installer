@@ -29,7 +29,7 @@ if ($first -in @("--help", "-h")) {
     $forward = @("install") + $args
 }
 
-[Console]::Error.WriteLine("⚠️  'install-bx-module' is deprecated and now forwards to bx-module. Use: bx-module $($forward -join ' ')")
+Write-Warning "'install-bx-module' is deprecated and now forwards to bx-module. Use: bx-module $($forward -join ' ')"
 
 & $bxModule @forward
 exit $LASTEXITCODE

@@ -1148,7 +1148,7 @@ if ($verb -notin @("install", "remove", "list", "outdated", "update")) {
     if ($verb -in @("--list", "--outdated", "--update", "--remove")) {
         Write-Host "💡 Did you mean: bx-module $($verb.Substring(2))?" -ForegroundColor Yellow
     } elseif (-not $verb.StartsWith("-")) {
-        Write-Host "💡 Did you mean: bx-module install $verb?" -ForegroundColor Yellow
+        Write-Host "💡 Did you mean: bx-module install ${verb}?" -ForegroundColor Yellow
     }
     Write-Host "💡 Commands: install, remove, list, outdated, update, help (run 'bx-module help' for details)" -ForegroundColor Yellow
     exit 1

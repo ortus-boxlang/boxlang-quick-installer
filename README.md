@@ -356,7 +356,7 @@ bx-module help update
 
 #### Migrating from `install-bx-module`
 
-`install-bx-module` is the previous name of this tool. It is kept as an alias that prints a deprecation notice (to stderr) and forwards to `bx-module`, so existing scripts keep working:
+`install-bx-module` is the previous name of this tool. It is kept as an alias that prints a deprecation notice (to stderr in bash, as a warning in PowerShell) and forwards to `bx-module`, so existing scripts keep working:
 
 | Previous | Now |
 |---|---|
