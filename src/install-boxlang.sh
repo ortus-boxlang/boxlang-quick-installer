@@ -76,7 +76,7 @@ else
 	helpers_url="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
-	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
+	if curl -fsSL --retry 3 --retry-delay 2 "$helpers_url" -o "$helpers_file"; then
 		chmod +x "$helpers_file"
 		. "$helpers_file"
 		print_success "Helper functions downloaded successfully"
@@ -396,7 +396,7 @@ check_and_install_commandbox() {
 
 	# Download CommandBox
 	print_info "Downloading CommandBox from ${commandbox_url}..."
-	if ! env curl -L --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
+	if ! env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
 		print_error "Failed to download CommandBox"
 		print_info "💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation"
 		return 1
@@ -783,7 +783,7 @@ install_boxlang() {
 		print_warning "⌛ Downloading BoxLang..."
 		print_info "${DOWNLOAD_URL}"
 		rm -f "${TEMP_DIR}"/boxlang.zip
-		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
+		env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}"/boxlang.zip "${DOWNLOAD_URL}" || {
 			print_error "Error: Download of BoxLang® binary failed"
 			exit 1
 		}
@@ -808,7 +808,7 @@ install_boxlang() {
 		print_warning "⌛ Downloading BoxLang MiniServer..."
 		print_info "${DOWNLOAD_URL_MINISERVER}"
 		rm -f "${TEMP_DIR}"/boxlang-miniserver.zip
-		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
+		env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}"/boxlang-miniserver.zip "${DOWNLOAD_URL_MINISERVER}" || {
 			print_error "Error: Download of BoxLang® MiniServer binary failed"
 			exit 1
 		}
@@ -830,7 +830,7 @@ install_boxlang() {
 		print_warning "⌛ Downloading installer scripts..."
 		print_info "${INSTALLER_URL}"
 		rm -f "${TEMP_DIR}"/boxlang-installer.zip
-		env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
+		env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
 			print_error "Error: Download of BoxLang® Installer bundle failed"
 			exit 1
 		}

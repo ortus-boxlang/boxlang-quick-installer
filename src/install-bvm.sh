@@ -45,7 +45,7 @@ else
 	helpers_url="https://downloads.ortussolutions.com/ortussolutions/boxlang-quick-installer/helpers/helpers.sh"
 	helpers_file="${TEMP_DIR}/helpers.sh"
 
-	if curl -fsSL "$helpers_url" -o "$helpers_file"; then
+	if curl -fsSL --retry 3 --retry-delay 2 "$helpers_url" -o "$helpers_file"; then
 		source "$helpers_file"
 	else
 		printf "${RED}Error: Failed to download helper functions from $helpers_url${NORMAL}\n"
@@ -72,7 +72,7 @@ install_bvm() {
         cp -R "$installer_dir"/. "$scripts_dir"/
     else
         print_info "Downloading BVM from [${INSTALLER_URL}]"
-        env curl -L --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
+        env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}"/boxlang-installer.zip "${INSTALLER_URL}" || {
             print_error "Error: Download of BoxLang® Installer bundle failed"
             exit 1
         }
