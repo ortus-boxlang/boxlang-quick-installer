@@ -19,7 +19,24 @@ set -e
 
 # Configuration
 FORGEBOX_API_URL="https://forgebox.io/api/v1"
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# Resolve this script's real location. It is usually run through a symlink in a bin
+# directory (e.g. /usr/local/bin/bx-module) while the helper scripts live next to the real
+# script. `readlink -f` is not portable, so follow the links by hand.
+SELF="$0"
+while [ -L "$SELF" ]; do
+	LINK_TARGET="$(readlink "$SELF")"
+	case "$LINK_TARGET" in
+		/*) SELF="$LINK_TARGET" ;;
+		*/*) SELF="$(dirname -- "$SELF")/$LINK_TARGET" ;;
+		*)
+			case "$SELF" in
+				*/*) SELF="${SELF%/*}/$LINK_TARGET" ;;
+				*) SELF="$LINK_TARGET" ;;
+			esac
+			;;
+	esac
+done
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)"
 # A literal tab character for use as an IFS field separator when parsing
 # tab-delimited jq output. `$'\t'` is a bash/ksh-ism that POSIX /bin/sh
 # (dash, BusyBox ash) does not expand, so it must be built with printf instead.
@@ -764,6 +781,59 @@ install_module_dependencies() {
 	done
 }
 
+# Prints the launcher script names a module's box.json declares through
+# boxlang.executable and boxlang.executables, one per line.
+module_launcher_names() {
+	local BOX_JSON_PATH=${1}
+
+	[ -f "${BOX_JSON_PATH}" ] || return 0
+	jq -r '(.boxlang.executable // empty), ((.boxlang.executables // {}) | keys[])' "${BOX_JSON_PATH}" 2>/dev/null || true
+}
+
+# Deletes the launcher scripts that install_module created in the bin directory for a
+# module. NAMES is the newline-delimited output of module_launcher_names. They are left in
+# place when another copy of the module (for example one nested inside another module) is
+# still installed, because that copy uses the same launchers.
+remove_module_launchers() {
+	local MODULE_NAME=${1}
+	local MODULE_PATH=${2}
+	local NAMES=${3}
+
+	[ -n "$NAMES" ] || return 0
+
+	local BIN_DIR
+	if [ "$LOCAL_INSTALL" = true ]; then
+		BIN_DIR="$(pwd)/boxlang_modules/.bin"
+	else
+		BIN_DIR="${BOXLANG_HOME:-$HOME/.boxlang}/bin"
+	fi
+	[ -d "${BIN_DIR}" ] || return 0
+
+	local other
+	other=$(find "${MODULES_HOME}" -type d -name "${MODULE_NAME}" ! -path "${MODULE_PATH}" 2>/dev/null | while IFS= read -r found; do
+		if [ -f "${found}/box.json" ]; then
+			echo "$found"
+			break
+		fi
+	done)
+	if [ -n "$other" ]; then
+		printf "${YELLOW}⚠️  Keeping the launcher script(s) of '${MODULE_NAME}': another copy is still installed at ${other}${NORMAL}\n"
+		return 0
+	fi
+
+	local name
+	printf '%s\n' "$NAMES" | while IFS= read -r name; do
+		[ -n "$name" ] || continue
+		case "$name" in
+			*/* | *..*) continue ;;
+		esac
+		if [ -f "${BIN_DIR}/${name}" ]; then
+			rm -f "${BIN_DIR}/${name}"
+			printf "${BLUE}🔧 Removed launcher script: ${name}${NORMAL}\n"
+		fi
+	done
+}
+
 remove_module() {
 	local MODULE_NAME=${1}
 	local FORCE_REMOVE=${2:-false}
@@ -814,10 +884,16 @@ remove_module() {
 		esac
 	fi
 
+	# Remember the launcher scripts the module installed (its box.json goes away with it)
+	local LAUNCHERS
+	LAUNCHERS=$(module_launcher_names "${BOX_JSON_PATH}")
+
 	# Remove the module directory
 	printf "${BLUE}🗑️  Removing module ${MODULE_NAME}...${NORMAL}\n"
 	if rm -rf "${MODULE_PATH}"; then
 		printf "${GREEN}✅ Module '${MODULE_NAME}' removed successfully!${NORMAL}\n"
+		# Remove the launcher scripts installed from its box.json executables
+		remove_module_launchers "${MODULE_NAME}" "${MODULE_PATH}" "${LAUNCHERS}"
 		# Untrack this module from the modules manifest
 		box_json_remove_dependency "${MODULES_HOME}/box.json" "${MODULE_NAME}"
 		# Remove any bash completions installed for this module
@@ -1117,10 +1193,13 @@ update_modules() {
 
 	local OUTDATED_MODULES=""
 	local OUTDATED_COUNT=0
+	local FOUND_COUNT=0
 	if [ -n "$FILTER" ]; then
 		local requested
 		for requested in $FILTER; do
-			if ! cut -f1 "${REPORT_FILE}" | grep -qx "$requested"; then
+			if cut -f1 "${REPORT_FILE}" | grep -qxF -- "$requested"; then
+				FOUND_COUNT=$((FOUND_COUNT + 1))
+			else
 				printf "${YELLOW}⚠️  Module '${requested}' was not found among the installed modules (or has no parseable version)${NORMAL}\n"
 			fi
 		done
@@ -1143,7 +1222,13 @@ update_modules() {
 	rm -f "${REPORT_FILE}"
 
 	if [ "$OUTDATED_COUNT" -eq 0 ]; then
-		printf "${GREEN}✅ All modules are up to date, nothing to update${NORMAL}\n"
+		if [ -n "$FILTER" ] && [ "$FOUND_COUNT" -eq 0 ]; then
+			printf "${YELLOW}⚠️  None of the requested modules are installed, nothing to update${NORMAL}\n"
+		elif [ -n "$FILTER" ]; then
+			printf "${GREEN}✅ The requested module(s) are up to date, nothing to update${NORMAL}\n"
+		else
+			printf "${GREEN}✅ All modules are up to date, nothing to update${NORMAL}\n"
+		fi
 		return 0
 	fi
 

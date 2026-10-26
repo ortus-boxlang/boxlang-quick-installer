@@ -460,6 +460,9 @@ make_fake_jq() {
 for last; do :; done
 deps=$(sed -n 's/.*"dependencies": *{\([^}]*\)}.*/\1/p' "$last" 2>/dev/null)
 case "$*" in
+	*executables*)
+		printf 'bxdemo\nbxdemo-extra\n'
+		;;
 	*length*)
 		if [ -z "$deps" ]; then echo 0; else echo "$deps" | tr ',' '\n' | grep -c .; fi
 		;;
@@ -1023,6 +1026,142 @@ test_update_modules_limits_to_named_modules() {
     assert_contains "Module 'bx-missing' was not found" "$output" "update_modules warns about a named module that is not installed"
 }
 
+###########################################################################
+# Tests for symlinked runs, launcher cleanup, and update messages
+###########################################################################
+
+test_bx_module_runs_through_symlinks_without_environment() {
+    run_test_group "bx-module resolves its helpers when run through a symlink"
+
+    local SBX="$TEST_TMP/symlink-run"
+    mkdir -p "$SBX/scripts" "$SBX/bin" "$SBX/mock-bin" "$SBX/home"
+    cp "$PROJECT_ROOT/src/bx-module.sh" "$SBX/scripts/bx-module.sh"
+    cp -R "$PROJECT_ROOT/src/helpers" "$SBX/scripts/helpers"
+    for command in curl unzip jq; do
+        printf '#!/bin/sh\nexit 0\n' > "$SBX/mock-bin/$command"
+        chmod +x "$SBX/mock-bin/$command"
+    done
+    ln -s "$SBX/scripts/bx-module.sh" "$SBX/bin/bx-module"
+    (cd "$SBX/bin" && ln -s ../scripts/bx-module.sh relative-bx-module && ln -s relative-bx-module chained-bx-module)
+
+    local output
+    # No BOXLANG_INSTALL_HOME / BVM_HOME: only the symlink target can supply the helpers
+    output=$(env -u BVM_HOME -u BOXLANG_INSTALL_HOME -u BOXLANG_HOME HOME="$SBX/home" PATH="$SBX/mock-bin:$PATH" sh "$SBX/bin/bx-module" help list 2>&1)
+    assert_contains "bx-module list [--local]" "$output" "an absolute symlink finds the helper scripts"
+    assert_not_contains "Helper scripts not found" "$output" "an absolute symlink does not report missing helpers"
+
+    output=$(cd "$SBX/bin" && env -u BVM_HOME -u BOXLANG_INSTALL_HOME -u BOXLANG_HOME HOME="$SBX/home" PATH="$SBX/mock-bin:$PATH" sh ./relative-bx-module help list 2>&1)
+    assert_contains "bx-module list [--local]" "$output" "a relative symlink finds the helper scripts"
+
+    output=$(cd "$SBX/bin" && env -u BVM_HOME -u BOXLANG_INSTALL_HOME -u BOXLANG_HOME HOME="$SBX/home" PATH="$SBX/mock-bin:$PATH" sh chained-bx-module help list 2>&1)
+    assert_contains "bx-module list [--local]" "$output" "a chain of symlinks addressed by a bare name finds the helper scripts"
+}
+
+test_remove_module_removes_its_launcher_scripts() {
+    run_test_group "remove_module deletes the launcher scripts the module installed"
+
+    local ROOT="$TEST_TMP/remove-launchers"
+    local BIN_JQ="$TEST_TMP/bin-jqlaunchers"
+    make_fake_jq "$BIN_JQ"
+
+    mkdir -p "$ROOT/modules/bx-demo" "$ROOT/home/bin"
+    echo '{"version": "1.0.0"}' > "$ROOT/modules/bx-demo/box.json"
+    : > "$ROOT/home/bin/bxdemo"
+    : > "$ROOT/home/bin/bxdemo-extra"
+    : > "$ROOT/home/bin/keepme"
+
+    local output
+    output=$(
+        MODULES_HOME="$ROOT/modules"
+        BOXLANG_HOME="$ROOT/home"
+        LOCAL_INSTALL=false
+        PATH="$BIN_JQ:$PATH" remove_module bx-demo true 2>&1
+    )
+
+    assert_contains "Removed launcher script: bxdemo" "$output" "remove_module reports the launcher it removed"
+    assert_equals "false" "$([ -e "$ROOT/home/bin/bxdemo" ] && echo true || echo false)" "remove_module deletes boxlang.executable"
+    assert_equals "false" "$([ -e "$ROOT/home/bin/bxdemo-extra" ] && echo true || echo false)" "remove_module deletes the boxlang.executables entries"
+    assert_equals "true" "$([ -e "$ROOT/home/bin/keepme" ] && echo true || echo false)" "remove_module leaves unrelated bin scripts alone"
+    assert_equals "false" "$([ -d "$ROOT/modules/bx-demo" ] && echo true || echo false)" "remove_module still removes the module directory"
+}
+
+test_remove_module_keeps_launchers_used_by_another_copy() {
+    run_test_group "remove_module keeps launchers when another copy is installed"
+
+    local ROOT="$TEST_TMP/remove-launchers-dup"
+    local BIN_JQ="$TEST_TMP/bin-jqlaunchersdup"
+    make_fake_jq "$BIN_JQ"
+
+    mkdir -p "$ROOT/modules/bx-demo" "$ROOT/modules/bx-sites/modules/bx-demo" "$ROOT/home/bin"
+    echo '{"version": "1.0.0"}' > "$ROOT/modules/bx-demo/box.json"
+    echo '{"version": "1.0.0"}' > "$ROOT/modules/bx-sites/modules/bx-demo/box.json"
+    : > "$ROOT/home/bin/bxdemo"
+
+    local output
+    output=$(
+        MODULES_HOME="$ROOT/modules"
+        BOXLANG_HOME="$ROOT/home"
+        LOCAL_INSTALL=false
+        PATH="$BIN_JQ:$PATH" remove_module bx-demo true 2>&1
+    )
+
+    assert_contains "Keeping the launcher script(s) of 'bx-demo'" "$output" "remove_module explains why it kept the launchers"
+    assert_equals "true" "$([ -e "$ROOT/home/bin/bxdemo" ] && echo true || echo false)" "remove_module keeps a launcher still used by a nested copy"
+    assert_equals "false" "$([ -d "$ROOT/modules/bx-demo" ] && echo true || echo false)" "remove_module still removes the requested copy"
+}
+
+test_remove_module_removes_local_launchers() {
+    run_test_group "remove_module deletes launchers from the local .bin folder"
+
+    local ROOT="$TEST_TMP/remove-launchers-local"
+    local BIN_JQ="$TEST_TMP/bin-jqlauncherslocal"
+    make_fake_jq "$BIN_JQ"
+
+    mkdir -p "$ROOT/boxlang_modules/bx-demo" "$ROOT/boxlang_modules/.bin"
+    echo '{"version": "1.0.0"}' > "$ROOT/boxlang_modules/bx-demo/box.json"
+    : > "$ROOT/boxlang_modules/.bin/bxdemo"
+
+    (
+        cd "$ROOT"
+        MODULES_HOME="$ROOT/boxlang_modules"
+        LOCAL_INSTALL=true
+        PATH="$BIN_JQ:$PATH" remove_module bx-demo true >/dev/null 2>&1
+    )
+
+    assert_equals "false" "$([ -e "$ROOT/boxlang_modules/.bin/bxdemo" ] && echo true || echo false)" "remove_module --local deletes the launcher from ./boxlang_modules/.bin"
+}
+
+test_update_modules_messages_for_named_modules() {
+    run_test_group "update_modules messages when modules are named"
+
+    local ROOT="$TEST_TMP/update-messages"
+    mkdir -p "$ROOT"
+
+    local output
+    output=$(
+        command_exists() { return 0; }
+        compute_outdated_report() { printf 'bx-sites\t1.0.0\t1.0.0\tuptodate\t%s\t0\n' "$ROOT"; }
+        update_modules "$ROOT" "Test" true "bx-sites" 2>&1
+    )
+    assert_contains "The requested module(s) are up to date" "$output" "update_modules says the named modules are up to date"
+    assert_not_contains "All modules are up to date" "$output" "update_modules does not claim every module was checked"
+
+    output=$(
+        command_exists() { return 0; }
+        compute_outdated_report() { printf 'bx-sites\t1.0.0\t1.0.0\tuptodate\t%s\t0\n' "$ROOT"; }
+        update_modules "$ROOT" "Test" true "bx-nope" 2>&1
+    )
+    assert_contains "None of the requested modules are installed" "$output" "update_modules says when no named module is installed"
+    assert_not_contains "up to date" "$output" "update_modules does not say up to date when nothing matched"
+
+    output=$(
+        command_exists() { return 0; }
+        compute_outdated_report() { printf 'bx-sites\t1.0.0\t1.0.0\tuptodate\t%s\t0\n' "$ROOT"; }
+        update_modules "$ROOT" "Test" true "" 2>&1
+    )
+    assert_contains "All modules are up to date" "$output" "update_modules keeps the original message without names"
+}
+
 run_all_tests() {
     test_list_modules_jq_failure
     test_list_modules_empty_manifest
@@ -1050,6 +1189,11 @@ run_all_tests() {
     test_main_verb_install_and_remove
     test_main_verb_list_outdated_update
     test_update_modules_limits_to_named_modules
+    test_bx_module_runs_through_symlinks_without_environment
+    test_remove_module_removes_its_launcher_scripts
+    test_remove_module_keeps_launchers_used_by_another_copy
+    test_remove_module_removes_local_launchers
+    test_update_modules_messages_for_named_modules
 
     # Print summary
     echo ""

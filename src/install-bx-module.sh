@@ -18,7 +18,12 @@ while [ -L "$SELF" ]; do
 	LINK_TARGET="$(readlink "$SELF")"
 	case "$LINK_TARGET" in
 		/*) SELF="$LINK_TARGET" ;;
-		*) SELF="${SELF%/*}/$LINK_TARGET" ;;
+		*)
+			case "$SELF" in
+				*/*) SELF="${SELF%/*}/$LINK_TARGET" ;;
+				*) SELF="$LINK_TARGET" ;;
+			esac
+			;;
 	esac
 done
 case "$SELF" in

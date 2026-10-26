@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `bx-module` now resolves its helper scripts when it is run through a symlink (such as the `/usr/local/bin/bx-module` link the quick installer creates) even if `BOXLANG_INSTALL_HOME` and `BVM_HOME` are not set, for example under `sudo`, cron, or CI. The legacy `install-bx-module` shim now also follows chains of symlinks addressed by a bare name.
+- `bx-module remove` now deletes the launcher scripts a module installed from its `box.json` `boxlang.executable` / `boxlang.executables` (and their `.bat` wrappers on Windows) from `~/.boxlang/bin` or `./boxlang_modules/.bin`. They are kept, with a warning, when another copy of the module is still installed.
+- `bx-module update <module>` no longer says "All modules are up to date" when nothing matched. It now says the requested modules are up to date, or that none of them are installed.
+
 ### Added
 
 - New `bx-module` command, the BoxLang module manager, with verbs instead of flags: `bx-module install`, `remove`, `list`, `outdated`, `update` and `help` (`bx-module help <command>` for one command). Options (`--local`, `--force`) follow the verb. A bare module name or a legacy flag (`bx-module --list`) fails with a hint naming the right command. It is installed next to `install-bx-module` by the Unix installer, BVM (`bx-module.bat` on Windows), and removed again by `install-boxlang --uninstall`.

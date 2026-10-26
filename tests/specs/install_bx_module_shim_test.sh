@@ -124,6 +124,10 @@ echo "────────────────────────�
 OUTPUT="$(PATH="$BIN:$PATH" install-bx-module --outdated 2>/dev/null)"
 assert_equals "FORWARDED: [outdated]" "$OUTPUT" "a symlinked install-bx-module finds bx-module.sh next to the real script"
 
+(cd "$BIN" && ln -s ../scripts/install-bx-module.sh relative-install-bx-module)
+OUTPUT="$(cd "$BIN" && sh relative-install-bx-module --list 2>/dev/null)"
+assert_equals "FORWARDED: [list]" "$OUTPUT" "a relative symlink addressed by a bare name finds bx-module.sh"
+
 echo ""
 echo "🧪 Testing: missing bx-module.sh"
 echo "────────────────────────────────────────────────────────────"
