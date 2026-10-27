@@ -46,7 +46,7 @@ The only difference is that BVM adds version management capabilities on top.
 - 🎯 **Smart version detection** - automatically detects actual version numbers from installations
 - 🚀 **First-install activation** - automatically activates the first BoxLang version you install
 - 🐚 **Shell initialization** - centralizes BVM and BoxLang PATH setup for Bash, Zsh, and Fish
-- ⌨️ **Command completion** - provides BVM command and version completion for Bash and Zsh
+- ⌨️ **Command completion** - tab completion for `bvm`, `install-boxlang` and `bx-module` in Bash, Zsh, Fish and PowerShell
 - 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
 - ☕ **Java installation assistance** - the Unix installer prompts to install Java 21 when needed; the Windows installer supports `--with-jre`
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
@@ -253,7 +253,7 @@ The initialization hook:
 
 - Exports `BVM_HOME` and `BOXLANG_HOME` with defaults of `~/.bvm` and `~/.boxlang`.
 - Adds the BVM wrapper directory, active version, and BoxLang home `bin` directory to `PATH`.
-- Loads BVM command and installed-version completions for Bash and Zsh.
+- Loads `bvm`, `install-boxlang` and `bx-module` completions (commands, flags, installed versions and installed modules) for Bash, Zsh and Fish. The Windows installer adds the PowerShell completions to your `$PROFILE`.
 
 For an existing terminal, reload the profile path printed by the installer or
 open a new terminal session:

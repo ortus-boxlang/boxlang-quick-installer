@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Tab completions for `bvm`, `install-boxlang` and `bx-module` (including the legacy `install-bx-module`) in Bash, Zsh, Fish and PowerShell, under `src/completions/`. They complete commands, flags, installed versions and installed modules.
+- `install-boxlang` installs the completions to `~/.boxlang/completions/` and loads them from your shell profile. The PowerShell installers add them to `$PROFILE`.
+
+### Changed
+
+- Replaced `bvm-completions.sh` with per-shell completion files. `bvm-init.sh` and `bvm-init.fish` now load `completions/load.sh` and `completions/load.fish`.
+
 ## [1.38.0] - 2026-10-26
 
 ## [1.37.0] - 2026-10-26

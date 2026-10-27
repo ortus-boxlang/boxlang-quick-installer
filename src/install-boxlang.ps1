@@ -35,6 +35,33 @@ if ($args -contains "--non-interactive") {
 }
 
 ###########################################################################
+# Completions Function
+###########################################################################
+function Register-PowerShellCompletions {
+    param([string]$LoaderPath)
+
+    if (-not (Test-Path $LoaderPath)) {
+        Write-Host -ForegroundColor Yellow "⚠️  PowerShell completions were not found at [$LoaderPath], skipping"
+        return
+    }
+    $marker = "# BoxLang shell completions"
+    try {
+        $profilePath = $PROFILE.CurrentUserAllHosts
+        $profileDir = Split-Path -Parent $profilePath
+        if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
+        if (-not (Test-Path $profilePath)) { New-Item -ItemType File -Path $profilePath -Force | Out-Null }
+        if (-not (Select-String -Path $profilePath -SimpleMatch $marker -Quiet)) {
+            Add-Content -Path $profilePath -Value "`n$marker`nif (Test-Path `"$LoaderPath`") { . `"$LoaderPath`" }"
+            Write-Host -ForegroundColor Green "⌨️  Added PowerShell completions to [$profilePath]"
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Yellow "⚠️  Could not update your PowerShell profile: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Blue "💡 Add this line to your profile to enable completions: . `"$LoaderPath`""
+    }
+}
+
+###########################################################################
 # Help Function
 ###########################################################################
 function Show-Help {
@@ -959,6 +986,15 @@ Write-Host -ForegroundColor Green "✅ BoxLang home bin directory created at [$B
 
 ## Add the bin folder and BoxLang home bin to the path
 Update-PathVariable -BinDir $DESTINATION_BIN -BoxLangHomeBin $BOXLANG_HOME_BIN
+
+## Install PowerShell completions into BoxLang home and load them from the profile
+$completionsSource = Join-Path $DESTINATION_BIN "completions"
+if (Test-Path $completionsSource) {
+    $completionsDest = Join-Path (Split-Path -Parent $BOXLANG_HOME_BIN) "completions"
+    New-Item -ItemType Directory -Path $completionsDest -Force | Out-Null
+    Copy-Item -Path (Join-Path $completionsSource "*") -Destination $completionsDest -Recurse -Force
+    Register-PowerShellCompletions -LoaderPath (Join-Path $completionsDest "load.ps1")
+}
 
 ## Create a BOXLANG_HOME env variable that points to the $DESTINATION_HOME
 Write-Host -ForegroundColor Green "🏠 Setting the BOXLANG_HOME environment variable to [$DESTINATION_HOME]"
