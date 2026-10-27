@@ -338,6 +338,44 @@ check_or_set_path() {
 }
 
 ###########################################################################
+# Install shell completions (bash, zsh, fish) into BoxLang home
+###########################################################################
+install_completions() {
+	local scripts_dir="$1"
+	local completions_src="${scripts_dir}/completions"
+	local completions_dest="${BOXLANG_HOME:-$HOME/.boxlang}/completions"
+	local marker="BoxLang shell completions"
+
+	if [ ! -d "$completions_src" ]; then
+		print_warning "Completions were not found in [$scripts_dir], skipping"
+		return 0
+	fi
+
+	print_info "⌨️  Installing shell completions to [$completions_dest]..."
+	mkdir -p "$completions_dest"
+	local item
+	for item in bash zsh fish load.sh load.fish; do
+		[ -e "${completions_src}/${item}" ] && cp -R "${completions_src}/${item}" "$completions_dest/"
+	done
+
+	local profile_file=$(get_shell_profile_file)
+	if [ -z "$profile_file" ] || grep -Fq "$marker" "$profile_file" 2>/dev/null; then
+		return 0
+	fi
+	{
+		echo ""
+		echo "# $marker"
+		if [ "${SHELL##*/}" = "fish" ]; then
+			echo "set -q BOXLANG_HOME; or set -gx BOXLANG_HOME \$HOME/.boxlang"
+			echo "test -s \$BOXLANG_HOME/completions/load.fish; and source \$BOXLANG_HOME/completions/load.fish"
+		else
+			echo "[ -s \"\${BOXLANG_HOME:-\$HOME/.boxlang}/completions/load.sh\" ] && . \"\${BOXLANG_HOME:-\$HOME/.boxlang}/completions/load.sh\""
+		fi
+	} >> "$profile_file"
+	print_success "Added shell completions to [$profile_file]"
+}
+
+###########################################################################
 # CommandBox Installation Check and Install Function
 ###########################################################################
 check_and_install_commandbox() {
@@ -921,6 +959,9 @@ EOF
 
 	# Check PATH for local user execution mostly.
 	check_or_set_path "$SYSTEM_BIN" "$SYSTEM_HOME" "$BOXLANG_HOME_BIN"
+
+	# Install shell completions
+	install_completions "$DESTINATION_SCRIPTS"
 
 	printf "${GREEN}"
 	printf "─────────────────────────────────────────────────────────────────────────────\n"

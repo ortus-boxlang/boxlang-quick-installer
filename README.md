@@ -466,6 +466,21 @@ boxlang-miniserver --dev
 boxlang-miniserver --help
 ```
 
+## ⌨️ Shell Completions
+
+Tab completion is installed for `bvm`, `install-boxlang`, `bx-module` (and the legacy `install-bx-module`) in Bash, Zsh, Fish and PowerShell. It completes commands, flags, installed BoxLang versions and installed modules.
+
+| Shell | Source | Loaded by |
+|---|---|---|
+| Bash / Zsh | `completions/{bash,zsh}/<command>.{bash,zsh}` | `completions/load.sh` |
+| Fish | `completions/fish/<command>.fish` | `completions/load.fish` |
+| PowerShell | `completions/powershell/<command>.ps1` | `completions/load.ps1` (added to `$PROFILE`) |
+
+- **BVM** installs them to `~/.bvm/scripts/completions/` and `bvm-init.sh` / `bvm-init.fish` load them.
+- **The single-version installer** copies them to `~/.boxlang/completions/` and adds a loader line to your shell profile.
+
+Open a new terminal, or source your profile, after installing.
+
 ## 🔧 Configuration
 
 ### Environment Variables

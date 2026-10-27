@@ -9,3 +9,8 @@ if test -d $BVM_HOME/current/bin
 end
 
 fish_add_path --prepend $BOXLANG_HOME/bin
+
+# Load bvm, install-boxlang and bx-module completions
+if test -s $BVM_HOME/scripts/completions/load.fish
+    source $BVM_HOME/scripts/completions/load.fish
+end
