@@ -30,9 +30,9 @@ esac
 
 export PATH
 
-# Load BVM command completion when supported by the current shell
-if [ -s "$BVM_HOME/scripts/bvm-completions.sh" ]; then
-    . "$BVM_HOME/scripts/bvm-completions.sh"
+# Load bvm, install-boxlang and bx-module completions (bash and zsh)
+if [ -n "${BASH_VERSION:-}${ZSH_VERSION:-}" ] && [ -s "$BVM_HOME/scripts/completions/load.sh" ]; then
+    . "$BVM_HOME/scripts/completions/load.sh"
 fi
 
 # Load bash completions contributed by installed BoxLang modules (see

@@ -16,6 +16,33 @@ $BVM_SCRIPT_URL = "https://downloads.ortussolutions.com/ortussolutions/boxlang-q
 $ProgressPreference = 'SilentlyContinue'
 
 ###########################################################################
+# Completions Function
+###########################################################################
+function Register-PowerShellCompletions {
+    param([string]$LoaderPath)
+
+    if (-not (Test-Path $LoaderPath)) {
+        Write-Host -ForegroundColor Yellow "⚠️  PowerShell completions were not found at [$LoaderPath], skipping"
+        return
+    }
+    $marker = "# BoxLang shell completions"
+    try {
+        $profilePath = $PROFILE.CurrentUserAllHosts
+        $profileDir = Split-Path -Parent $profilePath
+        if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
+        if (-not (Test-Path $profilePath)) { New-Item -ItemType File -Path $profilePath -Force | Out-Null }
+        if (-not (Select-String -Path $profilePath -SimpleMatch $marker -Quiet)) {
+            Add-Content -Path $profilePath -Value "`n$marker`nif (Test-Path `"$LoaderPath`") { . `"$LoaderPath`" }"
+            Write-Host -ForegroundColor Green "⌨️  Added PowerShell completions to [$profilePath]"
+        }
+    }
+    catch {
+        Write-Host -ForegroundColor Yellow "⚠️  Could not update your PowerShell profile: $($_.Exception.Message)"
+        Write-Host -ForegroundColor Blue "💡 Add this line to your profile to enable completions: . `"$LoaderPath`""
+    }
+}
+
+###########################################################################
 # Help Function
 ###########################################################################
 function Show-Help {
@@ -224,6 +251,9 @@ function Install-BVM {
         Write-Host -ForegroundColor Red "❌ Failed to extract installer bundle: $($_.Exception.Message)"
         return $false
     }
+
+    # Enable PowerShell completions for bvm, install-boxlang and bx-module
+    Register-PowerShellCompletions -LoaderPath (Join-Path $scriptsDir "completions\load.ps1")
 
     # Download bvm.ps1 directly to ~/.bvm/scripts/
     Write-Host -ForegroundColor Blue "⬇️  Downloading bvm.ps1 from [$BVM_SCRIPT_URL]..."
