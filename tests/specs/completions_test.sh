@@ -88,40 +88,44 @@ done
 
 ###########################################################################
 echo "Test: bash completions"
-out="$(bash_complete _bvm_complete bvm "")"
-assert_contains "install" "$out" "bvm completes subcommands"
-assert_contains "doctor" "$out" "bvm completes doctor"
+if command -v bash >/dev/null 2>&1; then
+	out="$(bash_complete _bvm_complete bvm "")"
+	assert_contains "install" "$out" "bvm completes subcommands"
+	assert_contains "doctor" "$out" "bvm completes doctor"
 
-out="$(bash_complete _bvm_complete bvm use "")"
-assert_contains "1.2.0" "$out" "bvm use completes installed versions"
-assert_contains "latest" "$out" "bvm use completes latest"
+	out="$(bash_complete _bvm_complete bvm use "")"
+	assert_contains "1.2.0" "$out" "bvm use completes installed versions"
+	assert_contains "latest" "$out" "bvm use completes latest"
 
-out="$(bash_complete _bvm_complete bvm rm "")"
-assert_contains "1.2.0" "$out" "bvm rm completes installed versions"
-assert_not_contains "latest" "$out" "bvm rm does not offer latest"
+	out="$(bash_complete _bvm_complete bvm rm "")"
+	assert_contains "1.2.0" "$out" "bvm rm completes installed versions"
+	assert_not_contains "latest" "$out" "bvm rm does not offer latest"
 
-out="$(bash_complete _bvm_complete bvm install --f)"
-assert_contains "--force" "$out" "bvm install completes --force"
+	out="$(bash_complete _bvm_complete bvm install --f)"
+	assert_contains "--force" "$out" "bvm install completes --force"
 
-out="$(bash_complete _install_boxlang_complete install-boxlang --with)"
-assert_contains "--with-jre" "$out" "install-boxlang completes --with-jre"
-assert_contains "--without-commandbox" "$out" "install-boxlang completes --without-commandbox"
+	out="$(bash_complete _install_boxlang_complete install-boxlang --with)"
+	assert_contains "--with-jre" "$out" "install-boxlang completes --with-jre"
+	assert_contains "--without-commandbox" "$out" "install-boxlang completes --without-commandbox"
 
-out="$(bash_complete _install_boxlang_complete install-boxlang "")"
-assert_contains "snapshot" "$out" "install-boxlang completes snapshot"
+	out="$(bash_complete _install_boxlang_complete install-boxlang "")"
+	assert_contains "snapshot" "$out" "install-boxlang completes snapshot"
 
-out="$(bash_complete _bx_module_complete bx-module "")"
-assert_contains "outdated" "$out" "bx-module completes subcommands"
+	out="$(bash_complete _bx_module_complete bx-module "")"
+	assert_contains "outdated" "$out" "bx-module completes subcommands"
 
-out="$(bash_complete _bx_module_complete bx-module remove "")"
-assert_contains "bx-orm" "$out" "bx-module remove completes installed modules"
+	out="$(bash_complete _bx_module_complete bx-module remove "")"
+	assert_contains "bx-orm" "$out" "bx-module remove completes installed modules"
 
-out="$(bash_complete _bx_module_complete bx-module update --)"
-assert_contains "--force" "$out" "bx-module update completes --force"
-assert_contains "--local" "$out" "bx-module update completes --local"
+	out="$(bash_complete _bx_module_complete bx-module update --)"
+	assert_contains "--force" "$out" "bx-module update completes --force"
+	assert_contains "--local" "$out" "bx-module update completes --local"
 
-out="$(bash_complete _bx_module_complete bx-module list --)"
-assert_not_contains "--force" "$out" "bx-module list does not offer --force"
+	out="$(bash_complete _bx_module_complete bx-module list --)"
+	assert_not_contains "--force" "$out" "bx-module list does not offer --force"
+else
+	echo "⚠️  SKIP: bash not installed"
+fi
 
 ###########################################################################
 echo "Test: completions stay in sync with the scripts"
@@ -144,11 +148,15 @@ done
 
 ###########################################################################
 echo "Test: loader is idempotent and wired into the init scripts"
-out="$(BVM_HOME="$TEST_TMP" bash --norc -c '. "'"$COMPLETIONS"'/load.sh"; . "'"$COMPLETIONS"'/load.sh"; complete -p bvm install-boxlang bx-module install-bx-module' 2>&1)"
-assert_contains "_bvm_complete bvm" "$out" "bvm completion is registered"
-assert_contains "_install_boxlang_complete install-boxlang" "$out" "install-boxlang completion is registered"
-assert_contains "_bx_module_complete bx-module" "$out" "bx-module completion is registered"
-assert_contains "_bx_module_complete install-bx-module" "$out" "install-bx-module legacy alias completion is registered"
+if command -v bash >/dev/null 2>&1; then
+	out="$(BVM_HOME="$TEST_TMP" bash --norc -c '. "'"$COMPLETIONS"'/load.sh"; . "'"$COMPLETIONS"'/load.sh"; complete -p bvm install-boxlang bx-module install-bx-module' 2>&1)"
+	assert_contains "_bvm_complete bvm" "$out" "bvm completion is registered"
+	assert_contains "_install_boxlang_complete install-boxlang" "$out" "install-boxlang completion is registered"
+	assert_contains "_bx_module_complete bx-module" "$out" "bx-module completion is registered"
+	assert_contains "_bx_module_complete install-bx-module" "$out" "install-bx-module legacy alias completion is registered"
+else
+	echo "⚠️  SKIP: bash not installed"
+fi
 
 grep -q 'completions/load.sh' "$PROJECT_ROOT/src/bvm-init.sh"
 assert_success $? "bvm-init.sh loads completions/load.sh"
@@ -157,10 +165,14 @@ assert_success $? "bvm-init.fish loads completions/load.fish"
 
 ###########################################################################
 echo "Test: syntax of the shell specific files"
-for f in "$COMPLETIONS"/bash/*.bash "$COMPLETIONS/load.sh"; do
-	bash -n "$f"
-	assert_success $? "bash syntax ok: ${f#"$PROJECT_ROOT"/}"
-done
+if command -v bash >/dev/null 2>&1; then
+	for f in "$COMPLETIONS"/bash/*.bash "$COMPLETIONS/load.sh"; do
+		bash -n "$f"
+		assert_success $? "bash syntax ok: ${f#"$PROJECT_ROOT"/}"
+	done
+else
+	echo "⚠️  SKIP: bash not installed"
+fi
 if command -v zsh >/dev/null 2>&1; then
 	for f in "$COMPLETIONS"/zsh/*.zsh; do
 		zsh -n "$f"
