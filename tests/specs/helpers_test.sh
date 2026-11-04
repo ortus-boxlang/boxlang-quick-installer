@@ -169,6 +169,60 @@ test_setup_colors() {
 }
 
 ###########################################################################
+# Tests for Setup Colors Without TERM
+###########################################################################
+
+# Assert a string does NOT contain a substring.
+assert_not_contains() {
+    local substring="$1"
+    local string="$2"
+    local test_name="$3"
+
+    case "$string" in
+    *"$substring"*)
+        echo "❌ FAIL: $test_name"
+        echo "   Did not expect '$substring'"
+        FAILED_TESTS="$FAILED_TESTS\n$test_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        return 1
+        ;;
+    *)
+        echo "✅ PASS: $test_name"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+        return 0
+        ;;
+    esac
+}
+
+test_setup_colors_without_term() {
+    run_test_group "Color Setup Without TERM"
+
+    # Regression: `tput colors` used to run whenever the tput binary existed, with no
+    # check on TERM. With TERM unset the substitution fails and, under the calling
+    # script's `set -e`, the whole installer/BVM run aborted.
+    local no_term_output
+    no_term_output=$(sh -c 'unset TERM; set -e; . "$1"; setup_colors; echo "SURVIVED"' sh "$HELPERS_FILE" 2>&1)
+    assert_contains "SURVIVED" "$no_term_output" "setup_colors() completes with TERM unset under set -e"
+    assert_not_contains "No value for \$TERM" "$no_term_output" "setup_colors() does not invoke tput when TERM is unset"
+
+    # A defined but useless TERM must not break it either.
+    local dumb_term_output
+    dumb_term_output=$(sh -c 'TERM=dumb; set -e; . "$1"; setup_colors; echo "SURVIVED"' sh "$HELPERS_FILE" 2>&1)
+    assert_contains "SURVIVED" "$dumb_term_output" "setup_colors() completes with TERM=dumb under set -e"
+
+    # ncolors must always be defined, otherwise the later `[ -n "$ncolors" ]` check
+    # itself errors out under `set -u`.
+    local defined_output
+    defined_output=$(sh -c 'unset TERM; set -eu; . "$1"; setup_colors; echo "ncolors=${ncolors-UNSET}"' sh "$HELPERS_FILE" 2>&1)
+    assert_not_contains "ncolors=UNSET" "$defined_output" "setup_colors() defines ncolors when TERM is unset"
+
+    # With no terminal attached, colours must fall back to empty strings.
+    local fallback_output
+    fallback_output=$(sh -c 'unset TERM; set -eu; . "$1"; setup_colors; echo "RED=[${RED}]"' sh "$HELPERS_FILE" 2>&1)
+    assert_contains "RED=[]" "$fallback_output" "setup_colors() leaves colors empty when TERM is unset"
+}
+
+###########################################################################
 # Tests for Version Comparison Functions
 ###########################################################################
 
@@ -333,6 +387,7 @@ run_all_tests() {
     test_print_functions
     test_command_exists
     test_setup_colors
+    test_setup_colors_without_term
     test_extract_semantic_version
     test_isSnapshotVersion
     test_compare_versions

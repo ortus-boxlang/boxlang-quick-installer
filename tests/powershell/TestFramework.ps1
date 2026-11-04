@@ -1,8 +1,26 @@
 ﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell caches parsed module metadata under %LOCALAPPDATA%. When a child
+# powershell.exe is launched without that variable, or with a relative one, the cache
+# path becomes relative as well and lands in the working directory - the repository.
+# These suites spawn child PowerShell processes, so make sure an absolute location exists
+# before anything else runs. The directory is stable so the cache survives between runs.
+function Initialize-TestLocalAppData {
+    $localAppData = $env:LOCALAPPDATA
+    if ($localAppData -and [System.IO.Path]::IsPathRooted($localAppData)) {
+        return
+    }
+
+    $fallback = Join-Path ([System.IO.Path]::GetTempPath()) 'boxlang-test-localappdata'
+    [System.IO.Directory]::CreateDirectory($fallback) | Out-Null
+    $env:LOCALAPPDATA = $fallback
+}
+
 function Initialize-TestSuite {
     param([string]$Name)
+
+    Initialize-TestLocalAppData
 
     $global:TestSuiteName = $Name
     $global:TestPassed = 0

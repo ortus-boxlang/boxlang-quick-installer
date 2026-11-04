@@ -1057,6 +1057,98 @@ test_bx_module_runs_through_symlinks_without_environment() {
     assert_contains "bx-module list [--local]" "$output" "a chain of symlinks addressed by a bare name finds the helper scripts"
 }
 
+test_create_module_launcher_uses_an_absolute_boxlang_path() {
+    run_test_group "create_module_launcher resolves boxlang instead of trusting PATH"
+
+    local ROOT="$TEST_TMP/launcher-boxlang"
+    local BIN="$ROOT/home/bin"
+    mkdir -p "$BIN"
+
+    local output
+    output=$(create_module_launcher "$BIN" "bx-demo" "bxdemo" 2>&1)
+    assert_contains "Creating executable script: bxdemo" "$output" "the launcher is written"
+
+    local launcher="$BIN/bxdemo"
+
+    # A bare `boxlang module:...` call would depend on the caller's PATH.
+    assert_not_contains "boxlang module:" "$(cat "$launcher")" "the launcher does not call boxlang through PATH"
+
+    # The launcher must name an absolute interpreter, never a bare PATH-dependent call.
+    assert_contains "'/boxlang' module:bx-demo" "$(cat "$launcher")" "the launcher pins a boxlang executable"
+    assert_not_contains '|| BOXLANG_EXEC=boxlang' "$(cat "$launcher")" "the launcher has no runtime PATH fallback"
+
+    # With boxlang off PATH entirely, the launcher still runs.
+    local fake="$ROOT/install/bin"
+    mkdir -p "$fake"
+    printf '#!/bin/sh\necho "RAN=$0 ARGS=$*"\n' > "$fake/boxlang"
+    chmod +x "$fake/boxlang"
+
+    # Point SCRIPT_DIR at <install>/scripts so the launcher embeds <install>/bin/boxlang.
+    local install="$ROOT/install"
+    mkdir -p "$install/scripts"
+    local saved_script_dir="$SCRIPT_DIR"
+    SCRIPT_DIR="$install/scripts"
+    create_module_launcher "$BIN" "bx-demo" "bxdemo" >/dev/null 2>&1
+    SCRIPT_DIR="$saved_script_dir"
+
+    assert_contains "'$install/bin/boxlang' module:bx-demo" "$(cat "$launcher")" "the launcher embeds the install's own boxlang"
+
+    local actual
+    actual=$(env PATH=/nonexistent BOX_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
+    assert_contains "RAN=$install/bin/boxlang" "$actual" "the launcher runs with boxlang off PATH"
+    assert_contains "ARGS=module:bx-demo" "$actual" "the launcher still runs the module"
+
+    # An empty environment (no PATH variable at all) must also work.
+    actual=$(env -i BOX_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
+    assert_contains "RAN=$install/bin/boxlang" "$actual" "the launcher runs with no PATH at all"
+}
+
+test_create_module_launcher_records_its_own_path() {
+    run_test_group "create_module_launcher records the launcher path in BOX_PROCESS_PATH"
+
+    local ROOT="$TEST_TMP/module-launcher"
+    local BIN="$ROOT/home/bin"
+    mkdir -p "$BIN"
+
+    local output
+    output=$(create_module_launcher "$BIN" "bx-demo" "bxdemo" 2>&1)
+    assert_contains "Creating executable script: bxdemo" "$output" "create_module_launcher reports the script it wrote"
+    assert_equals "true" "$([ -x "$BIN/bxdemo" ] && echo true || echo false)" "create_module_launcher marks the script executable"
+
+    local content
+    content=$(cat "$BIN/bxdemo")
+    assert_contains 'module:bx-demo "$@"' "$content" "the launcher runs the module and forwards its arguments"
+    assert_contains "'/boxlang' module:bx-demo" "$content" "the launcher pins the boxlang interpreter by absolute path"
+    assert_contains 'if [ -z "${BOX_PROCESS_PATH:-}" ]; then' "$content" "the launcher only populates BOX_PROCESS_PATH when it is unset"
+    sh -n "$BIN/bxdemo" 2>/dev/null
+    assert_return_code 0 $? "the launcher is valid POSIX shell syntax"
+
+    # Report back what the wrapped command would have seen.
+    cat > "$BIN/boxlang" <<'FAKEBOXLANG'
+#!/bin/sh
+printf 'BOX_PROCESS_PATH=%s|ARGS=%s\n' "${BOX_PROCESS_PATH:-<unset>}" "$*"
+FAKEBOXLANG
+    chmod +x "$BIN/boxlang"
+
+    local expected="BOX_PROCESS_PATH=$BIN/bxdemo|ARGS=module:bx-demo"
+
+    local actual
+    actual=$(cd "$ROOT" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    assert_equals "$expected" "$actual" "the launcher exports its own absolute path"
+
+    actual=$(cd "$BIN" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" ./bxdemo 2>&1)
+    assert_equals "$expected" "$actual" "a relative invocation is resolved to an absolute path"
+
+    actual=$(cd "$ROOT" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" bxdemo 2>&1)
+    assert_equals "$expected" "$actual" "an invocation found through PATH is resolved to an absolute path"
+
+    actual=$(BOX_PROCESS_PATH="/inherited path/launcher" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    assert_equals "BOX_PROCESS_PATH=/inherited path/launcher|ARGS=module:bx-demo" "$actual" "an inherited BOX_PROCESS_PATH is not overwritten"
+
+    actual=$(BOX_PROCESS_PATH="" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    assert_equals "$expected" "$actual" "an empty BOX_PROCESS_PATH is repopulated"
+}
+
 test_remove_module_removes_its_launcher_scripts() {
     run_test_group "remove_module deletes the launcher scripts the module installed"
 
@@ -1190,6 +1282,8 @@ run_all_tests() {
     test_main_verb_list_outdated_update
     test_update_modules_limits_to_named_modules
     test_bx_module_runs_through_symlinks_without_environment
+    test_create_module_launcher_records_its_own_path
+    test_create_module_launcher_uses_an_absolute_boxlang_path
     test_remove_module_removes_its_launcher_scripts
     test_remove_module_keeps_launchers_used_by_another_copy
     test_remove_module_removes_local_launchers
