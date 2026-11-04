@@ -1064,9 +1064,23 @@ test_create_module_launcher_uses_an_absolute_boxlang_path() {
     local BIN="$ROOT/home/bin"
     mkdir -p "$BIN"
 
+    # The CI images ship no BoxLang, so put a known one on PATH to make the pinned
+    # interpreter deterministic instead of depending on the host that runs the suite.
+    local pathBin="$ROOT/pathbin"
+    mkdir -p "$pathBin"
+    printf '#!/bin/sh\nexit 0\n' > "$pathBin/boxlang"
+    chmod +x "$pathBin/boxlang"
+
+    local saved_path="$PATH"
+    PATH="$pathBin:$PATH"
+    export PATH
+
     local output
     output=$(create_module_launcher "$BIN" "bx-demo" "bxdemo" 2>&1)
     assert_contains "Creating executable script: bxdemo" "$output" "the launcher is written"
+
+    PATH="$saved_path"
+    export PATH
 
     local launcher="$BIN/bxdemo"
 
@@ -1074,7 +1088,7 @@ test_create_module_launcher_uses_an_absolute_boxlang_path() {
     assert_not_contains "boxlang module:" "$(cat "$launcher")" "the launcher does not call boxlang through PATH"
 
     # The launcher must name an absolute interpreter, never a bare PATH-dependent call.
-    assert_contains "'/boxlang' module:bx-demo" "$(cat "$launcher")" "the launcher pins a boxlang executable"
+    assert_contains "'$pathBin/boxlang' module:bx-demo" "$(cat "$launcher")" "the launcher pins a boxlang executable"
     assert_not_contains '|| BOXLANG_EXEC=boxlang' "$(cat "$launcher")" "the launcher has no runtime PATH fallback"
 
     # With boxlang off PATH entirely, the launcher still runs.
@@ -1110,25 +1124,38 @@ test_create_module_launcher_records_its_own_path() {
     local BIN="$ROOT/home/bin"
     mkdir -p "$BIN"
 
+    # Pin a known interpreter. The CI images ship no BoxLang, and the launcher runs
+    # whatever interpreter it pinned, so this fake is what the run checks observe.
+    cat > "$BIN/boxlang" <<'FAKEBOXLANG'
+#!/bin/sh
+printf 'BOX_PROCESS_PATH=%s|ARGS=%s\n' "${BOX_PROCESS_PATH:-<unset>}" "$*"
+FAKEBOXLANG
+    chmod +x "$BIN/boxlang"
+
+    local saved_boxlang_binary="${BOXLANG_BINARY-}"
+    BOXLANG_BINARY="$BIN/boxlang"
+    export BOXLANG_BINARY
+
     local output
     output=$(create_module_launcher "$BIN" "bx-demo" "bxdemo" 2>&1)
+
+    if [ -n "$saved_boxlang_binary" ]; then
+        BOXLANG_BINARY="$saved_boxlang_binary"
+        export BOXLANG_BINARY
+    else
+        unset BOXLANG_BINARY
+    fi
+
     assert_contains "Creating executable script: bxdemo" "$output" "create_module_launcher reports the script it wrote"
     assert_equals "true" "$([ -x "$BIN/bxdemo" ] && echo true || echo false)" "create_module_launcher marks the script executable"
 
     local content
     content=$(cat "$BIN/bxdemo")
     assert_contains 'module:bx-demo "$@"' "$content" "the launcher runs the module and forwards its arguments"
-    assert_contains "'/boxlang' module:bx-demo" "$content" "the launcher pins the boxlang interpreter by absolute path"
+    assert_contains "'$BIN/boxlang' module:bx-demo" "$content" "the launcher pins the boxlang interpreter by absolute path"
     assert_contains 'if [ -z "${BOX_PROCESS_PATH:-}" ]; then' "$content" "the launcher only populates BOX_PROCESS_PATH when it is unset"
     sh -n "$BIN/bxdemo" 2>/dev/null
     assert_return_code 0 $? "the launcher is valid POSIX shell syntax"
-
-    # Report back what the wrapped command would have seen.
-    cat > "$BIN/boxlang" <<'FAKEBOXLANG'
-#!/bin/sh
-printf 'BOX_PROCESS_PATH=%s|ARGS=%s\n' "${BOX_PROCESS_PATH:-<unset>}" "$*"
-FAKEBOXLANG
-    chmod +x "$BIN/boxlang"
 
     local expected="BOX_PROCESS_PATH=$BIN/bxdemo|ARGS=module:bx-demo"
 
