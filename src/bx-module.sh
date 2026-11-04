@@ -566,13 +566,7 @@ install_module() {
 		# Check for boxlang.executable (single executable)
 		local EXECUTABLE=$(jq -r '.boxlang.executable // empty' "${BOX_JSON_PATH}" 2>/dev/null)
 		if [ -n "${EXECUTABLE}" ]; then
-			local EXEC_SCRIPT="${BIN_DIR}/${EXECUTABLE}"
-			printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
-			cat > "${EXEC_SCRIPT}" << EOF
-#!/bin/sh
-boxlang module:${MODULE_NAME} "\$@"
-EOF
-			chmod +x "${EXEC_SCRIPT}"
+			create_module_launcher "${BIN_DIR}" "${MODULE_NAME}" "${EXECUTABLE}"
 		fi
 
 		# Check for boxlang.executables (multiple executables)
@@ -779,6 +773,69 @@ install_module_dependencies() {
 			printf "${YELLOW}⚠️  Warning: Failed to install dependency '${dep_input}', continuing...${NORMAL}\n"
 		fi
 	done
+}
+
+# Single-quotes a value so it can be embedded literally in a generated script.
+# A literal single quote is emitted as the usual '\'' sequence.
+shell_single_quote() {
+	printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# Resolves the boxlang launcher to an absolute path at install time, so generated
+# launchers do not depend on boxlang being on the caller's PATH. The installer places
+# bx-module.sh in <install>/scripts and the launcher in <install>/bin. Falls back to
+# whatever is on PATH, and finally to a bare `boxlang`, when nothing is found.
+resolve_boxlang_binary() {
+	if [ -n "${BOXLANG_BINARY:-}" ]; then
+		printf '%s' "${BOXLANG_BINARY}"
+		return 0
+	fi
+
+	if [ -x "${SCRIPT_DIR}/../bin/boxlang" ]; then
+		printf '%s' "$(CDPATH= cd -P -- "${SCRIPT_DIR}/../bin" && pwd -P)/boxlang"
+		return 0
+	fi
+
+	local on_path
+	on_path=$(command -v boxlang 2>/dev/null)
+	if [ -n "$on_path" ]; then
+		printf '%s' "$on_path"
+		return 0
+	fi
+
+	printf '%s' 'boxlang'
+}
+
+# Creates the launcher script a module's boxlang.executable is exposed through, so the
+# module can be run as a plain command. The launcher records the full path it was invoked
+# with in BOX_PROCESS_PATH, leaving an inherited value alone, which lets a nested module
+# (or a module that re-execs boxlang) see which launcher started it.
+# POSIX /bin/sh only, so it works on Alpine BusyBox ash and dash as well.
+create_module_launcher() {
+	local BIN_DIR=${1}
+	local MODULE_NAME=${2}
+	local EXECUTABLE=${3}
+
+	local EXEC_SCRIPT="${BIN_DIR}/${EXECUTABLE}"
+	local BOXLANG_EXEC_QUOTED
+	BOXLANG_EXEC_QUOTED=$(shell_single_quote "$(resolve_boxlang_binary)")
+	printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
+	cat > "${EXEC_SCRIPT}" << EOF
+#!/bin/sh
+if [ -z "\${BOX_PROCESS_PATH:-}" ]; then
+	BOX_PROCESS_PATH="\$0"
+	case "\$BOX_PROCESS_PATH" in
+		*/*) ;;
+		*) BOX_PROCESS_PATH="\$(command -v -- "\$BOX_PROCESS_PATH" 2>/dev/null || printf %s "\$BOX_PROCESS_PATH")" ;;
+	esac
+	case "\$BOX_PROCESS_PATH" in
+		*/*) BOX_PROCESS_PATH="\$(CDPATH= cd -P "\${BOX_PROCESS_PATH%/*}" && pwd -P)/\${BOX_PROCESS_PATH##*/}" ;;
+	esac
+fi
+export BOX_PROCESS_PATH
+${BOXLANG_EXEC_QUOTED} module:${MODULE_NAME} "\$@"
+EOF
+	chmod +x "${EXEC_SCRIPT}"
 }
 
 # Prints the launcher script names a module's box.json declares through

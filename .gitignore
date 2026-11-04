@@ -36,3 +36,8 @@ src/main/java/ortus/boxlang/web/www/testbox/
 
 # JDBC artifacts
 derby.log
+
+# PowerShell module analysis cache. It is normally written under %LOCALAPPDATA%, but a
+# process started without that variable (or with a relative one) writes it relative to
+# the working directory instead, which puts it inside a checkout.
+Microsoft/Windows/PowerShell/ModuleAnalysisCache

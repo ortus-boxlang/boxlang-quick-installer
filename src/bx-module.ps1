@@ -827,6 +827,39 @@ function Install-ModuleDependencies {
     }
 }
 
+# Resolves the boxlang launcher to an absolute path at install time, so generated
+# launchers do not depend on boxlang being on the caller's PATH. The installer places the
+# module scripts in <install>\scripts and the launcher in <install>\bin (boxlang.bat), so
+# look there first, then on PATH. Returns a bare 'boxlang' when nothing is found.
+function Resolve-BoxLangBinary {
+    if ($env:BOXLANG_BINARY) {
+        return $env:BOXLANG_BINARY
+    }
+
+    $candidates = @()
+    if ($PSScriptRoot) {
+        $candidates += (Join-Path (Split-Path -Parent $PSScriptRoot) "bin\boxlang.bat")
+        $candidates += (Join-Path $PSScriptRoot "boxlang.bat")
+    }
+    if ($env:BOXLANG_INSTALL_HOME) {
+        $candidates += (Join-Path $env:BOXLANG_INSTALL_HOME "bin\boxlang.bat")
+    }
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -Path $candidate -PathType Leaf)) {
+            return (Resolve-Path -Path $candidate).Path
+        }
+    }
+
+    $onPath = Get-Command boxlang.bat -ErrorAction SilentlyContinue
+    if (-not $onPath) { $onPath = Get-Command boxlang -ErrorAction SilentlyContinue }
+    if ($onPath) {
+        return $onPath.Source
+    }
+
+    return "boxlang"
+}
+
 function Install-Module {
     param(
         [string]$moduleName,
@@ -970,18 +1003,39 @@ function Install-Module {
                     $execScript = Join-Path $binDir "$executable"
                     Write-Host "🔧 Creating executable script: $executable" -ForegroundColor Blue
 
+                    # Resolve boxlang to an absolute path at install time so the launcher
+                    # does not depend on boxlang being on the caller's PATH.
+                    $boxlangExec = Resolve-BoxLangBinary
+                    $boxlangExecSh = "'" + ($boxlangExec -replace "'", "'\''") + "'"
+                    $boxlangExecBat = '"' + $boxlangExec + '"'
+
                     # Create shell script
                     $scriptContent = @"
 #!/bin/sh
-boxlang module:$moduleName `"`$@`"
+if [ -z "`${BOX_PROCESS_PATH:-}" ]; then
+	BOX_PROCESS_PATH="`$0"
+	case "`$BOX_PROCESS_PATH" in
+		*/*) ;;
+		*) BOX_PROCESS_PATH="`$(command -v -- "`$BOX_PROCESS_PATH" 2>/dev/null || printf %s "`$BOX_PROCESS_PATH")" ;;
+	esac
+	case "`$BOX_PROCESS_PATH" in
+		*/*) BOX_PROCESS_PATH="`$(CDPATH= cd -P "`${BOX_PROCESS_PATH%/*}" && pwd -P)/`${BOX_PROCESS_PATH##*/}" ;;
+	esac
+fi
+export BOX_PROCESS_PATH
+$boxlangExecSh module:$moduleName `"`$@`"
 "@
-                    Set-Content -Path $execScript -Value $scriptContent -NoNewline
+                    # Create shell script. This here-string carries CRLF because the
+                    # script file does, so normalize to LF: a trailing CR makes
+                    # `then`/`case` tokens invalid under dash and BusyBox ash.
+                    Set-Content -Path $execScript -Value ($scriptContent -replace "`r`n", "`n") -NoNewline
 
                     # Also create .bat for Windows
                     $execBat = Join-Path $binDir "$executable.bat"
                     $batContent = @"
 @echo off
-boxlang module:$moduleName %*
+if not defined BOX_PROCESS_PATH set "BOX_PROCESS_PATH=%~f0"
+$boxlangExecBat module:$moduleName %*
 "@
                     Set-Content -Path $execBat -Value $batContent
                 }

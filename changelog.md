@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Module launchers created from a module's `box.json` `boxlang.executable` (and the `.bat` counterpart the PowerShell installer writes) now call BoxLang through an absolute path resolved at install time instead of a bare `boxlang`, so they keep working when BoxLang is not on the caller's `PATH` (for example from a service, cron job, or a shell that never sourced the profile). The launcher still falls back to `boxlang` on `PATH` if the pinned binary later disappears, and `BOXLANG_BINARY` overrides the choice.
+- Module launchers also record their own full path in `BOX_PROCESS_PATH` before running the module. An existing `BOX_PROCESS_PATH` is never overwritten, so a launcher that starts another launcher keeps the outermost path. This works with POSIX `/bin/sh` only, including Alpine BusyBox ash and dash.
+
+### Fixed
+
+- The `sh` launcher the PowerShell module installer writes is now normalized to LF endings. The here-string that builds it inherited the script's CRLF, and a trailing carriage return makes `if`/`case` tokens invalid under `dash` and BusyBox `ash`.
+- `setup_colors()` no longer invokes `tput` unless a terminal is attached and `TERM` is set. It previously ran `tput colors` whenever the `tput` binary existed, and with `TERM` unset the failing substitution aborted the calling installer or BVM run under `set -e`. Colours now fall back to no styling.
+
+## [1.39.0] - 2026-10-27
+
+### Added
+
 - Tab completions for `bvm`, `install-boxlang` and `bx-module` (including the legacy `install-bx-module`) in Bash, Zsh, Fish and PowerShell, under `src/completions/`. They complete commands, flags, installed versions and installed modules.
 - `install-boxlang` installs the completions to `~/.boxlang/completions/` and loads them from your shell profile. The PowerShell installers add them to `$PROFILE`.
 

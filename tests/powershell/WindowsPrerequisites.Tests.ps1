@@ -14,6 +14,15 @@ Invoke-Test 'provides native download, JSON, and archive commands' {
     }
 }
 
+Invoke-Test 'points LOCALAPPDATA at an absolute path so PowerShell caches stay out of the repository' {
+    Assert-True $env:LOCALAPPDATA 'LOCALAPPDATA is not set'
+    Assert-True ([System.IO.Path]::IsPathRooted($env:LOCALAPPDATA)) "LOCALAPPDATA must be absolute, got '$env:LOCALAPPDATA'"
+
+    # A child process must not write %LOCALAPPDATA%\Microsoft\... relative to the current directory.
+    $expected = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\PowerShell'
+    Assert-True ([System.IO.Path]::IsPathRooted($expected)) "The PowerShell cache path must be absolute, got '$expected'"
+}
+
 Invoke-Test 'parses module lists like the module installer' {
     $modules = @(Parse-ModuleList @('foo@1.0.0,bar@2.0.0', '--force', 'baz'))
     Assert-Equal 3 $modules.Count 'Module list count is incorrect'
