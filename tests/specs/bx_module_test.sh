@@ -1108,17 +1108,17 @@ test_create_module_launcher_uses_an_absolute_boxlang_path() {
     assert_contains "'$install/bin/boxlang' module:bx-demo" "$(cat "$launcher")" "the launcher embeds the install's own boxlang"
 
     local actual
-    actual=$(env PATH=/nonexistent BOX_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
+    actual=$(env PATH=/nonexistent BOXLANG_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
     assert_contains "RAN=$install/bin/boxlang" "$actual" "the launcher runs with boxlang off PATH"
     assert_contains "ARGS=module:bx-demo" "$actual" "the launcher still runs the module"
 
     # An empty environment (no PATH variable at all) must also work.
-    actual=$(env -i BOX_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
+    actual=$(env -i BOXLANG_PROCESS_PATH= /bin/sh "$launcher" 2>&1)
     assert_contains "RAN=$install/bin/boxlang" "$actual" "the launcher runs with no PATH at all"
 }
 
 test_create_module_launcher_records_its_own_path() {
-    run_test_group "create_module_launcher records the launcher path in BOX_PROCESS_PATH"
+    run_test_group "create_module_launcher records the launcher path in BOXLANG_PROCESS_PATH"
 
     local ROOT="$TEST_TMP/module-launcher"
     local BIN="$ROOT/home/bin"
@@ -1128,7 +1128,7 @@ test_create_module_launcher_records_its_own_path() {
     # whatever interpreter it pinned, so this fake is what the run checks observe.
     cat > "$BIN/boxlang" <<'FAKEBOXLANG'
 #!/bin/sh
-printf 'BOX_PROCESS_PATH=%s|ARGS=%s\n' "${BOX_PROCESS_PATH:-<unset>}" "$*"
+printf 'BOXLANG_PROCESS_PATH=%s|ARGS=%s\n' "${BOXLANG_PROCESS_PATH:-<unset>}" "$*"
 FAKEBOXLANG
     chmod +x "$BIN/boxlang"
 
@@ -1153,27 +1153,27 @@ FAKEBOXLANG
     content=$(cat "$BIN/bxdemo")
     assert_contains 'module:bx-demo "$@"' "$content" "the launcher runs the module and forwards its arguments"
     assert_contains "'$BIN/boxlang' module:bx-demo" "$content" "the launcher pins the boxlang interpreter by absolute path"
-    assert_contains 'if [ -z "${BOX_PROCESS_PATH:-}" ]; then' "$content" "the launcher only populates BOX_PROCESS_PATH when it is unset"
+    assert_contains 'if [ -z "${BOXLANG_PROCESS_PATH:-}" ]; then' "$content" "the launcher only populates BOXLANG_PROCESS_PATH when it is unset"
     sh -n "$BIN/bxdemo" 2>/dev/null
     assert_return_code 0 $? "the launcher is valid POSIX shell syntax"
 
-    local expected="BOX_PROCESS_PATH=$BIN/bxdemo|ARGS=module:bx-demo"
+    local expected="BOXLANG_PROCESS_PATH=$BIN/bxdemo|ARGS=module:bx-demo"
 
     local actual
-    actual=$(cd "$ROOT" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    actual=$(cd "$ROOT" && unset BOXLANG_PROCESS_PATH && PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
     assert_equals "$expected" "$actual" "the launcher exports its own absolute path"
 
-    actual=$(cd "$BIN" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" ./bxdemo 2>&1)
+    actual=$(cd "$BIN" && unset BOXLANG_PROCESS_PATH && PATH="$BIN:$PATH" ./bxdemo 2>&1)
     assert_equals "$expected" "$actual" "a relative invocation is resolved to an absolute path"
 
-    actual=$(cd "$ROOT" && unset BOX_PROCESS_PATH && PATH="$BIN:$PATH" bxdemo 2>&1)
+    actual=$(cd "$ROOT" && unset BOXLANG_PROCESS_PATH && PATH="$BIN:$PATH" bxdemo 2>&1)
     assert_equals "$expected" "$actual" "an invocation found through PATH is resolved to an absolute path"
 
-    actual=$(BOX_PROCESS_PATH="/inherited path/launcher" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
-    assert_equals "BOX_PROCESS_PATH=/inherited path/launcher|ARGS=module:bx-demo" "$actual" "an inherited BOX_PROCESS_PATH is not overwritten"
+    actual=$(BOXLANG_PROCESS_PATH="/inherited path/launcher" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    assert_equals "BOXLANG_PROCESS_PATH=/inherited path/launcher|ARGS=module:bx-demo" "$actual" "an inherited BOXLANG_PROCESS_PATH is not overwritten"
 
-    actual=$(BOX_PROCESS_PATH="" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
-    assert_equals "$expected" "$actual" "an empty BOX_PROCESS_PATH is repopulated"
+    actual=$(BOXLANG_PROCESS_PATH="" PATH="$BIN:$PATH" "$BIN/bxdemo" 2>&1)
+    assert_equals "$expected" "$actual" "an empty BOXLANG_PROCESS_PATH is repopulated"
 }
 
 test_remove_module_removes_its_launcher_scripts() {

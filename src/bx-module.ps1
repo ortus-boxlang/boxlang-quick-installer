@@ -1012,17 +1012,17 @@ function Install-Module {
                     # Create shell script
                     $scriptContent = @"
 #!/bin/sh
-if [ -z "`${BOX_PROCESS_PATH:-}" ]; then
-	BOX_PROCESS_PATH="`$0"
-	case "`$BOX_PROCESS_PATH" in
+if [ -z "`${BOXLANG_PROCESS_PATH:-}" ]; then
+	BOXLANG_PROCESS_PATH="`$0"
+	case "`$BOXLANG_PROCESS_PATH" in
 		*/*) ;;
-		*) BOX_PROCESS_PATH="`$(command -v -- "`$BOX_PROCESS_PATH" 2>/dev/null || printf %s "`$BOX_PROCESS_PATH")" ;;
+		*) BOXLANG_PROCESS_PATH="`$(command -v -- "`$BOXLANG_PROCESS_PATH" 2>/dev/null || printf %s "`$BOXLANG_PROCESS_PATH")" ;;
 	esac
-	case "`$BOX_PROCESS_PATH" in
-		*/*) BOX_PROCESS_PATH="`$(CDPATH= cd -P "`${BOX_PROCESS_PATH%/*}" && pwd -P)/`${BOX_PROCESS_PATH##*/}" ;;
+	case "`$BOXLANG_PROCESS_PATH" in
+		*/*) BOXLANG_PROCESS_PATH="`$(CDPATH= cd -P "`${BOXLANG_PROCESS_PATH%/*}" && pwd -P)/`${BOXLANG_PROCESS_PATH##*/}" ;;
 	esac
 fi
-export BOX_PROCESS_PATH
+export BOXLANG_PROCESS_PATH
 $boxlangExecSh module:$moduleName `"`$@`"
 "@
                     # Create shell script. This here-string carries CRLF because the
@@ -1034,7 +1034,7 @@ $boxlangExecSh module:$moduleName `"`$@`"
                     $execBat = Join-Path $binDir "$executable.bat"
                     $batContent = @"
 @echo off
-if not defined BOX_PROCESS_PATH set "BOX_PROCESS_PATH=%~f0"
+if not defined BOXLANG_PROCESS_PATH set "BOXLANG_PROCESS_PATH=%~f0"
 $boxlangExecBat module:$moduleName %*
 "@
                     Set-Content -Path $execBat -Value $batContent

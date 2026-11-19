@@ -808,7 +808,7 @@ resolve_boxlang_binary() {
 
 # Creates the launcher script a module's boxlang.executable is exposed through, so the
 # module can be run as a plain command. The launcher records the full path it was invoked
-# with in BOX_PROCESS_PATH, leaving an inherited value alone, which lets a nested module
+# with in BOXLANG_PROCESS_PATH, leaving an inherited value alone, which lets a nested module
 # (or a module that re-execs boxlang) see which launcher started it.
 # POSIX /bin/sh only, so it works on Alpine BusyBox ash and dash as well.
 create_module_launcher() {
@@ -822,17 +822,17 @@ create_module_launcher() {
 	printf "${BLUE}🔧 Creating executable script: ${EXECUTABLE}${NORMAL}\n"
 	cat > "${EXEC_SCRIPT}" << EOF
 #!/bin/sh
-if [ -z "\${BOX_PROCESS_PATH:-}" ]; then
-	BOX_PROCESS_PATH="\$0"
-	case "\$BOX_PROCESS_PATH" in
+if [ -z "\${BOXLANG_PROCESS_PATH:-}" ]; then
+	BOXLANG_PROCESS_PATH="\$0"
+	case "\$BOXLANG_PROCESS_PATH" in
 		*/*) ;;
-		*) BOX_PROCESS_PATH="\$(command -v -- "\$BOX_PROCESS_PATH" 2>/dev/null || printf %s "\$BOX_PROCESS_PATH")" ;;
+		*) BOXLANG_PROCESS_PATH="\$(command -v -- "\$BOXLANG_PROCESS_PATH" 2>/dev/null || printf %s "\$BOXLANG_PROCESS_PATH")" ;;
 	esac
-	case "\$BOX_PROCESS_PATH" in
-		*/*) BOX_PROCESS_PATH="\$(CDPATH= cd -P "\${BOX_PROCESS_PATH%/*}" && pwd -P)/\${BOX_PROCESS_PATH##*/}" ;;
+	case "\$BOXLANG_PROCESS_PATH" in
+		*/*) BOXLANG_PROCESS_PATH="\$(CDPATH= cd -P "\${BOXLANG_PROCESS_PATH%/*}" && pwd -P)/\${BOXLANG_PROCESS_PATH##*/}" ;;
 	esac
 fi
-export BOX_PROCESS_PATH
+export BOXLANG_PROCESS_PATH
 ${BOXLANG_EXEC_QUOTED} module:${MODULE_NAME} "\$@"
 EOF
 	chmod +x "${EXEC_SCRIPT}"
