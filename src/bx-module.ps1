@@ -1,4 +1,4 @@
-# BoxLang Module Manager (bx-module)
+﻿# BoxLang Module Manager (bx-module)
 # Description: This script installs and manages BoxLang modules from FORGEBOX using verbs:
 # install, remove, list, outdated, update. The legacy install-bx-module command is a thin
 # shim that translates its flags and calls this script.
