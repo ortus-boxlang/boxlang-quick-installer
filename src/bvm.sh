@@ -1147,7 +1147,7 @@ check_bvm_updates() {
 					local install_script="$BVM_SCRIPTS_DIR/install-bvm.sh"
 					if [ -x "$install_script" ]; then
 						print_info "⚡Executing upgrade using: $install_script"
-						exec "$install_script"
+						exec "$install_script" --upgrade
 					else
 						print_error "BVM installer script not found at: $install_script"
 						print_info "Please reinstall BVM manually using:"

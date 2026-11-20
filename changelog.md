@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Improved BVM installer UI: a branded banner, Recommended/Custom setup menus, a task plan, layered progress, and a `--verbose` mode that streams detailed task output. Normal installs hide background output, keep a log, and surface it only on failure or warnings.
+- Recommended installs now install missing command dependencies and Java 21+, then install and activate the latest BoxLang runtime. Custom mode can opt out of shell integration, Java, or the runtime.
+- Windows Java auto-install now uses a user-scoped JRE when the installer is not elevated; `install-jre.ps1` accepts `-Scope User|Machine`.
+- Added `--non-interactive`, `--verbose`, `--bvm-home`, `--with-runtime`, `--without-runtime`, `--with-shell`, `--without-shell`, and `--upgrade`; existing `--yes`/`-y`, `--with-jre`, `--without-jre`, `--force`, and `--local` remain supported.
+
+### Changed
+
+- BVM self-update now invokes `install-bvm --upgrade`, which reinstalls BVM without prompting for a runtime again.
+
 ## [1.41.0] - 2026-11-19
 
 ## [1.40.0] - 2026-11-04

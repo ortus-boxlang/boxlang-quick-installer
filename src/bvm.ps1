@@ -1039,7 +1039,7 @@ function Check-BvmUpdates {
                     Write-BvmInfo "Updating BVM..."
                     $installScript = Join-Path $BVM_SCRIPTS_DIR "install-bvm.ps1"
                     if (Test-Path $installScript) {
-                        & $installScript --force
+                        & $installScript --upgrade
                     } else {
                         Write-BvmInfo "Run the following to update BVM:"
                         Write-Host -ForegroundColor Green "  iwr -useb https://install-bvm.boxlang.io | iex"

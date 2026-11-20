@@ -148,6 +148,7 @@ apk add --no-cache curl unzip jq openjdk21
 - ✅ List local and remote versions
 - ✅ Clean uninstall capabilities
 - ✅ Health check and diagnostics
+- ✅ Updated installer UI with Recommended/Custom setup, automatic prerequisites, and `--verbose` details
 
 ## ⚙️ Command Options
 

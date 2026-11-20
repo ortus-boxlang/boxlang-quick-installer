@@ -1,4 +1,9 @@
-﻿# PowerShell 5 has performance issues with progress bars, so suppress them
+﻿param(
+    [ValidateSet("User", "Machine")]
+    [string]$Scope = "Machine"
+)
+
+# PowerShell 5 has performance issues with progress bars, so suppress them
 # PowerShell 7+ handles progress efficiently
 if ($PSVersionTable.PSVersion.Major -le 5) {
     $ProgressPreference = 'SilentlyContinue'
@@ -9,7 +14,24 @@ if ($PSVersionTable.PSVersion.Major -le 5) {
 # Set the JRE version and download URL
 $jreVersion = "21"
 $jreURL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.7%2B6/OpenJDK21U-jre_x64_windows_hotspot_21.0.7_6.zip"
-$installPath = "C:\Program Files\Java\jre$jreVersion"
+$installPath = if ($Scope -eq "User") {
+    Join-Path $env:LOCALAPPDATA "Programs\Java\jre$jreVersion"
+} else {
+    "C:\Program Files\Java\jre$jreVersion"
+}
+$environmentTarget = if ($Scope -eq "User") {
+    [System.EnvironmentVariableTarget]::User
+} else {
+    [System.EnvironmentVariableTarget]::Machine
+}
+
+if ($Scope -eq "Machine") {
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "ERROR: Machine-wide Java installation requires an elevated PowerShell." -ForegroundColor Red
+        exit 1
+    }
+}
 
 # Echo a nice announcement of what we're doing
 Write-Host "🚀 Starting OpenJDK $jreVersion installation..." -ForegroundColor Green
@@ -70,16 +92,18 @@ Move-Item -Path $extractedDir.FullName -Destination $installPath
 Remove-Item $zipPath -Force
 Remove-Item $tempExtract -Recurse -Force
 
-# Set JAVA_HOME system environment variable
+# Set JAVA_HOME environment variable
 Write-Host "🔧 Setting JAVA_HOME to $installPath" -ForegroundColor Cyan
-[System.Environment]::SetEnvironmentVariable("JAVA_HOME", $installPath, [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable("JAVA_HOME", $installPath, $environmentTarget)
+$env:JAVA_HOME = $installPath
 
-# Update system PATH
-Write-Host "🛤️  Updating system PATH..." -ForegroundColor Cyan
-$existingPath = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine)
+# Update PATH
+Write-Host "🛤️  Updating PATH..." -ForegroundColor Cyan
+$existingPath = [System.Environment]::GetEnvironmentVariable("Path", $environmentTarget)
 $cleanPath = $existingPath -split ";" | Where-Object { $_ -notmatch "\\Java\\.*?\\bin" } | ForEach-Object { $_.Trim() }
 $newPath = ($cleanPath + "$installPath\bin") -join ";"
-[System.Environment]::SetEnvironmentVariable("Path", $newPath, [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable("Path", $newPath, $environmentTarget)
+if (($env:Path -split ";") -notcontains "$installPath\bin") { $env:Path = "$installPath\bin;$env:Path" }
 
 # Verification
 Write-Host "🔍 Verifying Java installation..." -ForegroundColor Cyan

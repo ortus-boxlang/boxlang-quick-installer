@@ -48,7 +48,8 @@ The only difference is that BVM adds version management capabilities on top.
 - 🐚 **Shell initialization** - centralizes BVM and BoxLang PATH setup for Bash, Zsh, and Fish
 - ⌨️ **Command completion** - tab completion for `bvm`, `install-boxlang` and `bx-module` in Bash, Zsh, Fish and PowerShell
 - 🆙 **Built-in update checker** - check for BVM updates and upgrade easily
-- ☕ **Java installation assistance** - the Unix installer prompts to install Java 21 when needed; the Windows installer supports `--with-jre`
+- ☕ **Automatic prerequisites** - the installer installs missing command dependencies and Java 21+ in its recommended flow
+- 🎨 **Updated installer UI** - choose Recommended or Custom setup, follow layered task progress, or pass `--verbose` for full details
 - 🗑️ **Uninstall BVM** - Remove completely BVM, versions, etc.
 
 ## 🚀 Quick Start
@@ -56,18 +57,36 @@ The only difference is that BVM adds version management capabilities on top.
 ```bash
 # Install BVM and add its initialization to your shell profile
 curl -fsSL https://install-bvm.boxlang.io | bash
+```
 
-# Start a new terminal or reload the profile, then install and activate BoxLang
-bvm install latest
-bvm use latest
+The installer opens with a **Recommended / Custom** menu. Recommended installs BVM, configures shell integration, installs missing prerequisites and Java 21+, and installs/activates the latest BoxLang runtime. Start a new terminal, or reload your profile, then verify:
+
+```bash
 boxlang --version
 ```
 
 For a local checkout, run `./src/install-bvm.sh --local` from the project root.
 
+#### Installer modes
+
+| Option | Description |
+|---|---|
+| `--non-interactive` | Skip the menu and use the recommended defaults |
+| `--yes`, `-y` | Alias for `--non-interactive` |
+| `--verbose` | Stream detailed task output; normal mode hides it and keeps a log |
+| `--bvm-home PATH` | Install to a custom directory |
+| `--with-java` / `--without-java` | Control Java 21+ installation and checks |
+| `--with-shell` / `--without-shell` | Control shell profile and PATH changes |
+| `--with-runtime VERSION` | Install `latest`, `snapshot`, or an exact version |
+| `--without-runtime` | Install BVM only |
+| `--force` | Reinstall over an existing BVM |
+| `--upgrade` | Internal self-update flow; skips the runtime prompt |
+
+Any explicit `--with-*` or `--without-*` option implies `--non-interactive`. On Windows, `--with-jre` and `--without-jre` are aliases for the Java options.
+
 ## 📋 Prerequisites
 
-The Unix installer attempts to install missing command dependencies and prompts to install Java 21 when needed.
+The Unix installer attempts to install missing command dependencies and Java 21+ in the recommended flow. Use Custom mode or `--without-java` to opt out.
 
 - **bash** - Required shell execution environment (macOS/Linux), especially on Alpine Linux
 - **curl** - For downloading releases
@@ -79,7 +98,7 @@ The Unix installer attempts to install missing command dependencies and prompts 
 apk add --no-cache bash curl
 ```
 
-The Unix installer can install these command dependencies through a supported package manager. Java installation is prompted for during Unix installation; on Windows, use `--with-jre` or `--yes` to install it automatically.
+The Unix installer can install these command dependencies through a supported package manager. On Windows, `--yes`, `--with-jre`, and the recommended flow install Java 21+ automatically; an elevated shell allows machine-wide installation, otherwise Java is installed in the user profile.
 
 - **Java 21+** - JRE or JDK
 - **unzip** - For extracting downloaded files
@@ -158,8 +177,8 @@ boxlang --version
 #### Windows Requirements
 
 - **PowerShell 5.1+** (built into Windows 10/11) or PowerShell Core 6+
-- **Java 21+** — required by BVM; use `--with-jre` or download it from [Adoptium](https://adoptium.net/) or [Microsoft OpenJDK](https://www.microsoft.com/openjdk)
-- **Administrator privileges** recommended for junction/symlink creation
+- **Java 21+** — installed automatically in the recommended flow, or use `--with-jre`; download it manually from [Adoptium](https://adoptium.net/) or [Microsoft OpenJDK](https://www.microsoft.com/openjdk) if you opt out
+- **Administrator privileges** optional; needed only for machine-wide Java and junction/symlink creation. User-scope installation is used when not elevated
 - Internet connection
 
 #### Windows Files Installed
