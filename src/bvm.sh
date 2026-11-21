@@ -1084,12 +1084,10 @@ check_health() {
 # Check for BVM Updates
 ###########################################################################
 check_bvm_updates() {
-    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
-    print_header "🔄 BVM Update Checker"
-    printf "${RED}─────────────────────────────────────────────────────────────────────────────${NORMAL}\n"
     printf "\n"
-
-    print_info "🔍 Checking for BVM updates...\n"
+    print_header "BVM Update Checker"
+    printf "\n"
+	printf "${BLUE}🔍 Checking for BVM updates...${NORMAL}\n"
 
     # Get current version from local version.json in scripts directory
     local current_version=""
@@ -1133,9 +1131,10 @@ check_bvm_updates() {
 			print_success "🦾 You have the latest version of BVM!"
 			;;
 		1)
-			print_warning "🆙 A newer version of BVM is available!"
+			print_warning "A newer version of BVM is available!"
 			printf "\n"
 			printf "${BOLD}Would you like to upgrade to version [%s]? [Y/n]: ${NORMAL}" "$latest_version"
+			printf "\n"
 			read -r upgrade_response
 
 			case "$upgrade_response" in
