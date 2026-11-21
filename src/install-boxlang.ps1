@@ -20,7 +20,7 @@ $DESTINATION_SCRIPTS = "$($INSTALLATION_FOLDER.TrimEnd('\'))\scripts"
 $BOXLANG_HOME_BIN = Join-Path -Path $env:USERPROFILE -ChildPath ".boxlang\bin"
 
 # Command line flags - empty = prompt, true = install, false = skip
-$INSTALL_COMMANDBOX = ""
+$INSTALL_COMMANDBOX = $true
 $JAVA_INSTALL_MODE = "prompt"
 $NON_INTERACTIVE = $false
 $BOXLANG_PATH = ""
@@ -32,6 +32,238 @@ if ([Console]::IsInputRedirected) {
 }
 if ($args -contains "--non-interactive") {
     $NON_INTERACTIVE = $true
+}
+
+###########################################################################
+# Strata-style UI helpers
+###########################################################################
+
+$script:VERBOSE = $false
+$script:KEEP_EXISTING = $false
+$script:INTERACTIVE = $false
+
+$esc = [char]27
+$RESET = "$esc[0m"; $BOLD = "$esc[1m"; $DIM = "$esc[2m"
+$ACCENT = "$esc[36m"; $SUCCESS = "$esc[32m"; $WARNCOLOR = "$esc[33m"; $ORANGE = "$esc[38;5;208m"
+if ($env:NO_COLOR -or $Host.Name -ne "ConsoleHost") {
+    $RESET = ""; $BOLD = ""; $DIM = ""; $ACCENT = ""; $SUCCESS = ""; $WARNCOLOR = ""; $ORANGE = ""
+}
+
+function Write-UiInfo {
+    param([string]$Text)
+    Write-Host "  ${SUCCESS}✓${RESET}  $Text"
+}
+
+function Write-Section {
+    param([string]$Text)
+    Write-Host ""
+    Write-Host "  ${ACCENT}${BOLD}${Text}${RESET}"
+    Write-Host ""
+}
+
+function Show-Banner {
+    $logo = @(
+        '             ⠈⠑⠲⣤⡀      '
+        '        ⢀⣴⣿⣿⣷⣦⣄ ⠈⠻⣷⣄    '
+        '      ⢠⣾⣿⣿⣿⣿⣿⣿⣿⣷⡄ ⠈⢿⣷⡄  '
+        '        ⠈⠙⠻⣿⣿⣿⣿⣿⣿⡆ ⠘⣿⣿⡄ '
+        '           ⠈⢿⣿⣿⣿⣿⣿  ⢻⣿⣿ '
+        '            ⠸⣿⣿⣿⣿⣿  ⣸⣿⣿⡆'
+        '            ⢠⣿⣿⣿⣿⡏  ⣿⣿⣿⠇'
+        '            ⣼⣿⣿⣿⠏  ⣼⣿⣿⡿ '
+        '         ⢀⣠⣾⣿⡿⠟⠁ ⢀⣾⣿⣿⣿⠃ '
+        '⢠⣿⣿⠄    ⠚⠛⠛⠉⠁ ⢀⣠⣶⣿⣿⣿⡿⠁  '
+        ' ⠉⠉⢾⣿⣶⣦⣤⣤⣤⣤⣤⣶⣾⣿⣿⣿⣿⠿⠋    '
+        '    ⠈⠛⠻⠿⣿⣿⣿⣿⣿⣿⠿⠟⠋⠁      '
+    )
+    $text = @(
+        ''
+        'B O X L A N G'
+        ''
+        'The software productivity platform'
+        ''
+        'www.boxlang.io'
+        ''
+        ''
+        'BoxLang Quick Installer'
+        ''
+        ''
+        ''
+    )
+
+    Write-Host ""
+    if (-not $env:NO_COLOR -and $Host.Name -eq "ConsoleHost") {
+        $esc = [char]27
+        $gradient = @(
+        "${esc}[38;2;0;219;255m"
+        "${esc}[38;2;0;221;249m"
+        "${esc}[38;2;0;222;243m"
+        "${esc}[38;2;0;224;237m"
+        "${esc}[38;2;0;225;231m"
+        "${esc}[38;2;0;227;225m"
+        "${esc}[38;2;0;228;219m"
+        "${esc}[38;2;0;230;213m"
+        "${esc}[38;2;0;232;207m"
+        "${esc}[38;2;0;233;201m"
+        "${esc}[38;2;0;235;195m"
+        "${esc}[38;2;0;236;189m"
+        "${esc}[38;2;0;238;183m"
+        "${esc}[38;2;0;239;177m"
+        "${esc}[38;2;0;241;171m"
+        "${esc}[38;2;0;242;165m"
+        "${esc}[38;2;0;244;159m"
+        "${esc}[38;2;0;246;153m"
+        "${esc}[38;2;0;247;147m"
+        "${esc}[38;2;0;249;141m"
+        "${esc}[38;2;0;250;135m"
+        "${esc}[38;2;0;252;129m"
+        "${esc}[38;2;0;253;123m"
+        "${esc}[38;2;0;255;117m"
+        )
+        for ($y = 0; $y -lt $logo.Count; $y++) {
+            $line = ""
+            $plain = $logo[$y]
+            for ($x = 0; $x -lt $plain.Length; $x++) {
+                $ch = $plain[$x]
+                if ($ch -eq ' ') { $line += ' ' } else { $line += $gradient[$x] + $ch }
+            }
+            if ($text[$y]) {
+                if ($y -eq 1) { $label = "  ${BOLD}${ACCENT}$($text[$y])${RESET}" }
+                else { $label = "  ${SUCCESS}$($text[$y])${RESET}" }
+            } else { $label = "" }
+            Write-Host "$line$RESET$label"
+        }
+    } else {
+        for ($y = 0; $y -lt $logo.Count; $y++) {
+            if ($text[$y]) { Write-Host "$($logo[$y])  $($text[$y])" } else { Write-Host $logo[$y] }
+        }
+    }
+    Write-Host ""
+}
+
+function Show-SystemLine {
+    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+    Write-Host "  ${DIM}Windows · $arch · shell: PowerShell${RESET}"
+}
+
+function Select-Menu {
+    param([string]$Title, [string[]]$Labels, [string[]]$Hints, [bool[]]$Choices, [bool]$Multiple = $false)
+    $active = 0
+    function Draw-Menu {
+        Write-Section $Title
+        for ($i = 0; $i -lt $Labels.Count; $i++) {
+            $marker = " "; $color = $RESET
+            if ($Host.Name -eq "ConsoleHost" -and $script:INTERACTIVE -and $i -eq $active) {
+                $marker = "›"; $color = "$ACCENT$BOLD"
+            } elseif ($Multiple -and $Choices[$i]) { $color = $SUCCESS }
+            if ($Multiple) {
+                $check = if ($Choices[$i]) { "✓" } else { " " }
+                Write-Host ("  01  [2] 34" -f $color,$marker,$check,$Labels[$i],$RESET)
+            } else {
+                Write-Host ("  01  23" -f $color,$marker,$Labels[$i],$RESET)
+            }
+        }
+        Write-Host ""
+        Write-Host "  ${DIM}$($Hints[$active])${RESET}"
+        Write-Host ""
+        if ($Multiple) { Write-Host "  ${DIM}↑/↓ move · Space toggle · Enter continue · Esc cancel${RESET}" }
+        else { Write-Host "  ${DIM}↑/↓ choose · Enter continue · Esc cancel${RESET}" }
+    }
+    if (-not $script:INTERACTIVE) {
+        Draw-Menu
+        $answer = Read-Host "Choose [1], or press Enter for 1"
+        if ([string]::IsNullOrWhiteSpace($answer)) { $Choices[0] = $true; return $Choices }
+        foreach ($part in ($answer -split '[ ,;]+')) {
+            if ($part -match '^\d+$') {
+                $i = [int]$part - 1
+                if ($i -ge 0 -and $i -lt $Labels.Count) { $Choices[$i] = $true }
+            }
+        }
+        return $Choices
+    }
+    Draw-Menu
+    while ($true) {
+        $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        switch ($key.VirtualKeyCode) {
+            38 { $active = ($active + $Labels.Count - 1) % $Labels.Count; Draw-Menu }
+            40 { $active = ($active + 1) % $Labels.Count; Draw-Menu }
+            32 { if ($Multiple) { $Choices[$active] = -not $Choices[$active]; Draw-Menu } }
+            13 { if (-not $Multiple) { $Choices[$active] = $true }; Draw-Menu; return $Choices }
+            27 { throw "Installation cancelled." }
+        }
+    }
+}
+
+function Show-InstallPlan {
+    Write-Section "Installation plan"
+    Write-Host "  Install to $INSTALLATION_FOLDER"
+    Write-Host ""
+    Write-Host "  ${ACCENT}+${RESET}  BoxLang runtime: $TARGET_VERSION"
+    Write-Host "  ${ACCENT}+${RESET}  BoxLang MiniServer"
+    Write-Host "  ${ACCENT}+${RESET}  Shell integration and completions"
+    if ($JAVA_INSTALL_MODE -eq "skip") { Write-Host "  ${ACCENT}+${RESET}  Skip Java checks" }
+    else { Write-Host "  ${ACCENT}+${RESET}  Java 21+ (install if missing)" }
+    if ($INSTALL_COMMANDBOX -eq $true) { Write-Host "  ${ACCENT}+${RESET}  CommandBox" } else { Write-Host "  ${ACCENT}+${RESET}  Skip CommandBox" }
+    if ($script:VERBOSE) { Write-Host "  ${ACCENT}+${RESET}  Verbose task output" }
+    if (-not $script:INTERACTIVE) { Write-Host ""; Write-Host "  ${DIM}Non-interactive installation.${RESET}" }
+}
+
+function Show-InstallSummary {
+    Write-Section "Ready to explore"
+    Write-UiInfo "BoxLang installed to $DESTINATION_BIN"
+    Write-UiInfo "BoxLang JARs installed to $DESTINATION_LIB"
+    Write-UiInfo "BoxLang Home set to $DESTINATION_HOME"
+    Write-Host ""
+    Write-Host "  ${BOLD}Quick start:${RESET}"
+    Write-Host "    boxlang --version"
+    Write-Host "    boxlang-miniserver --help"
+    Write-Host ""
+    Write-Host "  ${DIM}Learn more: https://boxlang.io${RESET}"
+    Write-Host ""
+}
+
+function Choose-InstallerMode {
+    if (-not $script:INTERACTIVE) { return }
+    $choice = Select-Menu -Title "Choose your setup" -Labels @("Install BoxLang (recommended)", "Customize installation") -Hints @(
+        "Install the selected version with MiniServer, Java support, and shell integration."
+        "Choose the version and optional components."
+    ) -Choices @($false,$false) -Multiple $false
+    if (-not $choice[1]) { return }
+    $choice = Select-Menu -Title "Choose a BoxLang version" -Labels @("Latest stable", "Snapshot", "Exact version") -Hints @(
+        "Install the latest stable BoxLang release."
+        "Install the rolling development snapshot."
+        "Type an exact version after the installer."
+    ) -Choices @($false,$false,$false) -Multiple $false
+    if ($choice[1]) { $script:TARGET_VERSION = "snapshot" }
+    elseif ($choice[2]) { $script:TARGET_VERSION = Read-Host "Exact version" }
+    $choice = Select-Menu -Title "Make BoxLang yours" -Labels @("Install Java 21+ if missing", "Install CommandBox", "Show verbose task output") -Hints @(
+        "Download Java automatically when it is missing."
+        "Install CommandBox as the BoxLang package manager."
+        "Stream detailed command output during installation."
+    ) -Choices @($true,$true,$script:VERBOSE) -Multiple $true
+    if ($choice[0]) { $script:JAVA_INSTALL_MODE = "automatic" } else { $script:JAVA_INSTALL_MODE = "skip" }
+    $INSTALL_COMMANDBOX = [bool]$choice[1]
+    $script:VERBOSE = [bool]$choice[2]
+}
+
+function Handle-ExistingInstallation {
+    param([string]$CurrentVersion)
+    Write-Host ""
+    Write-Host "  ${ORANGE}!  Existing BoxLang $CurrentVersion detected at [$($script:CurrentInstallPath -or $INSTALLATION_FOLDER)].${RESET}"
+    Write-Host ""
+    if ($NON_INTERACTIVE -or $FORCE_INSTALL -or $KEEP_EXISTING) {
+        if ($KEEP_EXISTING) { return "keep" }
+        Write-Host "  Continuing with the requested reinstall."
+        return "reinstall"
+    }
+    $choice = Select-Menu -Title "Existing BoxLang installation" -Labels @("Reinstall / upgrade", "Keep current version and exit", "Uninstall BoxLang") -Hints @(
+        "BoxLang $CurrentVersion is installed at $($script:CurrentInstallPath -or $INSTALLATION_FOLDER). Reinstalling is recommended."
+        "Leave the current BoxLang installation unchanged."
+        "Remove BoxLang and exit."
+    ) -Choices @($false,$false,$false) -Multiple $false
+    if ($choice[1]) { return "keep" }
+    if ($choice[2]) { return "uninstall" }
+    return "reinstall"
 }
 
 ###########################################################################
@@ -90,15 +322,18 @@ function Show-Help {
     Write-Host "  --uninstall       Remove BoxLang from the system"
     Write-Host "  --check-update    Check if a newer version is available"
     Write-Host "  --force           Force reinstallation even if already installed"
-    Write-Host "  --with-commandbox Install CommandBox without prompting"
-    Write-Host "  --without-commandbox Skip CommandBox installation"
+    Write-Host "  --with-commandbox Install the CommandBox module (default)"
+    Write-Host "  --without-commandbox Skip the CommandBox module"
     Write-Host "  --with-jre        Require Java 21 or higher"
     Write-Host "  --without-jre     Skip the Java check for a local artifact installation"
 	Write-Host "  --boxlang-path <path> Use a local BoxLang JAR or ZIP"
 	Write-Host "  --miniserver-path <path> Use a local MiniServer JAR or ZIP"
 	Write-Host "  --installer-scripts-path <path> Use a local installer scripts ZIP or directory"
-    Write-Host "  --non-interactive  Never prompt for input (also enabled when input is redirected)"
-    Write-Host "  --yes, -y         Use defaults for all prompts (installs CommandBox)"
+    Write-Host "  --non-interactive  Never prompt; upgrade existing installs automatically"
+    Write-Host "  --verbose          Show detailed task output"
+    Write-Host "  --keep-existing    Exit cleanly when BoxLang is already installed"
+    Write-Host "  --interactive      Force the interactive installer"
+    Write-Host "  --yes, -y          Use defaults for all prompts (installs CommandBox)"
     Write-Host ""
     Write-Host -ForegroundColor White -NoNewline "Examples:"
     Write-Host ""
@@ -277,6 +512,32 @@ function Get-SemanticVersion {
 }
 
 # Get current installed BoxLang version
+$script:CurrentInstallPath = ""
+function Get-InstalledVersionAt {
+    param([string]$BinDir, [string]$InstallHome)
+
+    $script:CurrentInstallPath = ""
+    $candidates = @(
+        (Join-Path $BinDir "boxlang.bat"),
+        (Join-Path $BinDir "boxlang.exe"),
+        (Join-Path (Join-Path $InstallHome "bin") "boxlang.bat"),
+        (Join-Path (Join-Path $InstallHome "bin") "boxlang.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (-not (Test-Path $candidate)) { continue }
+        try {
+            $versionOutput = & $candidate --version 2>$null | Out-String
+            $version = Get-SemanticVersion -VersionString $versionOutput
+            if ($version) {
+                $script:CurrentInstallPath = $candidate
+                return $version
+            }
+        } catch { }
+    }
+    return $null
+}
+
 function Get-CurrentBoxLangVersion {
     # Try to find BoxLang in common locations
     $boxlangCandidates = @(
@@ -367,7 +628,7 @@ function Test-ForUpdates {
     Write-Host -ForegroundColor Blue "🔍 Checking for BoxLang updates..."
 
     # Get current version
-    $currentVersion = Get-CurrentBoxLangVersion
+    $currentVersion = Get-InstalledVersionAt -BinDir $DESTINATION_BIN -InstallHome $INSTALLATION_FOLDER
     if (-not $currentVersion) {
         Write-Host -ForegroundColor Yellow "⚠️  BoxLang is not currently installed"
         Write-Host -ForegroundColor Blue "💡 Run '.\install-boxlang.ps1' to install the latest version"
@@ -470,6 +731,15 @@ for ($argIndex = 0; $argIndex -lt $args.Count; $argIndex++) {
         "--non-interactive" {
             $NON_INTERACTIVE = $true
         }
+        "--verbose" {
+            $script:VERBOSE = $true
+        }
+        "--keep-existing" {
+            $script:KEEP_EXISTING = $true
+        }
+        "--interactive" {
+            $script:NON_INTERACTIVE = $false
+        }
         default {
             $newArgs += $arg
         }
@@ -482,6 +752,11 @@ $DOWNLOAD_URL = ""
 if ( $null -ne $env:BOXLANG_TARGET_VERSION ) {
     $TARGET_VERSION = $env:BOXLANG_TARGET_VERSION
 }
+
+$script:INTERACTIVE = -not $NON_INTERACTIVE -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+Show-Banner
+Show-SystemLine
+if ($INTERACTIVE) { Choose-InstallerMode }
 
 # If the version is "snapshot", always force it
 if ($TARGET_VERSION -eq "snapshot") {
@@ -617,6 +892,8 @@ function Update-PathVariable {
     }
 }
 
+Show-InstallPlan
+
 # Perform preflight checks
 $needsDownload = -not $BOXLANG_PATH -or -not $MINISERVER_PATH -or -not $INSTALLER_SCRIPTS_PATH -or $INSTALL_COMMANDBOX -ne $false
 if (-not (Test-Prerequisites -RequireInternet $needsDownload)) {
@@ -700,106 +977,22 @@ if ($JAVA_INSTALL_MODE -ne "skip" -and -not (Test-JavaVersion)) {
 }
 
 # CommandBox Installation Check and Install
-function Check-And-Install-CommandBox {
-    param(
-        [string]$BinDir
-    )
+function Install-CommandBoxModule {
+    param([string]$ScriptsDir)
+    if ($INSTALL_COMMANDBOX -eq $false) { return $false }
 
-	if ($INSTALL_COMMANDBOX -eq $false) {
-		return $false
-	}
-
-    Write-Host -ForegroundColor Blue "🔍 Checking for CommandBox..."
-
-    # Check if CommandBox is already available
-    $boxCommand = Get-Command "box" -ErrorAction SilentlyContinue
-    if ($boxCommand) {
-        Write-Host -ForegroundColor Green "✅ CommandBox is already installed and available"
-        return $true
-    }
-
-    Write-Host -ForegroundColor Yellow "⚠️  CommandBox is not installed"
-    Write-Host -ForegroundColor Blue "💡 CommandBox is the Package Manager for BoxLang®"
-    Write-Host -ForegroundColor Blue "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more"
-    Write-Host ""
-
-    # If flag is explicitly set to true, install without prompting
-    if ($INSTALL_COMMANDBOX -eq $true) {
-        Write-Host -ForegroundColor Green "Installing CommandBox (automatic mode)..."
-    } elseif ($NON_INTERACTIVE) {
-        # Use the prompt's default answer without reading input.
-        $response = ""
-    } else {
-        # Ask user if they want to install CommandBox
-        $response = Read-Host "Would you like to install CommandBox? [Y/n]"
-        if ($response -match "^[nN]") {
-            Write-Host -ForegroundColor Yellow "Skipping CommandBox installation"
-            Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
-            return $false
-        }
-    }
-    if ($response -match "^[nN]") {
-        Write-Host -ForegroundColor Yellow "Skipping CommandBox installation"
-        Write-Host -ForegroundColor Blue "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
+    $moduleScript = Join-Path $ScriptsDir "bx-module.ps1"
+    if (-not (Test-Path $moduleScript)) {
+        Write-Note "bx-module was not found; skipping CommandBox module install."
         return $false
     }
 
-    # The universal binary for Windows is available at the following URL
-    $commandboxUrl = "https://www.ortussolutions.com/parent/download/commandbox/type/windows"
-    $commandboxTempPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandbox.zip"
-    $commandboxExtractPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "commandbox"
-
     try {
-        # Download CommandBox
-		Write-Host -ForegroundColor Blue "📥  Downloading CommandBox from $commandboxUrl..."
-        Invoke-WebRequest -Uri $commandboxUrl -OutFile $commandboxTempPath
-
-        # Extract CommandBox
-        Write-Host -ForegroundColor Blue "📦 Unzipping CommandBox..."
-        if (Test-Path $commandboxExtractPath) {
-            Remove-Item -Path $commandboxExtractPath -Recurse -Force
-        }
-        Expand-Archive -Path $commandboxTempPath -DestinationPath $commandboxExtractPath -Force
-
-        # Install CommandBox - copy the executable to the bin directory
-        Write-Host -ForegroundColor Blue "🗂️ Installing CommandBox to $BinDir\box.exe..."
-        $boxExePath = Get-ChildItem -Path $commandboxExtractPath -Name "box.exe" -Recurse | Select-Object -First 1
-        if ($boxExePath) {
-            $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxExePath
-            Copy-Item -Path $sourceBoxPath -Destination $BinDir -Force
-        } else {
-            # Look for box.bat as fallback
-            $boxBatPath = Get-ChildItem -Path $commandboxExtractPath -Name "box.bat" -Recurse | Select-Object -First 1
-            if ($boxBatPath) {
-                $sourceBoxPath = Join-Path -Path $commandboxExtractPath -ChildPath $boxBatPath.Name
-                Copy-Item -Path $sourceBoxPath -Destination $BinDir -Force
-            } else {
-                throw "Could not find box.exe or box.bat in the extracted CommandBox archive"
-            }
-        }
-
-        # Create commandbox.properties file to configure home directory
-        Write-Host -ForegroundColor Blue "⚙️ Creating CommandBox configuration..."
-        $commandboxPropertiesPath = Join-Path -Path $BinDir -ChildPath "commandbox.properties"
-        $commandboxPropertiesContent = "commandbox_home=../.commandbox"
-        Set-Content -Path $commandboxPropertiesPath -Value $commandboxPropertiesContent -Encoding UTF8
-
-        # Create .commandbox directory
-        $commandboxHomeDir = Join-Path -Path (Split-Path $BinDir -Parent) -ChildPath ".commandbox"
-        New-Item -Type Directory -Path $commandboxHomeDir -Force | Out-Null
-        Write-Host -ForegroundColor Blue "🏠 Created CommandBox HOME directory at $commandboxHomeDir"
-
-        # Cleanup
-        Remove-Item -Path $commandboxTempPath -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $commandboxExtractPath -Recurse -Force -ErrorAction SilentlyContinue
-
-        Write-Host -ForegroundColor Green "✅ CommandBox installed successfully"
-        Write-Host -ForegroundColor Green "Point shortcuts to 'box.exe'"
+        & $moduleScript bx-cli
+        if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "bx-module exited with $LASTEXITCODE" }
         return $true
-    }
-    catch {
-        Write-Host -ForegroundColor Red "❌ Failed to install CommandBox: $($_.Exception.Message)"
-        Write-Host -ForegroundColor Blue "💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation"
+    } catch {
+        Write-Note "CommandBox module install failed. Retry with: bx-module bx-cli"
         return $false
     }
 }
@@ -836,25 +1029,15 @@ Write-Host -ForegroundColor Green "You can also download the $bxName runtimes fr
 Write-Host -ForegroundColor Green "*************************************************************************"
 
 # Check for existing BoxLang installation
-if (-not $FORCE_INSTALL) {
-    Write-Host -ForegroundColor Blue "🔍 Checking for existing BoxLang installation..."
-
+if (-not $KEEP_EXISTING) {
+    Write-Host -ForegroundColor Blue "[..] Checking for existing BoxLang installation..."
     $currentVersion = Get-CurrentBoxLangVersion
     if ($currentVersion) {
-        Write-Host -ForegroundColor Yellow "⚠️  BoxLang is already installed at [$INSTALLATION_FOLDER] with version [$currentVersion]"
-        Write-Host -ForegroundColor Blue "💡 Use '.\install-boxlang.ps1 --uninstall' to remove the existing version before reinstalling."
-        Write-Host -ForegroundColor Blue "💡 Or use '--force' to do a forced reinstall."
-        exit 0
-    } else {
-        Write-Host -ForegroundColor Green "✅ No previous BoxLang installation found, proceeding with fresh install..."
-        Write-Host ""
+        $decision = Handle-ExistingInstallation -CurrentVersion $currentVersion
+        if ($decision -eq "keep") { exit 0 }
+        if ($decision -eq "uninstall") { Uninstall-BoxLang; exit 0 }
+        $FORCE_INSTALL = $true
     }
-} else {
-    if (Test-Path $INSTALLATION_FOLDER -PathType Container) {
-        Write-Host -ForegroundColor Yellow "🔄 Forcing reinstallation of BoxLang..."
-        Remove-PreviousInstallation
-    }
-    Write-Host ""
 }
 
 # Uninstall previous versions (if not already done by force install)
@@ -975,7 +1158,7 @@ catch {
 }
 
 # Install CommandBox
-$null = Check-And-Install-CommandBox -BinDir $DESTINATION_BIN
+$null = Install-CommandBoxModule -ScriptsDir $DESTINATION_SCRIPTS
 
 # Create bin directory in BoxLang home for module executables
 Write-Host -ForegroundColor Blue "📁 Creating BoxLang home bin directory..."
@@ -1019,26 +1202,4 @@ if (-not (Test-Installation -BinDir $DESTINATION_BIN)) {
 }
 
 ## Finalization
-Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green "$bxName Binaries are now installed to [$DESTINATION_BIN]"
-Write-Host -ForegroundColor Green "$bxName JARs are now installed to [$DESTINATION_LIB]"
-Write-Host -ForegroundColor Green "$bxName Home is now set to [$DESTINATION_HOME]"
-Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green 'Your [BOXLANG_HOME] is set to the BoxLang installation directory.'
-Write-Host -ForegroundColor Green 'You can change this by setting the [BOXLANG_HOME] environment variable in your shell profile'
-Write-Host -ForegroundColor Green 'Just copy the following line to override the location if you want'
-Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green "`$env:BOXLANG_HOME=`"C:\new\home`""
-Write-Host -ForegroundColor Green ''
-Write-Host -ForegroundColor Green "You can start a MiniServer by running: boxlang-miniserver"
-Write-Host -ForegroundColor Green "You can use the Package Manager by running: box (if CommandBox was installed)"
-Write-Host -ForegroundColor Green '*************************************************************************'
-Write-Host -ForegroundColor Green "$bxName - Dynamic : Modular : Productive : https://boxlang.io"
-Write-Host -ForegroundColor Green '*************************************************************************'
-Write-Host -ForegroundColor Green "$bxName is FREE and Open-Source Software under the Apache 2.0 License"
-Write-Host -ForegroundColor Green "You can also buy support and enhanced versions at https://boxlang.io/plans"
-Write-Host -ForegroundColor Green 'p.s. Follow us at https://x.com/tryboxlang'
-Write-Host -ForegroundColor Green 'p.p.s. Clone us and star us at https://github.com/ortus-boxlang/boxlang'
-Write-Host -ForegroundColor Green 'Please support us via Patreon at https://www.patreon.com/ortussolutions'
-Write-Host -ForegroundColor Green '*************************************************************************'
-Write-Host -ForegroundColor Green "Copyright and Registered Trademarks of Ortus Solutions, Corp"
+Show-InstallSummary

@@ -11,6 +11,9 @@ _install_boxlang() {
         '--with-commandbox[Install CommandBox without prompting]' \
         '--without-commandbox[Skip CommandBox installation]' \
         '--non-interactive[Never prompt for input]' \
+        '--verbose[Show detailed task output]' \
+        '--keep-existing[Exit cleanly when BoxLang is already installed]' \
+        '--interactive[Force the interactive installer]' \
         '--with-jre[Install a Java JRE if not found]' \
         '--without-jre[Skip Java installation]' \
         '(-y --yes)'{-y,--yes}'[Use defaults for all prompts]' \

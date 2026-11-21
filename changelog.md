@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the Strata-style UI to `install-boxlang.sh` and `install-boxlang.ps1`: branded banner, Recommended/Custom setup, installation plan, task progress, detailed log, and `--verbose` output.
+- CommandBox is now installed by default via `bx-module bx-cli`, which installs it into the user's BoxLang home. `bx-module` also accepts `bx-cli` as an alias for installing the `bx-cli` module.
+- `install-boxlang.sh` and `install-boxlang.ps1` now detect existing BoxLang installations. Interactive installs ask whether to reinstall, keep, uninstall, or choose another path; non-interactive installs continue with the requested reinstall.
+- Added `--non-interactive`, `--verbose`, `--keep-existing`, and `--interactive` to the BoxLang installer. Container builds should use `--non-interactive`.
 - Improved BVM installer UI: a branded banner, Recommended/Custom setup menus, a task plan, layered progress, and a `--verbose` mode that streams detailed task output. Normal installs hide background output, keep a log, and surface it only on failure or warnings.
 - Recommended installs now install missing command dependencies and Java 21+, then install and activate the latest BoxLang runtime. Custom mode can opt out of shell integration, Java, or the runtime.
 - Windows Java auto-install now uses a user-scoped JRE when the installer is not elevated; `install-jre.ps1` accepts `-Scope User|Machine`.

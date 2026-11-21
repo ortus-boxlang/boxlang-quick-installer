@@ -32,8 +32,19 @@ The BoxLang Quick Installer provides convenient installation scripts for Mac, Li
 ```sh
 /bin/sh -c "$(curl -fsSL https://install.boxlang.io)"
 
-# With automatic Java 21  installation
+# With automatic Java 21 installation
 curl -fsSL https://install.boxlang.io | sh -s -- --with-jre
+```
+
+The installer uses an interactive Recommended/Custom flow when a controlling terminal is available, including the `curl ... | sh` form above. If BoxLang is already installed, interactive mode asks whether to reinstall, keep, uninstall, or change the install path.
+
+For container builds and other headless automation, add `--non-interactive`. This skips all prompts and upgrades/reinstalls an existing BoxLang installation instead of exiting:
+
+```sh
+curl -fsSL https://install.boxlang.io | /bin/bash -s -- \
+  "$BOXLANG_VERSION" \
+  --without-commandbox \
+  --non-interactive
 ```
 
 **Windows:**
@@ -161,8 +172,8 @@ Here are the available options for the install command.
 | `--check-update` | | Check if a newer version is available |
 | `--system` | | Force system-wide installation (requires sudo) |
 | `--force` | | Force reinstallation even if already installed |
-| `--with-commandbox` | | Install CommandBox without prompting |
-| `--without-commandbox` | | Skip CommandBox installation |
+| `--with-commandbox` | | Install the CommandBox module (default) |
+| `--without-commandbox` | | Skip the CommandBox module |
 | `--boxlang-path <path>` | | Use a local BoxLang JAR or ZIP instead of downloading it |
 | `--miniserver-path <path>` | | Use a local MiniServer JAR or ZIP instead of downloading it |
 | `--installer-scripts-path <path>` | | Use a local installer scripts ZIP or directory instead of downloading it |
@@ -176,6 +187,7 @@ Here are the available options for the install command.
 - Use `--system` when you want to install BoxLang for all users on the system
 - The `--force` option is useful when you need to reinstall or update an existing installation
 - `--yes` answers yes to all prompts and automatically installs CommandBox and Java when needed
+- CommandBox is installed by default through `bx-module bx-cli`, which places it in the user's BoxLang home.
 - `--with-commandbox` and `--without-commandbox` give you explicit control over CommandBox installation
 - `--boxlang-path`, `--miniserver-path`, and `--installer-scripts-path` accept local artifacts; JARs are copied directly and ZIPs are extracted
 - `--non-interactive` skips all prompts and uses each prompt's existing default answer; it is also enabled automatically when standard input is redirected
@@ -237,8 +249,8 @@ Options:
   --check-update        Check if a newer version is available
   --system              Force system-wide installation (requires sudo)
   --force               Force reinstallation even if already installed
-  --with-commandbox     Install CommandBox without prompting
-  --without-commandbox  Skip CommandBox installation
+  --with-commandbox     Install the CommandBox module (default)
+  --without-commandbox  Skip the CommandBox module
   --non-interactive     Never prompt for input (also enabled when input is redirected)
   --with-jre            ✨ Automatically install Java 21 JRE if not found
   --without-jre         ✨ Skip Java installation (manual installation required)

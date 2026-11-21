@@ -28,7 +28,7 @@ INSTALLER_VERSION="@build.version@"
 TEMP_DIR="${TMPDIR:-/tmp}"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # prompt = ask, automatic = install, skip = require Java without installing it
-INSTALL_COMMANDBOX=""
+INSTALL_COMMANDBOX=true
 JAVA_INSTALL_MODE="prompt"
 NON_INTERACTIVE=false
 # local paths to skip downloads (empty = download from remote)
@@ -36,15 +36,416 @@ BOXLANG_PATH=""
 MINISERVER_PATH=""
 INSTALLER_SCRIPTS_PATH=""
 
-if [ ! -t 0 ]; then
-	NON_INTERACTIVE=true
-fi
+# UI state
+VERBOSE=false
+INTERACTIVE=false
+PROMPT_DEVICE=""
+RICH_TERMINAL=false
+LOG_FILE=""
+TASK_OUTPUT_FILE=""
+TASK_STATUS_FILE=""
+ACTIVE_PID=""
+MENU_KEY=""
+MENU_LABELS=""
+MENU_HINTS=""
+MENU_CHOICES=""
+MENU_RESULT=""
+TASK_PROGRESS=no
+TASK_OUTPUT=quiet
+CUSTOM_VERSION=""
+INSTALL_DECISION=""
+INSTALL_HOME=""
+INSTALL_BIN=""
+COLOR_LAYER_ONE="" COLOR_LAYER_TWO="" COLOR_ORANGE=""
+ESC=$(printf '\033')
+CR=$(printf '\r')
 
-for arg in "$@"; do
-	if [ "$arg" = "--non-interactive" ]; then
+###########################################################################
+# Strata-style UI helpers (POSIX sh)
+###########################################################################
+
+detect_terminal() {
+	COLOR_GREEN="$GREEN" COLOR_CYAN="$CYAN" COLOR_YELLOW="$YELLOW" COLOR_RED="$RED"
+	COLOR_LAYER_ONE="$BLUE" COLOR_LAYER_TWO="$MAGENTA"
+	COLOR_ORANGE="$(printf '\033[38;5;208m')"
+	DIM=""
+	PROMPT_DEVICE=""
+	if [ -r /dev/tty ] && [ -w /dev/tty ] && ( : < /dev/tty ) 2>/dev/null; then
+		PROMPT_DEVICE=/dev/tty
+	fi
+	if [ "$NON_INTERACTIVE" = true ]; then
+		INTERACTIVE=false
+	elif [ -n "$PROMPT_DEVICE" ]; then
+		INTERACTIVE=true
+	else
+		INTERACTIVE=false
 		NON_INTERACTIVE=true
 	fi
-done
+	if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ]; then
+		if [ -n "$PROMPT_DEVICE" ] && command -v stty >/dev/null 2>&1; then
+			ui_rows=$(stty size < "$PROMPT_DEVICE" 2>/dev/null | awk '{print $1}')
+			ui_cols=$(stty size < "$PROMPT_DEVICE" 2>/dev/null | awk '{print $2}')
+			if [ "${ui_rows:-0}" -ge 24 ] 2>/dev/null && [ "${ui_cols:-0}" -ge 64 ] 2>/dev/null; then
+				RICH_TERMINAL=true
+			fi
+		fi
+	fi
+}
+
+ui_info() {
+	printf '  %s✓%s  %s\n' "$COLOR_GREEN" "$NORMAL" "$*"
+}
+
+ui_note() {
+	printf '  %s!%s  %s\n' "$COLOR_YELLOW" "$NORMAL" "$*" >&2
+}
+
+ui_warn() {
+	printf '  %s!%s  %s\n' "$COLOR_YELLOW" "$NORMAL" "$*" >&2
+	[ -z "$LOG_FILE" ] || printf 'warning: %s\n' "$*" >> "$LOG_FILE"
+}
+
+ui_section() {
+	printf '\n  %s%s%s%s\n\n' "$COLOR_CYAN" "$BOLD" "$*" "$NORMAL"
+}
+
+ui_divider() {
+	if [ "$RICH_TERMINAL" = true ]; then
+		printf '  %s────────────────────────────────────────────────────────────%s\n' "$DIM" "$NORMAL"
+	fi
+}
+
+show_banner() {
+	ui_logo_plain=$(cat <<'BOXPLAIN'
+             ⠈⠑⠲⣤⡀
+        ⢀⣴⣿⣿⣷⣦⣄ ⠈⠻⣷⣄
+      ⢠⣾⣿⣿⣿⣿⣿⣿⣿⣷⡄ ⠈⢿⣷⡄
+        ⠈⠙⠻⣿⣿⣿⣿⣿⣿⡆ ⠘⣿⣿⡄
+           ⠈⢿⣿⣿⣿⣿⣿  ⢻⣿⣿
+            ⠸⣿⣿⣿⣿⣿  ⣸⣿⣿⡆
+            ⢠⣿⣿⣿⣿⡏  ⣿⣿⣿⠇
+            ⣼⣿⣿⣿⠏  ⣼⣿⣿⡿
+         ⢀⣠⣾⣿⡿⠟⠁ ⢀⣾⣿⣿⣿⠃
+⢠⣿⣿⠄    ⠚⠛⠛⠉⠁ ⢀⣠⣶⣿⣿⣿⡿⠁
+ ⠉⠉⢾⣿⣶⣦⣤⣤⣤⣤⣤⣶⣾⣿⣿⣿⣿⠿⠋
+    ⠈⠛⠻⠿⣿⣿⣿⣿⣿⣿⠿⠟⠋⠁
+BOXPLAIN
+	)
+	ui_logo_color=$(cat <<'BOXCOLOR'
+             [38;2;0;239;177m⠈[38;2;0;241;171m⠑[38;2;0;242;165m⠲[38;2;0;244;159m⣤[38;2;0;246;153m⡀
+        [38;2;0;232;207m⢀[38;2;0;233;201m⣴[38;2;0;235;195m⣿[38;2;0;236;189m⣿[38;2;0;238;183m⣷[38;2;0;239;177m⣦[38;2;0;241;171m⣄ [38;2;0;244;159m⠈[38;2;0;246;153m⠻[38;2;0;247;147m⣷[38;2;0;249;141m⣄
+      [38;2;0;228;219m⢠[38;2;0;230;213m⣾[38;2;0;232;207m⣿[38;2;0;233;201m⣿[38;2;0;235;195m⣿[38;2;0;236;189m⣿[38;2;0;238;183m⣿[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣷[38;2;0;244;159m⡄ [38;2;0;247;147m⠈[38;2;0;249;141m⢿[38;2;0;250;135m⣷[38;2;0;252;129m⡄
+        [38;2;0;232;207m⠈[38;2;0;233;201m⠙[38;2;0;235;195m⠻[38;2;0;236;189m⣿[38;2;0;238;183m⣿[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⣿[38;2;0;246;153m⡆ [38;2;0;249;141m⠘[38;2;0;250;135m⣿[38;2;0;252;129m⣿[38;2;0;253;123m⡄
+           [38;2;0;236;189m⠈[38;2;0;238;183m⢿[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⣿[38;2;0;246;153m⣿  [38;2;0;250;135m⢻[38;2;0;252;129m⣿[38;2;0;253;123m⣿
+            [38;2;0;238;183m⠸[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⣿[38;2;0;246;153m⣿  [38;2;0;250;135m⣸[38;2;0;252;129m⣿[38;2;0;253;123m⣿[38;2;0;255;117m⡆
+            [38;2;0;238;183m⢠[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⣿[38;2;0;246;153m⡏  [38;2;0;250;135m⣿[38;2;0;252;129m⣿[38;2;0;253;123m⣿[38;2;0;255;117m⠇
+            [38;2;0;238;183m⣼[38;2;0;239;177m⣿[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⠏  [38;2;0;249;141m⣼[38;2;0;250;135m⣿[38;2;0;252;129m⣿[38;2;0;253;123m⡿
+         [38;2;0;233;201m⢀[38;2;0;235;195m⣠[38;2;0;236;189m⣾[38;2;0;238;183m⣿[38;2;0;239;177m⡿[38;2;0;241;171m⠟[38;2;0;242;165m⠁ [38;2;0;246;153m⢀[38;2;0;247;147m⣾[38;2;0;249;141m⣿[38;2;0;250;135m⣿[38;2;0;252;129m⣿[38;2;0;253;123m⠃
+[38;2;0;219;255m⢠[38;2;0;221;249m⣿[38;2;0;222;243m⣿[38;2;0;224;237m⠄    [38;2;0;232;207m⠚[38;2;0;233;201m⠛[38;2;0;235;195m⠛[38;2;0;236;189m⠉[38;2;0;238;183m⠁ [38;2;0;241;171m⢀[38;2;0;242;165m⣠[38;2;0;244;159m⣶[38;2;0;246;153m⣿[38;2;0;247;147m⣿[38;2;0;249;141m⣿[38;2;0;250;135m⡿[38;2;0;252;129m⠁
+ [38;2;0;221;249m⠉[38;2;0;222;243m⠉[38;2;0;224;237m⢾[38;2;0;225;231m⣿[38;2;0;227;225m⣶[38;2;0;228;219m⣦[38;2;0;230;213m⣤[38;2;0;232;207m⣤[38;2;0;233;201m⣤[38;2;0;235;195m⣤[38;2;0;236;189m⣤[38;2;0;238;183m⣶[38;2;0;239;177m⣾[38;2;0;241;171m⣿[38;2;0;242;165m⣿[38;2;0;244;159m⣿[38;2;0;246;153m⣿[38;2;0;247;147m⠿[38;2;0;249;141m⠋
+    [38;2;0;225;231m⠈[38;2;0;227;225m⠛[38;2;0;228;219m⠻[38;2;0;230;213m⠿[38;2;0;232;207m⣿[38;2;0;233;201m⣿[38;2;0;235;195m⣿[38;2;0;236;189m⣿[38;2;0;238;183m⣿[38;2;0;239;177m⣿[38;2;0;241;171m⠿[38;2;0;242;165m⠟[38;2;0;244;159m⠋[38;2;0;246;153m⠁
+BOXCOLOR
+	)
+	ui_banner_text=$(cat <<'BOXTEXT'
+
+  B O X L A N G
+
+  The software productivity platform
+
+  www.boxlang.io
+
+
+  BoxLang Quick Installer
+
+
+
+
+BOXTEXT
+	)
+	ui_lines="$ui_logo_plain"
+	if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ]; then
+		ui_lines="$ui_logo_color"
+	fi
+	ui_i=1
+	printf '
+'
+	while [ "$ui_i" -le 12 ]; do
+		ui_line=$(printf '%s
+' "$ui_lines" | sed -n "${ui_i}p")
+		ui_text=$(printf '%s
+' "$ui_banner_text" | sed -n "${ui_i}p")
+		printf '%b%s%b
+' "$ui_line" "$ui_text" "$NORMAL"
+		ui_i=$((ui_i + 1))
+	done
+	printf '
+'
+}
+
+show_system() {
+	ui_system="Unknown system"
+	if [ -r /etc/os-release ]; then
+		# shellcheck disable=SC1091
+		. /etc/os-release
+		ui_system="${PRETTY_NAME:-${ID:-Unknown system}}"
+	elif command -v sw_vers >/dev/null 2>&1; then
+		ui_system="macOS $(sw_vers -productVersion 2>/dev/null)"
+	fi
+	ui_arch="$(uname -m 2>/dev/null)"
+	case "$ui_arch" in
+		x86_64|amd64) ui_arch=x64 ;;
+		arm64|aarch64) ui_arch=arm64 ;;
+	esac
+	ui_shell="${SHELL##*/}"
+	printf '  %s%s · %s · shell: %s%s\n' "$DIM" "$ui_system" "$ui_arch" "$ui_shell" "$NORMAL"
+}
+
+menu_at() {
+	printf '%s\n' "$1" | sed -n "$2p"
+}
+
+menu_count() {
+	printf '%s\n' "$1" | wc -l | tr -d ' '
+}
+
+menu_set_choice() {
+	ui_idx=1
+	ui_out=""
+	ui_count=$(menu_count "$MENU_CHOICES")
+	while [ "$ui_idx" -le "$ui_count" ]; do
+		ui_value=$(menu_at "$MENU_CHOICES" "$ui_idx")
+		if [ "$ui_idx" -eq "$1" ]; then ui_value="$2"; fi
+		if [ -z "$ui_out" ]; then ui_out="$ui_value"; else ui_out="$ui_out
+$ui_value"; fi
+		ui_idx=$((ui_idx + 1))
+	done
+	MENU_CHOICES="$ui_out"
+}
+
+read_menu_key() {
+	MENU_KEY=""
+	if [ -z "$PROMPT_DEVICE" ]; then return 1; fi
+	if command -v stty >/dev/null 2>&1 && command -v dd >/dev/null 2>&1; then
+		ui_stty=$(stty -g < "$PROMPT_DEVICE" 2>/dev/null) || return 1
+		stty raw -echo min 1 time 0 < "$PROMPT_DEVICE" 2>/dev/null || return 1
+		ui_first=$(dd bs=1 count=1 2>/dev/null < "$PROMPT_DEVICE")
+		if [ "$ui_first" = "$ESC" ]; then
+			stty raw -echo min 0 time 1 < "$PROMPT_DEVICE" 2>/dev/null || true
+			ui_rest=$(dd bs=1 count=2 2>/dev/null < "$PROMPT_DEVICE")
+			MENU_KEY="$ui_first$ui_rest"
+		else
+			MENU_KEY="$ui_first"
+		fi
+		stty "$ui_stty" < "$PROMPT_DEVICE" 2>/dev/null || true
+	else
+		IFS= read -r MENU_KEY < "$PROMPT_DEVICE" || return 1
+	fi
+	[ -n "$MENU_KEY" ]
+}
+
+select_menu() {
+	MENU_LABELS="$2"
+	MENU_HINTS="$3"
+	MENU_CHOICES="$4"
+	ui_multiple="$5"
+	ui_active=1
+	ui_count=$(menu_count "$MENU_LABELS")
+	ui_saved=false
+	if [ "$RICH_TERMINAL" = true ]; then
+		ui_rows=$((ui_count + 12))
+		ui_i=0
+		while [ "$ui_i" -lt "$ui_rows" ]; do printf '\n'; ui_i=$((ui_i + 1)); done
+		printf '\033[%dA\0337\033[?25l' "$ui_rows"
+		ui_saved=true
+	fi
+	while true; do
+		if [ "$ui_saved" = true ]; then printf '\0338\033[J'; fi
+		ui_section "$1"
+		ui_i=1
+		while [ "$ui_i" -le "$ui_count" ]; do
+			ui_label=$(menu_at "$MENU_LABELS" "$ui_i")
+			ui_choice=$(menu_at "$MENU_CHOICES" "$ui_i")
+			ui_marker=" "
+			ui_color="$NORMAL"
+			if [ "$RICH_TERMINAL" != true ]; then
+				ui_marker="$ui_i"
+			elif [ "$ui_i" -eq "$ui_active" ]; then
+				ui_marker='›'; ui_color="$COLOR_CYAN$BOLD"
+			elif [ "$ui_multiple" = yes ] && [ "$ui_choice" = yes ]; then
+				ui_color="$COLOR_GREEN"
+			fi
+			if [ "$ui_multiple" = yes ]; then
+				ui_check=" "
+				[ "$ui_choice" = yes ] && ui_check="✓"
+				printf '  %s%s  [%s] %s%s\n' "$ui_color" "$ui_marker" "$ui_check" "$ui_label" "$NORMAL"
+			else
+				printf '  %s%s  %s%s\n' "$ui_color" "$ui_marker" "$ui_label" "$NORMAL"
+			fi
+			ui_i=$((ui_i + 1))
+		done
+		ui_hint=$(menu_at "$MENU_HINTS" "$ui_active")
+		printf '\n  %s%s%s\n\n' "$DIM" "$ui_hint" "$NORMAL"
+		ui_divider
+		if [ "$ui_multiple" = yes ]; then
+			printf '  %s↑/↓ move · Space toggle · Enter continue · Esc cancel%s\n' "$DIM" "$NORMAL"
+		else
+			printf '  %s↑/↓ choose · Enter continue · Esc cancel%s\n' "$DIM" "$NORMAL"
+		fi
+		if read_menu_key || [ -n "$MENU_KEY" ]; then
+			case "$MENU_KEY" in
+				"${ESC}[A"|"${ESC}OA"|k) ui_active=$((ui_active - 1)); [ "$ui_active" -lt 1 ] && ui_active="$ui_count" ;;
+				"${ESC}[B"|"${ESC}OB"|j) ui_active=$((ui_active + 1)); [ "$ui_active" -gt "$ui_count" ] && ui_active=1 ;;
+				" ")
+					if [ "$ui_multiple" = yes ]; then
+						ui_choice=$(menu_at "$MENU_CHOICES" "$ui_active")
+						if [ "$ui_choice" = yes ]; then menu_set_choice "$ui_active" no; else menu_set_choice "$ui_active" yes; fi
+					fi
+					;;
+				""|$CR)
+					if [ "$ui_multiple" != yes ]; then menu_set_choice "$ui_active" yes; fi
+					if [ "$ui_saved" = true ]; then printf '\0338\033[J\033[?25h'; fi
+					MENU_RESULT="$MENU_CHOICES"
+					return 0
+					;;
+				"$ESC"|q|Q) ui_cancel ;;
+				[1-9]*) if [ "$ui_multiple" = yes ]; then
+						if [ "$MENU_KEY" -le "$ui_count" ]; then ui_active="$MENU_KEY"; fi
+					else
+						ui_active="$MENU_KEY"
+						menu_set_choice "$ui_active" yes
+						if [ "$ui_saved" = true ]; then printf '\0338\033[J\033[?25h'; fi
+						MENU_RESULT="$MENU_CHOICES"
+						return 0
+					fi ;;
+			esac
+		else
+			ui_cancel
+		fi
+	done
+}
+
+ui_cancel() {
+	if [ "$RICH_TERMINAL" = true ]; then printf '\0338\033[J\033[?25h'; fi
+	printf '\n  Installation cancelled.\n\n'
+	exit 0
+}
+
+prompt_yes_no() {
+	[ -n "$PROMPT_DEVICE" ] || return 0
+	printf '%s [Y/n] ' "$1" > "$PROMPT_DEVICE"
+	IFS= read -r ui_answer < "$PROMPT_DEVICE" || return 0
+	case "$ui_answer" in
+		n|N|no|NO|No) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+download_percent() {
+	[ -f "$TASK_OUTPUT_FILE" ] || return 1
+	ui_percent=$(tail -c 2048 "$TASK_OUTPUT_FILE" 2>/dev/null | sed -n 's/.*\([0-9][0-9]*\)\.[0-9]*%.*/\1/p' | tail -1)
+	[ -n "$ui_percent" ] || return 1
+	[ "$ui_percent" -le 100 ] || return 1
+	printf '%s' "$ui_percent"
+}
+
+progress_bar() {
+	ui_percent="$1"; ui_marker="$2"; ui_label="$3"
+	ui_filled=$((ui_percent * 18 / 100))
+	ui_ribbon=""
+	ui_i=0
+	while [ "$ui_i" -lt 18 ]; do
+		if [ "$ui_i" -lt "$ui_filled" ]; then
+			ui_cell='▓'
+			case $((ui_i / 6)) in
+				0) ui_color="$COLOR_LAYER_ONE" ;;
+				1) ui_color="$COLOR_LAYER_TWO" ;;
+				*) ui_color="$COLOR_CYAN" ;;
+			esac
+			[ "$ui_marker" != '✓' ] || ui_color="$COLOR_GREEN"
+		elif [ "$ui_i" -eq "$ui_filled" ] && [ "$ui_percent" -gt 0 ]; then
+			ui_cell='▒'; ui_color="$COLOR_CYAN$BOLD"
+		else
+			ui_cell='░'; ui_color="$DIM"
+		fi
+		ui_ribbon="$ui_ribbon$ui_color$ui_cell"
+		ui_i=$((ui_i + 1))
+	done
+	ui_marker_color="$COLOR_CYAN"
+	[ "$ui_marker" != '✓' ] || ui_marker_color="$COLOR_GREEN"
+	printf '\r  %s%s%s  %-34s [%s%s] %s%3s%%%s\033[K' "$ui_marker_color" "$ui_marker" "$NORMAL" "$ui_label" "$ui_ribbon" "$NORMAL" "$ui_marker_color" "$ui_percent" "$NORMAL"
+}
+
+run_task() {
+	ui_label="$1"; shift
+	ui_result=0
+	[ -z "$LOG_FILE" ] || printf '\n--- %s ---\n' "$ui_label" >> "$LOG_FILE"
+	: > "$TASK_OUTPUT_FILE"
+	if [ "$VERBOSE" = true ] || [ "$TASK_OUTPUT" = live ]; then
+		printf '  %s→%s  %s\n' "$COLOR_CYAN" "$NORMAL" "$ui_label"
+		rm -f "$TASK_STATUS_FILE"
+		( "$@" 2>&1; printf '%s\n' "$?" > "$TASK_STATUS_FILE" ) | tee -a "$LOG_FILE" "$TASK_OUTPUT_FILE"
+		ui_result=$(cat "$TASK_STATUS_FILE" 2>/dev/null || printf 1)
+	else
+		"$@" > "$TASK_OUTPUT_FILE" 2>&1 &
+		ACTIVE_PID=$!
+		if [ "$RICH_TERMINAL" != true ]; then
+			printf '  …  %s\n' "$ui_label"
+		fi
+		ui_frame=0
+		ui_frames='
+⠋
+⠙
+⠹
+⠸
+⠼
+⠴
+⠦
+⠧
+⠇
+⠏'
+		while kill -0 "$ACTIVE_PID" 2>/dev/null; do
+			if [ "$RICH_TERMINAL" = true ]; then
+				if [ "$TASK_PROGRESS" = yes ] && ui_percent=$(download_percent); then
+					progress_bar "$ui_percent" "$(menu_at "$ui_frames" $((ui_frame % 10 + 1)))" "$ui_label"
+				else
+					progress_bar 0 "$(menu_at "$ui_frames" $((ui_frame % 10 + 1)))" "$ui_label"
+				fi
+			fi
+			ui_frame=$((ui_frame + 1))
+			sleep 0.1
+		done
+		if wait "$ACTIVE_PID"; then ui_result=0; else ui_result=$?; fi
+		ACTIVE_PID=""
+		[ "$RICH_TERMINAL" != true ] || printf '\r\033[K'
+		cat "$TASK_OUTPUT_FILE" >> "$LOG_FILE"
+	fi
+	if [ "$ui_result" -ne 0 ]; then
+		cat "$TASK_OUTPUT_FILE" >&2
+		printf '  %s×%s  Failed: %s\n' "$COLOR_RED" "$NORMAL" "$ui_label" >&2
+		return "$ui_result"
+	fi
+	if [ "$RICH_TERMINAL" = true ] && [ "$VERBOSE" != true ]; then
+		progress_bar 100 '✓' "$ui_label"
+		printf '\n'
+	else
+		ui_info "$ui_label"
+	fi
+}
+
+ui_cleanup() {
+	ui_status=$?
+	[ "$RICH_TERMINAL" != true ] || printf '\033[?25h'
+	if [ -n "$ACTIVE_PID" ]; then
+		kill "$ACTIVE_PID" 2>/dev/null || true
+		wait "$ACTIVE_PID" 2>/dev/null || true
+	fi
+	if [ "$ui_status" -ne 0 ] && [ -n "$LOG_FILE" ]; then
+		printf '  Detailed output: %s\n' "$LOG_FILE" >&2
+	elif [ "$ui_status" -eq 0 ] && [ -n "$LOG_FILE" ]; then
+		rm -f "$LOG_FILE"
+	fi
+	exit "$ui_status"
+}
 
 ###########################################################################
 # Get current BoxLang install home
@@ -90,6 +491,27 @@ fi
 ###########################################################################
 # Get current installed BoxLang version
 ###########################################################################
+CURRENT_INSTALL_PATH=""
+get_installed_version_at() {
+	local install_home="$1"
+	local bin_dir="$2"
+	local candidate version_output version=""
+	CURRENT_INSTALL_PATH=""
+	for candidate in "$bin_dir/boxlang" "$install_home/bin/boxlang"; do
+		[ -n "$candidate" ] || continue
+		[ -x "$candidate" ] || continue
+		version_output=$("$candidate" --version 2>/dev/null || printf '')
+		[ -n "$version_output" ] || continue
+		version=$(extract_semantic_version "$version_output" | xargs 2>/dev/null || printf '')
+		if [ -n "$version" ]; then
+			CURRENT_INSTALL_PATH="$candidate"
+			printf '%s' "$version"
+			return 0
+		fi
+	done
+	return 1
+}
+
 get_current_version() {
 	local current_version=""
 
@@ -378,90 +800,20 @@ install_completions() {
 ###########################################################################
 # CommandBox Installation Check and Install Function
 ###########################################################################
-check_and_install_commandbox() {
-	local system_bin="$1"
-	local boxlang_bin="$2"
-
-	if [ "$INSTALL_COMMANDBOX" = "false" ]; then
+install_commandbox_module() {
+	[ "$INSTALL_COMMANDBOX" = true ] || return 0
+	local scripts_dir="$1"
+	if [ -z "$scripts_dir" ] || [ ! -x "$scripts_dir/bx-module.sh" ]; then
+		ui_note "bx-module was not found; skipping CommandBox module install."
 		return 0
 	fi
-
-	print_info "🔍 Checking for CommandBox..."
-
-	# Check if CommandBox is already available
-	if command_exists box; then
-		print_success "CommandBox is already installed and available"
+	if "$scripts_dir/bx-module.sh" bx-cli; then
 		return 0
 	fi
-
-	print_warning "CommandBox is not installed"
-	print_info "💡 CommandBox is the Package Manager for BoxLang®"
-	print_info "💡 It allows you to easily manage BoxLang modules, dependencies, start servlet containers, and more${NORMAL}"
-
-	# Determine if we should install CommandBox based on flags
-	local should_install=""
-	if [ "$INSTALL_COMMANDBOX" = "true" ]; then
-		should_install="yes"
-		print_info "📦 Installing CommandBox (auto-install enabled)..."
-	else
-		# Interactive mode - ask user
-		if [ "$NON_INTERACTIVE" = true ]; then
-			response=""
-		else
-			print_info "❓ Would you like to install CommandBox? [Y/n]"
-			read -r response < /dev/tty
-		fi
-		case "$response" in
-			[nN][oO]|[nN])
-				should_install="no"
-				;;
-			*)
-				should_install="yes"
-				;;
-		esac
-	fi
-
-	if [ "$should_install" != "yes" ]; then
-		print_info "💡 You can install CommandBox later from: https://commandbox.ortusbooks.com/setup/installation"
-		return 0
-	fi
-
-	print_info "📦 Installing CommandBox..."
-
-	# The universal binary for mac/linux is available at the following URL
-	local commandbox_url="https://www.ortussolutions.com/parent/download/commandbox/type/bin"
-	local commandbox_filename="commandbox.zip"
-
-	# Download CommandBox
-	print_info "Downloading CommandBox from ${commandbox_url}..."
-	if ! env curl -L --retry 3 --retry-delay 2 --progress-bar -o "${TEMP_DIR}/${commandbox_filename}" "${commandbox_url}"; then
-		print_error "Failed to download CommandBox"
-		print_info "💡 Please manually install CommandBox from: https://commandbox.ortusbooks.com/setup/installation"
-		return 1
-	fi
-
-	# Extract CommandBox
-	print_info "Extracting CommandBox..."
-	if ! unzip -o "${TEMP_DIR}/${commandbox_filename}" -d "${TEMP_DIR}/commandbox/"; then
-		print_error "Failed to extract CommandBox"
-		return 1
-	fi
-
-	# Install CommandBox to BoxLang bin directory
-	print_info "Installing CommandBox to ${boxlang_bin}/box..."
-	mv "${TEMP_DIR}/commandbox/box" "${boxlang_bin}/box"
-	chmod 755 "${boxlang_bin}/box"
-
-	# Create symbolic link in system bin directory
-	print_info "Creating CommandBox symbolic link in ${system_bin}..."
-	ln -sf "${boxlang_bin}/box" "${system_bin}/box"
-
-	# Cleanup
-	rm -rf "${TEMP_DIR}/${commandbox_filename}" "${TEMP_DIR}/commandbox/"
-
-	print_success "CommandBox installed successfully"
+	ui_note "CommandBox module install failed. Retry with: bx-module bx-cli"
 	return 0
 }
+
 
 ###########################################################################
 # Installation Verification Function
@@ -534,54 +886,64 @@ verify_installation() {
 # Uninstall BoxLang
 ###########################################################################
 uninstall_boxlang() {
-	print_warning "🗑️  Uninstalling BoxLang..."
+	show_banner
+	show_system
+
+	TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/boxlang-uninstall.XXXXXX")
+	LOG_FILE=$(mktemp "${TMPDIR:-/tmp}/boxlang-uninstall.XXXXXX.log")
+	TASK_OUTPUT_FILE="$TEMP_DIR/task-output"
+	TASK_STATUS_FILE="$TEMP_DIR/task-status"
+	trap ui_cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+
+	ui_section "Uninstalling BoxLang"
+	run_task "Removed BoxLang installation" uninstall_boxlang_internal || return 1
+	ui_section "BoxLang removed"
+	ui_info "BoxLang Home directory (~/.boxlang) was preserved"
+	ui_info "To remove it completely, run: rm -rf ~/.boxlang"
+}
+
+uninstall_boxlang_internal() {
 
 	# Remove symbolic links from system bin directories
-	print_info "🔗 Removing system symbolic links..."
-	rm -fv /usr/local/bin/boxlang
-	rm -fv /usr/local/bin/bx
-	rm -fv /usr/local/bin/boxlang-miniserver
-	rm -fv /usr/local/bin/bx-miniserver
-	rm -fv /usr/local/bin/bx-module
-	rm -fv /usr/local/bin/install-bx-module
-	rm -fv /usr/local/bin/install-boxlang
-	rm -fv /usr/local/bin/install-bvm
+	rm -f /usr/local/bin/boxlang
+	rm -f /usr/local/bin/bx
+	rm -f /usr/local/bin/boxlang-miniserver
+	rm -f /usr/local/bin/bx-miniserver
+	rm -f /usr/local/bin/bx-module
+	rm -f /usr/local/bin/install-bx-module
+	rm -f /usr/local/bin/install-boxlang
+	rm -f /usr/local/bin/install-bvm
 
 	# Remove BoxLang installation directory
-	print_info "📁 Removing previous BoxLang installation directory..."
-	rm -rfv /usr/local/boxlang
+	rm -rf /usr/local/boxlang
 
 	# Remove legacy JAR files if they exist
-	print_info "🫙 Removing legacy JAR files (if any)..."
-	rm -fv /usr/local/lib/boxlang-*.jar
+	rm -f /usr/local/lib/boxlang-*.jar
 
 	# Also check user-local installation
 	if [ -d "$HOME/.local/bin" ]; then
-		print_info "👤 Checking user-local installation..."
-		rm -fv "$HOME/.local/bin/boxlang"
-		rm -fv "$HOME/.local/bin/bx"
-		rm -fv "$HOME/.local/bin/boxlang-miniserver"
-		rm -fv "$HOME/.local/bin/bx-miniserver"
-		rm -fv "$HOME/.local/bin/bx-module"
-		rm -fv "$HOME/.local/bin/install-bx-module"
-		rm -fv "$HOME/.local/bin/install-boxlang"
-		rm -fv "$HOME/.local/bin/install-boxlang"
+		rm -f "$HOME/.local/bin/boxlang"
+		rm -f "$HOME/.local/bin/bx"
+		rm -f "$HOME/.local/bin/boxlang-miniserver"
+		rm -f "$HOME/.local/bin/bx-miniserver"
+		rm -f "$HOME/.local/bin/bx-module"
+		rm -f "$HOME/.local/bin/install-bx-module"
+		rm -f "$HOME/.local/bin/install-boxlang"
+		rm -f "$HOME/.local/bin/install-boxlang"
 	fi
 
 	# Remove user-local BoxLang installation directory
 	if [ -d "$HOME/.local/boxlang" ]; then
-		print_info "📁 Removing user-local BoxLang installation directory..."
-		rm -rfv "$HOME/.local/boxlang"
+		rm -rf "$HOME/.local/boxlang"
 	fi
 
 	# Remove legacy user lib files if they exist
 	if [ -d "$HOME/.local/lib" ]; then
-		rm -fv "$HOME/.local/lib/boxlang-*.jar"
+		rm -f "$HOME/.local/lib/boxlang-*.jar"
 	fi
 
-	print_success "✅ BoxLang uninstalled successfully"
-	print_info "💡 BoxLang Home directory (~/.boxlang) was preserved"
-	print_info "💡 To remove it completely, run: rm -rf ~/.boxlang"
 }
 
 ###########################################################################
@@ -604,9 +966,11 @@ show_help() {
 	printf "  --check-update    	Check if a newer version is available\n"
 	printf "  --system          	Force system-wide installation (requires sudo)\n"
 	printf "  --force           	Force reinstallation even if already installed\n"
-	printf "  --with-commandbox 	Install CommandBox without prompting\n"
-	printf "  --without-commandbox 	Skip CommandBox installation\n"
-	printf "  --non-interactive 	Never prompt for input (also enabled when input is redirected)\n"
+	printf "  --with-commandbox 	Install the CommandBox module (default)\n"
+	printf "  --without-commandbox 	Skip the CommandBox module\n"
+	printf "  --non-interactive 	Never prompt for input; upgrade existing installs automatically\n"
+	printf "  --verbose        	Show detailed task output\n"
+	printf "  --keep-existing  	Exit cleanly when BoxLang is already installed\n"
 	printf "  --with-jre        	Automatically install Java 21 JRE if not found\n"
 	printf "  --without-jre     	Skip Java installation (manual installation required)\n"
 	printf "  --yes, -y         	Use defaults for all prompts (installs CommandBox and Java)\n"
@@ -668,6 +1032,227 @@ remove_previous_installation() {
 # Handle the main installation
 ###########################################################################
 install_boxlang() {
+	FORCE_INSTALL=false
+	TARGET_VERSION="latest"
+	HAS_SYSTEM=false
+	install_argument=""
+
+	for arg in "$@"; do
+		case "$arg" in
+			--force) FORCE_INSTALL=true ;;
+			--keep-existing) KEEP_EXISTING=true ;;
+			--system) HAS_SYSTEM=true ;;
+			--*) ;;
+			*) if [ "$TARGET_VERSION" = latest ]; then TARGET_VERSION="$arg"; fi ;;
+		esac
+	done
+
+	if [ "$TARGET_VERSION" = snapshot ]; then FORCE_INSTALL=true; fi
+	if [ "$(id -u)" -eq 0 ] || [ "$HAS_SYSTEM" = true ]; then
+		INSTALL_HOME="${BOXLANG_INSTALL_HOME:-/usr/local/boxlang}"
+		INSTALL_BIN="/usr/local/bin"
+	else
+		INSTALL_HOME="$HOME/.local/boxlang"
+		INSTALL_BIN="$HOME/.local/bin"
+	fi
+
+	show_banner
+	show_system
+
+	if [ "$INTERACTIVE" = true ]; then
+		choose_installation
+		case "$CUSTOM_VERSION" in
+			""|latest) ;;
+			*) TARGET_VERSION="$CUSTOM_VERSION" ;;
+		esac
+	fi
+
+	show_installation_plan
+
+	TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/boxlang-install.XXXXXX")
+	LOG_FILE=$(mktemp "${TMPDIR:-/tmp}/boxlang-install.XXXXXX.log")
+	TASK_OUTPUT_FILE="$TEMP_DIR/task-output"
+	TASK_STATUS_FILE="$TEMP_DIR/task-status"
+	trap ui_cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+
+	ui_preflight_deps=""
+	if [ -z "$BOXLANG_PATH" ] || [ -z "$MINISERVER_PATH" ] || [ -z "$INSTALLER_SCRIPTS_PATH" ]; then
+		ui_preflight_deps="curl"
+	elif [ "$INSTALL_COMMANDBOX" != false ] || [ "$JAVA_INSTALL_MODE" != skip ]; then
+		ui_preflight_deps="curl"
+	fi
+	ui_need_unzip=false
+	case "$BOXLANG_PATH" in ""|*.zip) ui_need_unzip=true ;; esac
+	case "$MINISERVER_PATH" in ""|*.zip) ui_need_unzip=true ;; esac
+	if [ -z "$INSTALLER_SCRIPTS_PATH" ] || { [ -n "$INSTALLER_SCRIPTS_PATH" ] && [ ! -d "$INSTALLER_SCRIPTS_PATH" ]; }; then ui_need_unzip=true; fi
+	if [ "$INSTALL_COMMANDBOX" != false ]; then ui_need_unzip=true; fi
+	if [ "$ui_need_unzip" = true ]; then ui_preflight_deps="$ui_preflight_deps unzip"; fi
+
+	if [ -n "$ui_preflight_deps" ]; then
+		run_task "Verified installer prerequisites" \
+			preflight_check skip -- $ui_preflight_deps || return 1
+	else
+		run_task "Verified installer prerequisites" true || return 1
+	fi
+
+	if [ "$JAVA_INSTALL_MODE" = skip ]; then
+		ui_note "Java checks skipped. BoxLang will not run until Java 21+ is installed."
+	else
+		if ! run_task "Verified Java 21+" check_java_version; then
+			if [ "$JAVA_INSTALL_MODE" = automatic ]; then
+				TASK_OUTPUT=live run_task "Installed Java 21+" install_java || return 1
+			else
+				ui_note "Java 21+ is required. Install it and rerun the installer."
+				return 1
+			fi
+		fi
+	fi
+
+	CURRENT_VERSION=$(get_installed_version_at "$INSTALL_HOME" "$INSTALL_BIN" 2>/dev/null) || CURRENT_VERSION=""
+	if [ -n "$CURRENT_VERSION" ]; then
+		handle_existing_installation "$CURRENT_VERSION"
+		case "$INSTALL_DECISION" in
+			keep) return 0 ;;
+			uninstall) uninstall_boxlang; return 0 ;;
+		esac
+		if [ "$INSTALL_DECISION" = reinstall ] || [ "$FORCE_INSTALL" = true ]; then
+			run_task "Removed previous BoxLang installation" remove_previous_installation || return 1
+		fi
+	fi
+
+	run_task "Installed BoxLang runtime and tools" install_boxlang_internal "$TARGET_VERSION" || return 1
+	show_install_summary "$TARGET_VERSION"
+}
+
+choose_installation() {
+	select_menu "Choose your setup" \
+'Install BoxLang (recommended)
+Customize installation' \
+'Install the latest BoxLang + MiniServer.
+Choose the version, components, and installation behavior.' \
+'no
+no' no
+	ui_custom=$(menu_at "$MENU_RESULT" 2)
+	[ "$ui_custom" = yes ] || return 0
+
+	select_menu "Choose a BoxLang version" \
+'Latest stable
+Snapshot
+Exact version' \
+'Install the latest stable BoxLang release.
+Install the rolling development snapshot.
+Type an exact version after the installer.' \
+'no
+no
+no' no
+	if [ "$(menu_at "$MENU_RESULT" 2)" = yes ]; then CUSTOM_VERSION=snapshot
+	elif [ "$(menu_at "$MENU_RESULT" 3)" = yes ]; then
+		printf 'Exact version: ' > "$PROMPT_DEVICE"
+		IFS= read -r CUSTOM_VERSION < "$PROMPT_DEVICE"
+	else CUSTOM_VERSION=latest; fi
+
+	ui_verbose_default=no
+	[ "$VERBOSE" = true ] && ui_verbose_default=yes
+	select_menu "Make BoxLang yours" \
+'Install MiniServer and shell integration
+Install Java 21+ if missing
+Install CommandBox
+Show verbose task output' \
+'Install MiniServer, completions, and PATH integration.
+Download Java automatically when it is missing.
+Install CommandBox as the BoxLang package manager.
+Stream detailed command output during installation.' \
+'yes
+yes
+yes
+'"$ui_verbose_default" yes
+	if [ "$(menu_at "$MENU_RESULT" 3)" = yes ]; then INSTALL_COMMANDBOX=true; else INSTALL_COMMANDBOX=false; fi
+	if [ "$(menu_at "$MENU_RESULT" 2)" = yes ]; then JAVA_INSTALL_MODE=automatic; else JAVA_INSTALL_MODE=skip; fi
+	if [ "$(menu_at "$MENU_RESULT" 4)" = yes ]; then VERBOSE=true; else VERBOSE=false; fi
+}
+
+handle_existing_installation() {
+	INSTALL_DECISION=reinstall
+	printf '\n  %s!  Existing BoxLang %s detected at [%s].%s\n\n' "$COLOR_ORANGE" "$1" "${CURRENT_INSTALL_PATH:-$INSTALL_HOME}" "$NORMAL"
+	if [ "$KEEP_EXISTING" = true ]; then
+		INSTALL_DECISION=keep
+		return 0
+	fi
+	if [ "$NON_INTERACTIVE" = true ] || [ "$FORCE_INSTALL" = true ]; then
+		printf '  Continuing with the requested reinstall.\n'
+		return 0
+	fi
+	select_menu "Existing BoxLang installation" \
+'Reinstall / upgrade
+Keep current version and exit
+Uninstall BoxLang
+Choose a different install path' \
+"BoxLang $1 found at $INSTALL_HOME. Reinstalling is the recommended choice.
+Leave the current BoxLang installation unchanged.
+Remove BoxLang and all installed versions.
+Install somewhere else." \
+'no
+no
+no
+no' no
+	if [ "$(menu_at "$MENU_RESULT" 2)" = yes ]; then INSTALL_DECISION=keep; return 0; fi
+	if [ "$(menu_at "$MENU_RESULT" 3)" = yes ]; then INSTALL_DECISION=uninstall; return 0; fi
+	if [ "$(menu_at "$MENU_RESULT" 4)" = yes ]; then
+		printf 'Install path: ' > "$PROMPT_DEVICE"
+		IFS= read -r BOXLANG_INSTALL_HOME < "$PROMPT_DEVICE"
+		if [ "$(id -u)" -eq 0 ] || [ "$HAS_SYSTEM" = true ]; then
+			INSTALL_HOME="${BOXLANG_INSTALL_HOME:-/usr/local/boxlang}"
+			INSTALL_BIN="/usr/local/bin"
+		else
+			INSTALL_HOME="$HOME/.local/boxlang"
+			INSTALL_BIN="$HOME/.local/bin"
+		fi
+	fi
+	INSTALL_DECISION=reinstall
+}
+
+show_installation_plan() {
+	ui_section "Installation plan"
+	printf '  Install to %s\n\n' "$INSTALL_HOME"
+	if [ -n "$BOXLANG_PATH" ] || [ -n "$MINISERVER_PATH" ]; then
+		printf '  Installing BoxLang® from local artifacts to [%s]\n' "$INSTALL_HOME"
+	fi
+	printf '  %s+%s  BoxLang runtime: %s\n' "$COLOR_CYAN" "$NORMAL" "$TARGET_VERSION"
+	printf '  %s+%s  MiniServer and shell integration\n' "$COLOR_CYAN" "$NORMAL"
+	if [ "$JAVA_INSTALL_MODE" = skip ]; then
+		printf '  %s+%s  Skip Java checks\n' "$COLOR_CYAN" "$NORMAL"
+	else
+		printf '  %s+%s  Java 21+ (install if missing)\n' "$COLOR_CYAN" "$NORMAL"
+	fi
+	if [ "$INSTALL_COMMANDBOX" = true ]; then
+		printf '  %s+%s  CommandBox\n' "$COLOR_CYAN" "$NORMAL"
+	else
+		printf '  %s+%s  Skip CommandBox\n' "$COLOR_CYAN" "$NORMAL"
+	fi
+	if [ "$VERBOSE" = true ]; then printf '  %s+%s  Verbose task output\n' "$COLOR_CYAN" "$NORMAL"; fi
+	if [ "$NON_INTERACTIVE" = true ]; then printf '\n  %sNon-interactive installation.%s\n' "$DIM" "$NORMAL"; fi
+}
+
+show_install_summary() {
+	ui_section "Ready to explore"
+	ui_info "BoxLang $1 installed at $INSTALL_HOME"
+	ui_info "MiniServer installed"
+	ui_info "Shell completions installed"
+	ui_info "Module executable directory: [${BOXLANG_HOME:-$HOME/.boxlang}/bin]"
+	printf '\n  %sTo use BoxLang in this terminal:%s\n' "$BOLD" "$NORMAL"
+	case "${SHELL##*/}" in
+		fish) printf '    source ~/.config/fish/config.fish\n' ;;
+		zsh) printf '    source ~/.zshrc\n' ;;
+		*) printf '    source ~/.bashrc\n' ;;
+	esac
+	printf '\n  %sQuick start:%s\n' "$BOLD" "$NORMAL"
+	printf '    boxlang --version\n    boxlang-miniserver --help\n'
+	printf '\n  %sLearn more: %s%s\n\n' "$DIM" "https://boxlang.io" "$NORMAL"
+}
+
+install_boxlang_internal() {
 	# Check for --force flag in any position and remove it from args
 	local FORCE_INSTALL=false
 	local TARGET_VERSION="latest"
@@ -689,62 +1274,11 @@ install_boxlang() {
 	fi
 
 	###########################################################################
-	# Pre-flight Checks
-	# Build dependency list based on what's actually needed
-	###########################################################################
-	local preflight_deps=""
-	# curl: only if any download will happen
-	if [ -z "$BOXLANG_PATH" ] || [ -z "$MINISERVER_PATH" ] || [ -z "$INSTALLER_SCRIPTS_PATH" ]; then
-		preflight_deps="curl"
-	elif [ "$INSTALL_COMMANDBOX" != "false" ] || [ "$JAVA_INSTALL_MODE" != "skip" ]; then
-		preflight_deps="curl"
-	fi
-	# unzip: only if any zip will be extracted
-	local need_unzip=false
-	case "$BOXLANG_PATH" in ""|*.zip) need_unzip=true;; esac
-	case "$MINISERVER_PATH" in ""|*.zip) need_unzip=true;; esac
-	if [ -z "$INSTALLER_SCRIPTS_PATH" ] || ( [ -n "$INSTALLER_SCRIPTS_PATH" ] && [ ! -d "$INSTALLER_SCRIPTS_PATH" ] ); then need_unzip=true; fi
-	if [ "$INSTALL_COMMANDBOX" != "false" ]; then need_unzip=true; fi
-	if $need_unzip; then preflight_deps="$preflight_deps unzip"; fi
-
-	if ! preflight_check "$JAVA_INSTALL_MODE" -- $preflight_deps; then
-		exit 1
-	fi
-
-	###########################################################################
 	# Setup Installation Directories
 	###########################################################################
 	# These are the system-wide installation directories
 	local SYSTEM_HOME="${BOXLANG_INSTALL_HOME:-/usr/local/boxlang}"
 	local SYSTEM_BIN="/usr/local/bin"
-
-	###########################################################################
-	# Verify if BoxLang is already installed
-	# If it is, we will exit early unless --force is used
-	# If --force is used, we will remove the existing installation first
-	###########################################################################
-
-	if [ "$FORCE_INSTALL" = false ]; then
-		print_info "🔍 Checking for existing BoxLang installation..."
-		local CURRENT_VERSION=$(get_current_version)
-		if [ $? -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
-			print_warning "⚠️  BoxLang is already installed at [${SYSTEM_HOME}] with version[${CURRENT_VERSION}]"
-			print_info "💡 Use ${GREEN}'install-boxlang.sh --uninstall'${BLUE} to remove the existing version before reinstalling."
-			print_info "💡 Or use ${GREEN}'--force'${BLUE} to do a forced reinstall."
-			print_info "💡 Or use ${GREEN}'--help'${BLUE} for more information."
-			exit 0;
-		else
-			print_success "No previous BoxLang installation found, proceeding with fresh install..."
-		fi
-	else
-		if [ -d "${SYSTEM_HOME}" ]; then
-			print_warning "🔄 Forcing reinstallation of BoxLang..."
-		fi
-		remove_previous_installation || {
-			print_error "❌ Failed to remove previous installation, please see log for more information"
-			exit 1
-		}
-	fi
 
 	###########################################################################
 	# Support user-local installation if not running as root and not explicitly system install
@@ -937,7 +1471,7 @@ EOF
 
 	# CommandBox Installation
 	# In the future this will be part of BoxLang
-	check_and_install_commandbox "$SYSTEM_BIN" "$DESTINATION_BIN"
+	install_commandbox_module "$DESTINATION_SCRIPTS"
 
 	# Cleanup
 	printf "\n"
@@ -1037,12 +1571,18 @@ main() {
 				shift
 				;;
 			"--yes"|"-y")
-				# Setup all defaults here.
 				INSTALL_COMMANDBOX=true
 				JAVA_INSTALL_MODE="automatic"
+				NON_INTERACTIVE=true
 				;;
 			"--non-interactive")
 				NON_INTERACTIVE=true
+				;;
+			"--verbose")
+				VERBOSE=true
+				;;
+			"--keep-existing")
+				KEEP_EXISTING=true
 				;;
 			*)
 				install_argument="$1"
@@ -1050,6 +1590,8 @@ main() {
 		esac
 		shift
 	done
+
+	detect_terminal
 
 	# If no command was specified, it's an install operation
 	if [ -z "$command" ]; then

@@ -107,6 +107,7 @@ show_help() {
 	printf "${BOLD}USAGE:${NORMAL}\n"
 	printf "  bx-module <command> [arguments] [options]\n\n"
 	printf "${BOLD}COMMANDS:${NORMAL}\n"
+	printf "  bx-cli                               Install CommandBox as a BoxLang module\n"
 	printf "  install [<module>[@<version>] ...]   Install module(s), or a project box.json's dependencies when none are given\n"
 	printf "  remove <module> [<module> ...]       Remove module(s)\n"
 	printf "  list                                 Show installed module(s), including nested dependencies\n"
@@ -182,7 +183,7 @@ show_verb_help() {
 			;;
 		*)
 			printf "${RED}❌ Error: Unknown command '${VERB}'${NORMAL}\n"
-			printf "${YELLOW}💡 Commands: install, remove, list, outdated, update, help${NORMAL}\n"
+			printf "${YELLOW}💡 Commands: bx-cli, install, remove, list, outdated, update, help${NORMAL}\n"
 			return 1
 			;;
 	esac
@@ -1488,6 +1489,9 @@ main() {
 		help | --help | -h)
 			show_help "${1:-}"
 			exit $?
+			;;
+		bx-cli)
+			cmd_install bx-cli "$@"
 			;;
 		install | remove | list | outdated | update)
 			local arg

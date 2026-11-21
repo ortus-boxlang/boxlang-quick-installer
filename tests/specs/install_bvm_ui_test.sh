@@ -32,7 +32,7 @@ assert_contains 'Customize installation' "$(cat "$INSTALLER")" 'installer offers
 assert_contains '--verbose' "$(cat "$INSTALLER")" 'installer supports verbose output'
 assert_contains '--upgrade' "$(cat "$INSTALLER")" 'installer supports the self-update flag'
 assert_contains 'exec "$install_script" --upgrade' "$(cat "$PROJECT_ROOT/src/bvm.sh")" 'BVM self-update uses the upgrade flag'
-assert_contains 'COLOR_WARNING=$'\''\033[38;5;208m'\''' "$(cat "$INSTALLER")" 'warnings use orange'
+assert_contains 'COLOR_WARNING=$'\''\033[33m'\''' "$(cat "$INSTALLER")" 'warnings use orange'
 assert_contains '  %s!  %s%s\n' "$(grep -n '^    printf .*COLOR_WARNING' "$INSTALLER")" 'the full warning row uses the warning color'
 
 OUTPUT="$(NO_COLOR=1 \
@@ -45,7 +45,7 @@ assert_contains 'The software productivity platform' "$OUTPUT" 'banner uses the 
 assert_contains 'www.boxlang.io' "$OUTPUT" 'banner shows the BoxLang URL'
 assert_contains 'BoxLang Version Manager (BVM)' "$OUTPUT" 'banner names the version manager'
 assert_contains 'shell: bash' "$OUTPUT" 'installer shows the detected system'
-assert_contains 'Installation plan' "$OUTPUT" 'installer shows the installation plan'
+assert_contains 'Installation Plan' "$OUTPUT" 'installer shows the installation plan'
 assert_contains 'BVM launchers and wrappers' "$OUTPUT" 'plan lists BVM launchers'
 assert_contains 'Skip Java checks' "$OUTPUT" 'plan reflects the Java opt-out'
 assert_contains 'Installing BVM' "$OUTPUT" 'installer announces the install phase'

@@ -4,7 +4,7 @@ _install_boxlang_complete() {
     local cur prev opts
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD - 1]}"
-    opts="--help -h --version -v --uninstall --check-update --system --force --with-commandbox --without-commandbox --non-interactive --with-jre --without-jre --yes -y --boxlang-path --miniserver-path --installer-scripts-path"
+    opts="--help -h --version -v --uninstall --check-update --system --force --with-commandbox --without-commandbox --non-interactive --verbose --keep-existing --interactive --with-jre --without-jre --yes -y --boxlang-path --miniserver-path --installer-scripts-path"
     COMPREPLY=()
 
     case "$prev" in

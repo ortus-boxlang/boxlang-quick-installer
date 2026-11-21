@@ -296,7 +296,7 @@ function Show-VerbHelp {
         }
         default {
             Write-Host "❌ Error: Unknown command '$Verb'" -ForegroundColor Red
-            Write-Host "💡 Commands: install, remove, list, outdated, update, help" -ForegroundColor Yellow
+            Write-Host "💡 Commands: bx-cli, install, remove, list, outdated, update, help" -ForegroundColor Yellow
             return $false
         }
     }
@@ -1255,6 +1255,11 @@ if ($args.Count -gt 1) { $verbArgs = @($args[1..($args.Count - 1)]) }
 if ($verb -eq "") {
     Show-Help
     exit 0
+}
+
+if ($verb -eq "bx-cli") {
+    $verb = "install"
+    $verbArgs = @("bx-cli") + $verbArgs
 }
 
 if ($verb -in @("help", "--help", "-h")) {
